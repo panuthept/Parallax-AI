@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=42.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "inferallel"
+version = "0.1.0"
+description = "A package for parallel inference"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "Apache-2.0"
+authors = [
+    {name = "Panuthep Tasawong", email = "falcon_270394@hotmail.co.th"},
+]
+dependencies = [
+    "openai>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/panuthep/inferallel"
+
+[tool.setuptools]
+packages = ["inferallel"]
