@@ -26,7 +26,7 @@ def chat_completions(
         return None
 
 
-class VanillaOpenAI:
+class VanillaOpenAIClient:
     # This one is for baseline comparison
     def __init__(
         self, 
@@ -85,7 +85,7 @@ class VanillaOpenAI:
             yield output
 
 
-class ParallaxOpenAI:
+class ParallaxOpenAIClient:
     def __init__(
         self, 
         api_key: str = "EMPTY",
@@ -152,7 +152,7 @@ if __name__ == "__main__":
     from time import time
 
     model = "google/gemma-3-27b-it"
-    inferallel_client = ParallaxOpenAI(
+    inferallel_client = ParallaxOpenAIClient(
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
     )
