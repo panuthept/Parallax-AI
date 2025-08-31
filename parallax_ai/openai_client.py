@@ -18,6 +18,9 @@ def completions(
         prompt = inputs
         index = None
 
+    if prompt is None:
+        return None, index
+
     if completions_kwargs is None or not isinstance(completions_kwargs, dict):
         completions_kwargs = {}
 
@@ -46,6 +49,9 @@ def chat_completions(
     else:
         messages = inputs
         index = None
+
+    if messages is None:
+        return None, index
 
     if chat_completions_kwargs is None or not isinstance(chat_completions_kwargs, dict):
         chat_completions_kwargs = {}
