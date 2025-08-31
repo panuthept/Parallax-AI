@@ -9,7 +9,7 @@ def completions(
     model: str,
     api_key: str = "EMPTY",
     base_url: Optional[str] = None,
-    chat_completions_kwargs: Optional[dict] = None,
+    completions_kwargs: Optional[dict] = None,
 ):
     if isinstance(inputs, tuple):
         assert len(inputs) == 2, "inputs should be a tuple of (prompt, index)."
@@ -18,15 +18,15 @@ def completions(
         prompt = inputs
         index = None
 
-    if chat_completions_kwargs is None or not isinstance(chat_completions_kwargs, dict):
-        chat_completions_kwargs = {}
+    if completions_kwargs is None or not isinstance(completions_kwargs, dict):
+        completions_kwargs = {}
 
     client = OpenAI(api_key=api_key, base_url=base_url)
     try:
         response = client.completions.create(
             model=model,
             prompt=prompt,
-            **chat_completions_kwargs
+            **completions_kwargs
         )
         return response, index
     except Exception as e:
