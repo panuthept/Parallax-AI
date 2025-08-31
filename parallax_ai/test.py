@@ -25,7 +25,7 @@ def main():
             first_output_elapsed_time = time() - start_time
             print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     total_elapsed_time = time() - start_time
-    print(f"Total Elapsed Time (500 examples): {total_elapsed_time:.2f}")
+    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}")
     
     print("ParallaxOpenAIClient.ichat_completions:")
     start_time = time()
@@ -34,7 +34,7 @@ def main():
             first_output_elapsed_time = time() - start_time
             print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     total_elapsed_time = time() - start_time
-    print(f"Total Elapsed Time (500 examples): {total_elapsed_time:.2f}")
+    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}")
     
 
     # Vanilla Client
@@ -50,7 +50,7 @@ def main():
             first_output_elapsed_time = time() - start_time
             print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     total_elapsed_time = time() - start_time
-    print(f"Total Elapsed Time (500 examples): {total_elapsed_time:.2f}")
+    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}")
 
 
 if __name__ == "__main__":
