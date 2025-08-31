@@ -22,7 +22,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/panuthep/Parallax"
+Homepage = "https://github.com/panuthept/Parallax"
 
 [tool.setuptools]
 packages = ["parallax"]
