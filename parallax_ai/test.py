@@ -3,7 +3,6 @@ from parallax_ai import ParallaxOpenAIClient, VanillaOpenAIClient
 
 def main():
     from time import time
-    from tqdm import tqdm
 
     messages = [
         {"role": "user", "content": "Sing me a song."},
@@ -21,7 +20,7 @@ def main():
     
     print("ParallaxOpenAIClient: ichat_completions")
     start_time = time()
-    for i, output in enumerate(tqdm(parallax_client.ichat_completions(messagess, model=model))):
+    for i, output in enumerate(parallax_client.ichat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
             print(f"first_output_elapsed_time: {first_output_elapsed_time:.2f}")
@@ -30,7 +29,7 @@ def main():
 
     print("ParallaxOpenAIClient: ichat_completions_unordered")
     start_time = time()
-    for i, (output, index) in enumerate(tqdm(parallax_client.ichat_completions_unordered(messagess, model=model))):
+    for i, (output, index) in enumerate(parallax_client.ichat_completions_unordered(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
             print(f"first_output_elapsed_time: {first_output_elapsed_time:.2f}")
@@ -46,7 +45,7 @@ def main():
     
     print("VanillaOpenAIClient:")
     start_time = time()
-    for i, output in enumerate(tqdm(vanilla_client.ichat_completions(messagess, model=model))):
+    for i, output in enumerate(vanilla_client.ichat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
             print(f"first_output_elapsed_time: {first_output_elapsed_time:.2f}")
