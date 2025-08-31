@@ -1,7 +1,7 @@
 from openai import OpenAI
 from functools import partial
 from multiprocessing import Pool
-from typing import List, Tuple, Optional
+from typing import List, Optional
 
 
 def chat_completions(
@@ -132,7 +132,7 @@ class ParallaxOpenAIClient:
                 partial_chat_completions,
                 messages,
             )
-            outputs = [response for response, index in outputs]
+            outputs = [response for response, _ in outputs]
         return outputs
 
     def ichat_completions(
