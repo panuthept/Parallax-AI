@@ -1,4 +1,4 @@
-from parallax import ParallaxOpenAIClient, VanillaOpenAIClient
+from parallax_ai import ParallaxOpenAIClient, VanillaOpenAIClient
 
 
 def main():
