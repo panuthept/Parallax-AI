@@ -18,6 +18,12 @@ vllm serve google/gemma-3-27b-it
 ```bash
 python -m parallax_ai.test
 >>>
+ParallaxOpenAIClient.completions:
+First Output Elapsed Time: 7.10s
+Total Elapsed Time (500 requires): 7.10s
+ParallaxOpenAIClient.icompletions:
+First Output Elapsed Time: 2.85s
+Total Elapsed Time (500 requires): 6.99s
 ParallaxOpenAIClient.chat_completions:
 First Output Elapsed Time: 7.32s
 Total Elapsed Time (500 requires): 7.32s
