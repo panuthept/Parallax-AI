@@ -23,18 +23,18 @@ def main():
     for i, output in enumerate(parallax_client.chat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
-            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}s")
     total_elapsed_time = time() - start_time
-    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}")
+    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}s")
     
     print("ParallaxOpenAIClient.ichat_completions:")
     start_time = time()
     for i, output in enumerate(parallax_client.ichat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
-            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}s")
     total_elapsed_time = time() - start_time
-    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}")
+    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}s")
     
 
     # Vanilla Client
@@ -48,9 +48,9 @@ def main():
     for i, output in enumerate(vanilla_client.ichat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
-            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}s")
     total_elapsed_time = time() - start_time
-    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}")
+    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}s")
 
 
 if __name__ == "__main__":

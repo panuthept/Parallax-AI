@@ -19,14 +19,14 @@ vllm serve google/gemma-3-27b-it
 python -m parallax_ai.test
 >>>
 ParallaxOpenAIClient.chat_completions:
-First Output Elapsed Time: 7.32
-Total Elapsed Time (500 requires): 7.32
+First Output Elapsed Time: 7.32s
+Total Elapsed Time (500 requires): 7.32s
 ParallaxOpenAIClient.ichat_completions:
-First Output Elapsed Time: 2.85
-Total Elapsed Time (500 requires): 7.09
+First Output Elapsed Time: 2.85s
+Total Elapsed Time (500 requires): 7.09s
 Vanilla OpenAI Client:
-First Output Elapsed Time: 1.78
-Total Elapsed Time (500 requires): 672.02
+First Output Elapsed Time: 1.78s
+Total Elapsed Time (500 requires): 672.02s
 ```
 
 ## Usage (Compatible with any OpenAI-API–compatible server, e.g., vLLM)
