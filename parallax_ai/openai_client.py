@@ -4,6 +4,35 @@ from multiprocessing import Pool
 from typing import List, Optional
 
 
+def completions(
+    inputs,
+    model: str,
+    api_key: str = "EMPTY",
+    base_url: Optional[str] = None,
+    chat_completions_kwargs: Optional[dict] = None,
+):
+    if isinstance(inputs, tuple):
+        assert len(inputs) == 2, "inputs should be a tuple of (prompt, index)."
+        prompt, index = inputs
+    else:
+        prompt = inputs
+        index = None
+
+    if chat_completions_kwargs is None or not isinstance(chat_completions_kwargs, dict):
+        chat_completions_kwargs = {}
+
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    try:
+        response = client.completions.create(
+            model=model,
+            prompt=prompt,
+            **chat_completions_kwargs
+        )
+        return response, index
+    except Exception as e:
+        return None, index
+
+
 def chat_completions(
     inputs,
     model: str,
@@ -102,6 +131,95 @@ class ParallaxOpenAIClient:
         self.api_key = api_key
         self.base_url = base_url
         self.max_parallel_processes = max_parallel_processes
+
+    def completions(
+        self,
+        prompts: List[str]|str,
+        model: str,
+        completions_kwargs: Optional[dict] = None,
+    ):
+        """
+        Parallely process inputs, wait for all to finished, output in order.
+        """
+        if isinstance(prompts, list):
+            prompts = prompts
+        elif isinstance(prompts, str):
+            prompts = [prompts]
+        else:
+            raise ValueError("prompts must be a list of str or str")
+
+        partial_completions = partial(
+            completions,
+            model=model,
+            api_key=self.api_key,
+            base_url=self.base_url,
+            completions_kwargs=completions_kwargs,
+        )
+
+        with Pool(processes=self.max_parallel_processes) as pool:
+            outputs = pool.map(
+                partial_completions,
+                prompts,
+            )
+            outputs = [response for response, _ in outputs]
+        return outputs
+
+    def icompletions(
+        self,
+        prompts: List[str]|str,
+        model: str,
+        completions_kwargs: Optional[dict] = None,
+    ):
+        """
+        Parallely process inputs, output as soon as one finished, in order.
+        """
+        if isinstance(prompts, list):
+            prompts = prompts
+        elif isinstance(prompts, str):
+            prompts = [prompts]
+        else:
+            raise ValueError("prompts must be a list of str or str")
+
+        partial_completions = partial(
+            completions,
+            model=model,
+            api_key=self.api_key,
+            base_url=self.base_url,
+            completions_kwargs=completions_kwargs,
+        )
+
+        with Pool(processes=self.max_parallel_processes) as pool:
+            for output, _ in pool.imap(partial_completions, prompts):
+                yield output
+
+    def icompletions_unordered(
+        self,
+        prompts: List[str]|str,
+        model: str,
+        completions_kwargs: Optional[dict] = None,
+    ):
+        """
+        Parallely process inputs, output as soon as one finished without order.
+        """
+        if isinstance(prompts, list):
+            prompts = prompts
+        elif isinstance(prompts, str):
+            prompts = [prompts]
+        else:
+            raise ValueError("prompts must be a list of str or str")
+
+        partial_completions = partial(
+            completions,
+            model=model,
+            api_key=self.api_key,
+            base_url=self.base_url,
+            completions_kwargs=completions_kwargs,
+        )
+
+        inputs = [(prompt, i) for i, prompt in enumerate(prompts)]
+        with Pool(processes=self.max_parallel_processes) as pool:
+            for output, index in pool.imap_unordered(partial_completions, inputs):
+                yield (output, index)
 
     def chat_completions(
         self,

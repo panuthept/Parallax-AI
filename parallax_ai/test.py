@@ -8,6 +8,7 @@ def main():
         {"role": "user", "content": "Sing me a song."},
     ]
     messagess = [messages for _ in range(500)]
+    prompts = ["Sing me a song." for _ in range(500)]
 
     model = "google/gemma-3-27b-it"
 
@@ -17,6 +18,24 @@ def main():
         base_url="http://localhost:8000/v1",
         max_parallel_processes=None,
     )
+    
+    print("ParallaxOpenAIClient.completions:")
+    start_time = time()
+    for i, output in enumerate(parallax_client.completions(prompts, model=model)):
+        if i == 0:
+            first_output_elapsed_time = time() - start_time
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}s")
+    total_elapsed_time = time() - start_time
+    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}s")
+    
+    print("ParallaxOpenAIClient.icompletions:")
+    start_time = time()
+    for i, output in enumerate(parallax_client.icompletions(prompts, model=model)):
+        if i == 0:
+            first_output_elapsed_time = time() - start_time
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}s")
+    total_elapsed_time = time() - start_time
+    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}s")
     
     print("ParallaxOpenAIClient.chat_completions:")
     start_time = time()
