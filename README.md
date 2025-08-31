@@ -1,23 +1,23 @@
-# Inferallel
+# Parallax
 
 A Python package for parallel inference.
 
 ## Installation
 
-You can install Inferallel using pip:
+You can install Parallax using pip:
 
 ```bash
 pip install -e .  # For development
 # or
-pip install inferallel  # When published to PyPI
+pip install parallax  # When published to PyPI
 ```
 
 ## Development
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/panuthep/inferallel.git
-   cd inferallel
+   git clone https://github.com/panuthep/Parallax.git
+   cd Parallax
    ```
 
 2. Set up a virtual environment and install development dependencies:
