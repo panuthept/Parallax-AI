@@ -3,9 +3,9 @@ requires = ["setuptools>=42.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "parallax"
+name = "parallax-ai"
 version = "0.1.0"
-description = "A lightweight Python library that enables efficient parallel execution of AI API calls."
+description = "Lightweight parallel AI API calls in Python."
 readme = "README.md"
 requires-python = ">=3.8"
 license = "Apache-2.0"
@@ -22,7 +22,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/panuthept/Parallax"
+Homepage = "https://github.com/panuthept/Parallax-AI"
 
 [tool.setuptools]
-packages = ["parallax"]
+packages = ["parallax_ai"]
