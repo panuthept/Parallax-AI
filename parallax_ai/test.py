@@ -3,7 +3,6 @@ from parallax_ai import ParallaxOpenAIClient, VanillaOpenAIClient
 
 def main():
     from time import time
-    from tqdm import tqdm
 
     messages = [
         {"role": "user", "content": "Sing me a song."},
@@ -21,20 +20,20 @@ def main():
     
     print("ParallaxOpenAIClient.chat_completions:")
     start_time = time()
-    for i, output in enumerate(tqdm(parallax_client.chat_completions(messagess, model=model))):
+    for i, output in enumerate(parallax_client.chat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     total_elapsed_time = time() - start_time
-    print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     print(f"Total Elapsed Time: {total_elapsed_time:.2f}")
     
     print("ParallaxOpenAIClient.ichat_completions:")
     start_time = time()
-    for i, output in enumerate(tqdm(parallax_client.ichat_completions(messagess, model=model))):
+    for i, output in enumerate(parallax_client.ichat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     total_elapsed_time = time() - start_time
-    print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     print(f"Total Elapsed Time: {total_elapsed_time:.2f}")
     
 
@@ -46,11 +45,11 @@ def main():
     
     print("Vanilla OpenAI Client:")
     start_time = time()
-    for i, output in enumerate(tqdm(vanilla_client.chat_completions(messagess, model=model))):
+    for i, output in enumerate(vanilla_client.chat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     total_elapsed_time = time() - start_time
-    print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     print(f"Total Elapsed Time: {total_elapsed_time:.2f}")
 
 
