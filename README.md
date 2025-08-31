@@ -1,6 +1,6 @@
 # Parallax
 
-A light-weight Python package for parallel API calls.
+A lightweight Python library that enables efficient parallel execution of AI API calls.
 
 ## Installation
 

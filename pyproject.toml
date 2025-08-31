@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "parallax"
 version = "0.1.0"
-description = "A package for parallel inference"
+description = "A lightweight Python library that enables efficient parallel execution of AI API calls."
 readme = "README.md"
 requires-python = ">=3.8"
 license = "Apache-2.0"
