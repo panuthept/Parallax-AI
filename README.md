@@ -33,7 +33,7 @@ list_of_messages = [
 ]
 ```
 
-### chat_completions: Returns a list of outputs in order (waits until all are finished)
+### `chat_completions`: Returns a list of outputs in order (waits until all are finished)
 
 ```python
 outputs = parallax_client.chat_completions(list_of_messages, model="gpt-3.5-turbo")
@@ -42,7 +42,7 @@ for output in outputs:
     pass
 ```
 
-### ichat_completions: Returns outputs one by one in order (yields as soon as each finishes)
+### `ichat_completions`: Returns outputs one by one in order (yields as soon as each finishes)
 
 ```python
 for output in parallax_client.ichat_completions(list_of_messages, model="gpt-3.5-turbo"):
@@ -50,7 +50,7 @@ for output in parallax_client.ichat_completions(list_of_messages, model="gpt-3.5
     pass
 ```
 
-### ichat_completions_unordered: Returns outputs as they finish (order not guaranteed)
+### `ichat_completions_unordered`: Returns outputs as they finish (order not guaranteed)
 ```python
 for output, index in parallax_client.ichat_completions_unordered(list_of_messages, model="gpt-3.5-turbo"):
     # PROCESS OUTPUT
