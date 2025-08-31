@@ -1,6 +1,6 @@
 # Parallax
 
-A Python package for parallel inference.
+A light-weight Python package for parallel API calls.
 
 ## Installation
 
