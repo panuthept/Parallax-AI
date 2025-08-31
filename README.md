@@ -10,6 +10,25 @@ You can install Parallax using pip:
 pip install parallax-ai
 ```
 
+## Testing
+```bash
+vllm serve google/gemma-3-27b-it
+```
+
+```bash
+python -m parallax_ai.test
+>>>
+ParallaxOpenAIClient.chat_completions:
+First Output Elapsed Time: 7.32
+Total Elapsed Time (500 requires): 7.32
+ParallaxOpenAIClient.ichat_completions:
+First Output Elapsed Time: 2.85
+Total Elapsed Time (500 requires): 7.09
+Vanilla OpenAI Client:
+First Output Elapsed Time: 1.78
+Total Elapsed Time (500 requires): 672.02
+```
+
 ## Usage (Compatible with any OpenAI-API–compatible server, e.g., vLLM)
 
 ### Initialize Client
