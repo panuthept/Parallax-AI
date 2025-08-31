@@ -45,7 +45,7 @@ def main():
     
     print("Vanilla OpenAI Client:")
     start_time = time()
-    for i, output in enumerate(vanilla_client.chat_completions(messagess, model=model)):
+    for i, output in enumerate(vanilla_client.ichat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
             print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
