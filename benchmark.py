@@ -13,12 +13,13 @@ def main():
     model = "google/gemma-3-27b-it"
 
     # Parallax Client
-    print("ParallaxOpenAIClient:")
     parallax_client = ParallaxOpenAIClient(
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
+        max_parallel_processes=None,
     )
     
+    print("ParallaxOpenAIClient: ichat_completions")
     start_time = time()
     for i, output in enumerate(tqdm(parallax_client.ichat_completions(messagess, model=model))):
         if i == 0:
@@ -27,13 +28,23 @@ def main():
     total_elapsed_time = time() - start_time
     print(f"total_elapsed_time: {total_elapsed_time:.2f}")
 
+    print("ParallaxOpenAIClient: ichat_completions_unordered")
+    start_time = time()
+    for i, (output, index) in enumerate(tqdm(parallax_client.ichat_completions_unordered(messagess, model=model))):
+        if i == 0:
+            first_output_elapsed_time = time() - start_time
+            print(f"first_output_elapsed_time: {first_output_elapsed_time:.2f}")
+    total_elapsed_time = time() - start_time
+    print(f"total_elapsed_time: {total_elapsed_time:.2f}")
+    
+
     # Vanilla Client
-    print("VanillaOpenAIClient:")
     vanilla_client = VanillaOpenAIClient(
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
     )
     
+    print("VanillaOpenAIClient:")
     start_time = time()
     for i, output in enumerate(tqdm(vanilla_client.ichat_completions(messagess, model=model))):
         if i == 0:
