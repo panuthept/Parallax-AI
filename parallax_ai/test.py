@@ -18,23 +18,23 @@ def main():
         max_parallel_processes=None,
     )
     
-    print("ParallaxOpenAIClient: ichat_completions")
+    print("ParallaxOpenAIClient.chat_completions")
+    start_time = time()
+    for i, output in enumerate(parallax_client.chat_completions(messagess, model=model)):
+        if i == 0:
+            first_output_elapsed_time = time() - start_time
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
+    total_elapsed_time = time() - start_time
+    print(f"Total Elapsed Time: {total_elapsed_time:.2f}")
+    
+    print("ParallaxOpenAIClient.ichat_completions")
     start_time = time()
     for i, output in enumerate(parallax_client.ichat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
-            print(f"first_output_elapsed_time: {first_output_elapsed_time:.2f}")
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     total_elapsed_time = time() - start_time
-    print(f"total_elapsed_time: {total_elapsed_time:.2f}")
-
-    print("ParallaxOpenAIClient: ichat_completions_unordered")
-    start_time = time()
-    for i, (output, index) in enumerate(parallax_client.ichat_completions_unordered(messagess, model=model)):
-        if i == 0:
-            first_output_elapsed_time = time() - start_time
-            print(f"first_output_elapsed_time: {first_output_elapsed_time:.2f}")
-    total_elapsed_time = time() - start_time
-    print(f"total_elapsed_time: {total_elapsed_time:.2f}")
+    print(f"Total Elapsed Time: {total_elapsed_time:.2f}")
     
 
     # Vanilla Client
@@ -43,14 +43,14 @@ def main():
         base_url="http://localhost:8000/v1",
     )
     
-    print("VanillaOpenAIClient:")
+    print("Vanilla OpenAI Client:")
     start_time = time()
     for i, output in enumerate(vanilla_client.ichat_completions(messagess, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
-            print(f"first_output_elapsed_time: {first_output_elapsed_time:.2f}")
+            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}")
     total_elapsed_time = time() - start_time
-    print(f"total_elapsed_time: {total_elapsed_time:.2f}")
+    print(f"Total Elapsed Time: {total_elapsed_time:.2f}")
 
 
 if __name__ == "__main__":
