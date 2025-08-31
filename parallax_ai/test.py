@@ -7,7 +7,7 @@ def main():
     messages = [
         {"role": "user", "content": "Sing me a song."},
     ]
-    messagess = [messages for _ in range(100)]
+    messagess = [messages for _ in range(500)]
 
     model = "google/gemma-3-27b-it"
 
