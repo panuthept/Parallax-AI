@@ -1,15 +1,11 @@
-from parallax_ai import ParallaxOpenAIClient, VanillaOpenAIClient
+from parallax_ai import ParallaxOpenAIClient
+from parallax_ai.clients.openai_client import run
 
 
 def main():
     from time import time
 
-    messages = [
-        {"role": "user", "content": "Sing me a song."},
-    ]
-    messagess = [messages for _ in range(500)]
     prompts = ["Sing me a song." for _ in range(500)]
-
     model = "google/gemma-3-27b-it"
 
     # Parallax Client
@@ -19,52 +15,31 @@ def main():
         max_parallel_processes=None,
     )
     
-    print("ParallaxOpenAIClient.completions:")
+    print("ParallaxOpenAIClient.run:")
     start_time = time()
-    for i, output in enumerate(parallax_client.completions(prompts, model=model)):
+    for i, output in enumerate(parallax_client.run(prompts, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
             print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}s")
     total_elapsed_time = time() - start_time
     print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}s")
+    print()
     
-    print("ParallaxOpenAIClient.icompletions:")
+    print("ParallaxOpenAIClient.irun:")
     start_time = time()
-    for i, output in enumerate(parallax_client.icompletions(prompts, model=model)):
+    for i, output in enumerate(parallax_client.irun(prompts, model=model)):
         if i == 0:
             first_output_elapsed_time = time() - start_time
             print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}s")
     total_elapsed_time = time() - start_time
     print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}s")
+    print()
     
-    print("ParallaxOpenAIClient.chat_completions:")
-    start_time = time()
-    for i, output in enumerate(parallax_client.chat_completions(messagess, model=model)):
-        if i == 0:
-            first_output_elapsed_time = time() - start_time
-            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}s")
-    total_elapsed_time = time() - start_time
-    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}s")
-    
-    print("ParallaxOpenAIClient.ichat_completions:")
-    start_time = time()
-    for i, output in enumerate(parallax_client.ichat_completions(messagess, model=model)):
-        if i == 0:
-            first_output_elapsed_time = time() - start_time
-            print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}s")
-    total_elapsed_time = time() - start_time
-    print(f"Total Elapsed Time (500 requires): {total_elapsed_time:.2f}s")
-    
-
     # Vanilla Client
-    vanilla_client = VanillaOpenAIClient(
-        api_key="EMPTY",
-        base_url="http://localhost:8000/v1",
-    )
-    
     print("Vanilla OpenAI Client:")
     start_time = time()
-    for i, output in enumerate(vanilla_client.ichat_completions(messagess, model=model)):
+    for i, prompt in enumerate(prompts):
+        output = run(prompt, model=model, api_key="EMPTY", base_url="http://localhost:8000/v1")
         if i == 0:
             first_output_elapsed_time = time() - start_time
             print(f"First Output Elapsed Time: {first_output_elapsed_time:.2f}s")

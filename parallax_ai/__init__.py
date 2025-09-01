@@ -2,4 +2,4 @@
 
 __version__ = "0.2.2"
 
-from parallax_ai.clients import ParallaxOpenAIClient, VanillaOpenAIClient
+from parallax_ai.clients import ParallaxOpenAIClient
