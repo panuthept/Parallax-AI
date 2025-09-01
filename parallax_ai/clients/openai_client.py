@@ -9,7 +9,7 @@ def completions(
     model: str,
     api_key: str = "EMPTY",
     base_url: Optional[str] = None,
-    completions_kwargs: Optional[dict] = None,
+    **kwargs,
 ):
     if isinstance(inputs, tuple):
         assert len(inputs) == 2, "inputs should be a tuple of (prompt, index)."
@@ -21,15 +21,12 @@ def completions(
     if prompt is None:
         return None, index
 
-    if completions_kwargs is None or not isinstance(completions_kwargs, dict):
-        completions_kwargs = {}
-
     client = OpenAI(api_key=api_key, base_url=base_url)
     try:
         response = client.completions.create(
             model=model,
             prompt=prompt,
-            **completions_kwargs
+            **kwargs
         )
         return response, index
     except Exception as e:
@@ -41,7 +38,7 @@ def chat_completions(
     model: str,
     api_key: str = "EMPTY",
     base_url: Optional[str] = None,
-    chat_completions_kwargs: Optional[dict] = None,
+    **kwargs,
 ):
     if isinstance(inputs, tuple):
         assert len(inputs) == 2, "inputs should be a tuple of (messages, index)."
@@ -53,15 +50,12 @@ def chat_completions(
     if messages is None:
         return None, index
 
-    if chat_completions_kwargs is None or not isinstance(chat_completions_kwargs, dict):
-        chat_completions_kwargs = {}
-
     client = OpenAI(api_key=api_key, base_url=base_url)
     try:
         response = client.chat.completions.create(
             model=model,
             messages=messages,
-            **chat_completions_kwargs
+            **kwargs
         )
         return response, index
     except Exception as e:
@@ -82,7 +76,7 @@ class VanillaOpenAIClient:
         self,
         messages: List[List[dict]]|List[dict],
         model: str,
-        chat_completions_kwargs: Optional[dict] = None,
+        **kwargs,
     ):
         if isinstance(messages, list) and isinstance(messages[0], list):
             messages = messages
@@ -98,7 +92,7 @@ class VanillaOpenAIClient:
                 model=model,
                 api_key=self.api_key,
                 base_url=self.base_url,
-                chat_completions_kwargs=chat_completions_kwargs,
+                **kwargs,
             )
             outputs.append(output)
         return outputs
@@ -107,7 +101,7 @@ class VanillaOpenAIClient:
         self,
         messages: List[List[dict]]|List[dict],
         model: str,
-        chat_completions_kwargs: Optional[dict] = None,
+        **kwargs,
     ):
         if isinstance(messages, list) and isinstance(messages[0], list):
             messages = messages
@@ -122,7 +116,7 @@ class VanillaOpenAIClient:
                 model=model,
                 api_key=self.api_key,
                 base_url=self.base_url,
-                chat_completions_kwargs=chat_completions_kwargs,
+                **kwargs,
             )
             yield output
 
@@ -132,21 +126,18 @@ class ParallaxOpenAIClient:
         self, 
         api_key: str = "EMPTY",
         base_url: Optional[str] = None,
-        max_parallel_processes: int = None
+        max_parallel_processes: Optional[int] = None
     ):
         self.api_key = api_key
         self.base_url = base_url
         self.max_parallel_processes = max_parallel_processes
 
-    def completions(
+    def _prepare_completions(
         self,
         prompts: List[str]|str,
         model: str,
-        completions_kwargs: Optional[dict] = None,
+        **kwargs,
     ):
-        """
-        Parallely process inputs, wait for all to finished, output in order.
-        """
         if isinstance(prompts, list):
             prompts = prompts
         elif isinstance(prompts, str):
@@ -159,7 +150,23 @@ class ParallaxOpenAIClient:
             model=model,
             api_key=self.api_key,
             base_url=self.base_url,
-            completions_kwargs=completions_kwargs,
+            **kwargs,
+        )
+        return prompts, partial_completions
+
+    def completions(
+        self,
+        prompts: List[str]|str,
+        model: str,
+        **kwargs,
+    ):
+        """
+        Parallely process inputs, wait for all to finished, output in order.
+        """
+        prompts, partial_completions = self._prepare_completions(
+            prompts=prompts,
+            model=model,
+            **kwargs,
         )
 
         with Pool(processes=self.max_parallel_processes) as pool:
@@ -174,24 +181,15 @@ class ParallaxOpenAIClient:
         self,
         prompts: List[str]|str,
         model: str,
-        completions_kwargs: Optional[dict] = None,
+        **kwargs,
     ):
         """
         Parallely process inputs, output as soon as one finished, in order.
         """
-        if isinstance(prompts, list):
-            prompts = prompts
-        elif isinstance(prompts, str):
-            prompts = [prompts]
-        else:
-            raise ValueError("prompts must be a list of str or str")
-
-        partial_completions = partial(
-            completions,
+        prompts, partial_completions = self._prepare_completions(
+            prompts=prompts,
             model=model,
-            api_key=self.api_key,
-            base_url=self.base_url,
-            completions_kwargs=completions_kwargs,
+            **kwargs,
         )
 
         with Pool(processes=self.max_parallel_processes) as pool:
@@ -202,24 +200,15 @@ class ParallaxOpenAIClient:
         self,
         prompts: List[str]|str,
         model: str,
-        completions_kwargs: Optional[dict] = None,
+        **kwargs,
     ):
         """
         Parallely process inputs, output as soon as one finished without order.
         """
-        if isinstance(prompts, list):
-            prompts = prompts
-        elif isinstance(prompts, str):
-            prompts = [prompts]
-        else:
-            raise ValueError("prompts must be a list of str or str")
-
-        partial_completions = partial(
-            completions,
+        prompts, partial_completions = self._prepare_completions(
+            prompts=prompts,
             model=model,
-            api_key=self.api_key,
-            base_url=self.base_url,
-            completions_kwargs=completions_kwargs,
+            **kwargs,
         )
 
         inputs = [(prompt, i) for i, prompt in enumerate(prompts)]
@@ -227,15 +216,12 @@ class ParallaxOpenAIClient:
             for output, index in pool.imap_unordered(partial_completions, inputs):
                 yield (output, index)
 
-    def chat_completions(
+    def _prepare_chat_completions(
         self,
         messages: List[List[dict]]|List[dict],
         model: str,
-        chat_completions_kwargs: Optional[dict] = None,
+        **kwargs,
     ):
-        """
-        Parallely process inputs, wait for all to finished, output in order.
-        """
         if isinstance(messages, list) and isinstance(messages[0], list):
             messages = messages
         elif isinstance(messages, list) and isinstance(messages[0], dict):
@@ -248,7 +234,23 @@ class ParallaxOpenAIClient:
             model=model,
             api_key=self.api_key,
             base_url=self.base_url,
-            chat_completions_kwargs=chat_completions_kwargs,
+            **kwargs,
+        )
+        return messages, partial_chat_completions
+
+    def chat_completions(
+        self,
+        messages: List[List[dict]]|List[dict],
+        model: str,
+        **kwargs,
+    ):
+        """
+        Parallely process inputs, wait for all to finished, output in order.
+        """
+        messages, partial_chat_completions = self._prepare_chat_completions(
+            messages=messages,
+            model=model,
+            **kwargs,
         )
 
         with Pool(processes=self.max_parallel_processes) as pool:
@@ -263,24 +265,15 @@ class ParallaxOpenAIClient:
         self,
         messages: List[List[dict]]|List[dict],
         model: str,
-        chat_completions_kwargs: Optional[dict] = None,
+        **kwargs,
     ):
         """
         Parallely process inputs, output as soon as one finished, in order.
         """
-        if isinstance(messages, list) and isinstance(messages[0], list):
-            messages = messages
-        elif isinstance(messages, list) and isinstance(messages[0], dict):
-            messages = [messages]
-        else:
-            raise ValueError("messages must be a list of list of dict or list of dict")
-
-        partial_chat_completions = partial(
-            chat_completions,
+        messages, partial_chat_completions = self._prepare_chat_completions(
+            messages=messages,
             model=model,
-            api_key=self.api_key,
-            base_url=self.base_url,
-            chat_completions_kwargs=chat_completions_kwargs,
+            **kwargs,
         )
 
         with Pool(processes=self.max_parallel_processes) as pool:
@@ -291,24 +284,15 @@ class ParallaxOpenAIClient:
         self,
         messages: List[List[dict]]|List[dict],
         model: str,
-        chat_completions_kwargs: Optional[dict] = None,
+        **kwargs,
     ):
         """
         Parallely process inputs, output as soon as one finished without order.
         """
-        if isinstance(messages, list) and isinstance(messages[0], list):
-            messages = messages
-        elif isinstance(messages, list) and isinstance(messages[0], dict):
-            messages = [messages]
-        else:
-            raise ValueError("messages must be a list of list of dict or list of dict")
-
-        partial_chat_completions = partial(
-            chat_completions,
+        messages, partial_chat_completions = self._prepare_chat_completions(
+            messages=messages,
             model=model,
-            api_key=self.api_key,
-            base_url=self.base_url,
-            chat_completions_kwargs=chat_completions_kwargs,
+            **kwargs,
         )
 
         inputs = [(message, i) for i, message in enumerate(messages)]
