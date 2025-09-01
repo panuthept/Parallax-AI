@@ -13,13 +13,13 @@ def completions(
 ):
     if isinstance(inputs, tuple):
         assert len(inputs) == 2, "inputs should be a tuple of (prompt, index)."
-        prompt, index = inputs
+        index, prompt = inputs
     else:
         prompt = inputs
         index = None
 
     if prompt is None:
-        return None, index
+        return index, None
 
     client = OpenAI(api_key=api_key, base_url=base_url)
     try:
@@ -28,10 +28,10 @@ def completions(
             prompt=prompt,
             **kwargs
         )
-        return response, index
+        return index, response
     except Exception as e:
         print(e)
-        return None, index
+        return index, None
 
 
 def chat_completions(
@@ -43,13 +43,13 @@ def chat_completions(
 ):
     if isinstance(inputs, tuple):
         assert len(inputs) == 2, "inputs should be a tuple of (messages, index)."
-        messages, index = inputs
+        index, messages = inputs
     else:
         messages = inputs
         index = None
 
     if messages is None:
-        return None, index
+        return index, None
 
     client = OpenAI(api_key=api_key, base_url=base_url)
     try:
@@ -58,10 +58,10 @@ def chat_completions(
             messages=messages,
             **kwargs
         )
-        return response, index
+        return index, response
     except Exception as e:
         print(e)
-        return None, index
+        return index, None
 
 
 class VanillaOpenAIClient:
@@ -89,7 +89,7 @@ class VanillaOpenAIClient:
 
         outputs = []
         for message in messages:
-            output, _ = chat_completions(
+            _, output = chat_completions(
                 message,
                 model=model,
                 api_key=self.api_key,
@@ -113,7 +113,7 @@ class VanillaOpenAIClient:
             raise ValueError("messages must be a list of list of dict or list of dict")
 
         for message in messages:
-            output, _ = chat_completions(
+            _, output = chat_completions(
                 message,
                 model=model,
                 api_key=self.api_key,
@@ -176,7 +176,7 @@ class ParallaxOpenAIClient:
                 partial_completions,
                 prompts,
             )
-            outputs = [response for response, _ in outputs]
+            outputs = [response for _, response in outputs]
         return outputs
 
     def icompletions(
@@ -195,7 +195,7 @@ class ParallaxOpenAIClient:
         )
 
         with Pool(processes=self.max_parallel_processes) as pool:
-            for output, _ in pool.imap(partial_completions, prompts):
+            for _, output in pool.imap(partial_completions, prompts):
                 yield output
 
     def icompletions_unordered(
@@ -213,10 +213,10 @@ class ParallaxOpenAIClient:
             **kwargs,
         )
 
-        inputs = [(prompt, i) for i, prompt in enumerate(prompts)]
+        inputs = [(i, prompt) for i, prompt in enumerate(prompts)]
         with Pool(processes=self.max_parallel_processes) as pool:
-            for output, index in pool.imap_unordered(partial_completions, inputs):
-                yield (output, index)
+            for index, output in pool.imap_unordered(partial_completions, inputs):
+                yield (index, output)
 
     def _prepare_chat_completions(
         self,
@@ -260,7 +260,7 @@ class ParallaxOpenAIClient:
                 partial_chat_completions,
                 messages,
             )
-            outputs = [response for response, _ in outputs]
+            outputs = [response for _, response in outputs]
         return outputs
 
     def ichat_completions(
@@ -279,7 +279,7 @@ class ParallaxOpenAIClient:
         )
 
         with Pool(processes=self.max_parallel_processes) as pool:
-            for output, _ in pool.imap(partial_chat_completions, messages):
+            for _, output in pool.imap(partial_chat_completions, messages):
                 yield output
 
     def ichat_completions_unordered(
@@ -297,10 +297,10 @@ class ParallaxOpenAIClient:
             **kwargs,
         )
 
-        inputs = [(message, i) for i, message in enumerate(messages)]
+        inputs = [(i, message) for i, message in enumerate(messages)]
         with Pool(processes=self.max_parallel_processes) as pool:
-            for output, index in pool.imap_unordered(partial_chat_completions, inputs):
-                yield (output, index)
+            for index, output in pool.imap_unordered(partial_chat_completions, inputs):
+                yield (index, output)
 
 
 if __name__ == "__main__":
