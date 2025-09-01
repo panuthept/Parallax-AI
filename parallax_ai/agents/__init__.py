@@ -1,1 +1,1 @@
-from .base_agents import Agent, JSONOutputAgent
+from .base_agents import Agent, JSONOutputAgent, KeywordOutputAgent
