@@ -30,6 +30,7 @@ def completions(
         )
         return response, index
     except Exception as e:
+        print(e)
         return None, index
 
 
@@ -59,6 +60,7 @@ def chat_completions(
         )
         return response, index
     except Exception as e:
+        print(e)
         return None, index
 
 
