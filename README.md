@@ -18,21 +18,17 @@ vllm serve google/gemma-3-27b-it
 ```bash
 python -m parallax_ai.test
 >>>
-ParallaxOpenAIClient.completions:
-First Output Elapsed Time: 7.10s
-Total Elapsed Time (500 requires): 7.10s
-ParallaxOpenAIClient.icompletions:
-First Output Elapsed Time: 2.85s
-Total Elapsed Time (500 requires): 6.99s
-ParallaxOpenAIClient.chat_completions:
-First Output Elapsed Time: 7.32s
-Total Elapsed Time (500 requires): 7.32s
-ParallaxOpenAIClient.ichat_completions:
-First Output Elapsed Time: 2.85s
-Total Elapsed Time (500 requires): 7.09s
+ParallaxOpenAIClient.run:
+First Output Elapsed Time: 4.40s
+Total Elapsed Time (500 requires): 4.40s
+
+ParallaxOpenAIClient.irun:
+First Output Elapsed Time: 1.95s
+Total Elapsed Time (500 requires): 3.51s
+
 Vanilla OpenAI Client:
-First Output Elapsed Time: 1.78s
-Total Elapsed Time (500 requires): 672.02s
+First Output Elapsed Time: 0.72s
+Total Elapsed Time (500 requires): 95.70s
 ```
 
 ## Usage (Compatible with any OpenAI-API–compatible server, e.g., vLLM)
@@ -58,26 +54,26 @@ list_of_messages = [
 ]
 ```
 
-### `chat_completions`: Returns a list of outputs in order (waits until all are finished)
+### `run`: Returns a list of outputs in order (waits until all are finished)
 
 ```python
-outputs = parallax_client.chat_completions(list_of_messages, model="gpt-3.5-turbo")
+outputs = parallax_client.run(list_of_messages, model="gpt-3.5-turbo")
 for output in outputs:
     # PROCESS OUTPUT
     pass
 ```
 
-### `ichat_completions`: Returns outputs one by one in order (yields as soon as each finishes)
+### `irun`: Returns outputs one by one in order (yields as soon as each finishes)
 
 ```python
-for output in parallax_client.ichat_completions(list_of_messages, model="gpt-3.5-turbo"):
+for output in parallax_client.irun(list_of_messages, model="gpt-3.5-turbo"):
     # PROCESS OUTPUT
     pass
 ```
 
-### `ichat_completions_unordered`: Returns outputs as they finish (order not guaranteed)
+### `irun_unordered`: Returns outputs as they finish (order not guaranteed)
 ```python
-for output, index in parallax_client.ichat_completions_unordered(list_of_messages, model="gpt-3.5-turbo"):
+for output, index in parallax_client.irun_unordered(list_of_messages, model="gpt-3.5-turbo"):
     # PROCESS OUTPUT
     pass
 ```
