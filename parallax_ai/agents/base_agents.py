@@ -33,6 +33,9 @@ class Agent(BaseAgent):
         self.system_prompt = system_prompt
 
     def _inputs_processing(self, inputs):
+        if isinstance(inputs, str) or (isinstance(inputs, list) and isinstance(inputs[0], dict)):
+            inputs = [inputs]
+
         processed_inputs = []
         for input in inputs:
             if self.system_prompt is None:
@@ -51,6 +54,8 @@ class Agent(BaseAgent):
         return processed_inputs
 
     def _output_processing(self, input, output) -> str:
+        if output is None:
+            return None
         if isinstance(input, list) and isinstance(input[0], dict):
             return output.choices[0].message.content
         elif isinstance(input, str):
@@ -103,6 +108,7 @@ class JSONOutputAgent(Agent):
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         system_prompt: Optional[str] = None,
+        max_tries: int = 3,
         **kwargs,
     ):
         super().__init__(
@@ -112,6 +118,7 @@ class JSONOutputAgent(Agent):
             system_prompt=system_prompt,
             **kwargs,
         )
+        self.max_tries = max_tries
         self.output_schema = output_schema
         self.system_prompt = self.system_prompt + "\n\n" + self.output_schema_instruction if self.system_prompt is not None else self.output_schema_instruction
 
@@ -120,7 +127,7 @@ class JSONOutputAgent(Agent):
         return (
             "Output in JSON format that matches the following schema:\n"
             "{output_schema}"
-        ).format(output_schema=json.dumps(self.output_schema))
+        ).format(output_schema=json.dumps(self.output_schema, indent=2))
 
     def json_parser(self, output: str) -> dict:
         try:
@@ -146,6 +153,39 @@ class JSONOutputAgent(Agent):
         output = super()._output_processing(input, output)
         return self.json_parser(output)
 
+    def run(
+        self, 
+        inputs, 
+    ) -> List[str]:
+        processed_inputs = self._inputs_processing(inputs)
+        outputs = self.client.run(
+            inputs=processed_inputs,
+            model=self.model,
+        )
+        return [self._output_processing(input, output) for input, output in zip(processed_inputs, outputs)]
+
+    def irun(
+        self, 
+        inputs, 
+    ) -> Iterator[str]:
+        processed_inputs = self._inputs_processing(inputs)
+        for i, output in enumerate(self.client.irun(
+            inputs=processed_inputs,
+            model=self.model,
+        )):
+            yield self._output_processing(processed_inputs[i], output)
+
+    def irun_unordered(
+        self, 
+        inputs, 
+    ) -> Iterator[Tuple[int, str]]:
+        processed_inputs = self._inputs_processing(inputs)
+        for i, output in self.client.irun_unordered(
+            inputs=processed_inputs,
+            model=self.model,
+        ):
+            yield i, self._output_processing(processed_inputs[i], output)
+
 
 if __name__ == "__main__":
     from time import time
@@ -159,13 +199,14 @@ if __name__ == "__main__":
                 "properties": {
                     "name": {"type": "string"},
                     "age": {"type": "integer"},
+                    "background": {"type": "string"},
                 },
-                "required": ["name", "age"],
+                "required": ["name", "age", "background"],
             },
         },
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
-        system_prompt="Generate a list of persons with name, age, and occupation, that relavant to a given user input.",
+        system_prompt="Generate a list of persons with name, age, and background, that relavant to a given user input.",
     )
 
     messages = [
