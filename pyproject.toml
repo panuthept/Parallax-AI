@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "parallax-ai"
-version = "0.2.1"
+version = "0.2.2"
 description = "Lightweight parallel AI API calls in Python."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -14,6 +14,7 @@ authors = [
 ]
 dependencies = [
     "openai>=1.0.0",
+    "jsonschema>=4.25.1",
 ]
 
 [project.optional-dependencies]
