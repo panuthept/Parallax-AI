@@ -1,5 +1,7 @@
 import json
+import random
 import jsonschema
+from copy import deepcopy
 from abc import ABC, abstractmethod
 from parallax_ai.clients import ParallaxOpenAIClient
 from typing import Any, List, Tuple, Optional, Iterator
@@ -26,18 +28,22 @@ class Agent(BaseAgent):
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         system_prompt: Optional[str] = None,
+        max_tries: int = 5,
         **kwargs,
     ):
         self.model = model
-        self.client = ParallaxOpenAIClient(api_key=api_key, base_url=base_url)
+        self.max_tries = max_tries
         self.system_prompt = system_prompt
+        self.client = ParallaxOpenAIClient(api_key=api_key, base_url=base_url)
 
     def _inputs_processing(self, inputs):
+        # Ensure that inputs is a list
         if isinstance(inputs, str) or (isinstance(inputs, list) and isinstance(inputs[0], dict)):
             inputs = [inputs]
-
+        # Add system prompt (if exists) to the inputs
         processed_inputs = []
         for input in inputs:
+            input = deepcopy(input)
             if self.system_prompt is None:
                 processed_inputs.append(input)
             else:
@@ -62,39 +68,94 @@ class Agent(BaseAgent):
             return output.choices[0].text
         else:
             raise ValueError(f"Unknown input type:\n{input}")
+        return output
 
     def run(
         self, 
         inputs, 
     ) -> List[str]:
-        processed_inputs = self._inputs_processing(inputs)
-        outputs = self.client.run(
-            inputs=processed_inputs,
-            model=self.model,
-        )
-        return [self._output_processing(input, output) for input, output in zip(processed_inputs, outputs)]
+        inputs = self._inputs_processing(inputs)
+
+        finished_outputs = {}
+        unfinished_inputs = inputs
+        for _ in range(self.max_tries):
+            unfinished_indices = []
+            outputs = self.client.run(inputs=unfinished_inputs, model=self.model)
+            for i, output in enumerate(outputs):
+                output = self._output_processing(inputs[i], output)
+                if output is not None:
+                    finished_outputs[i] = output
+                else:
+                    unfinished_indices.append(i)
+            if len(unfinished_indices) == 0:
+                break
+            unfinished_inputs = [inputs[i] for i in unfinished_indices]
+        return [finished_outputs[i] if i in finished_outputs else None for i in range(len(inputs))]
 
     def irun(
         self, 
         inputs, 
     ) -> Iterator[str]:
-        processed_inputs = self._inputs_processing(inputs)
-        for i, output in enumerate(self.client.irun(
-            inputs=processed_inputs,
-            model=self.model,
-        )):
-            yield self._output_processing(processed_inputs[i], output)
+        inputs = self._inputs_processing(inputs)
+
+        current_index = 0
+        finished_outputs = {}
+        unfinished_indices = None
+        unfinished_inputs = inputs
+        for _ in range(self.max_tries):
+            true_index_mapping = deepcopy(unfinished_indices) if unfinished_indices else []
+            unfinished_indices = []
+            for i, output in enumerate(self.client.irun(inputs=unfinished_inputs, model=self.model)):
+                # Convert to true index
+                if len(true_index_mapping) > 0:
+                    i = true_index_mapping[i]
+                # Process output
+                output = self._output_processing(inputs[i], output)
+                # Check output validity
+                if output is not None:
+                    # Cache valid outputs
+                    finished_outputs[i] = output
+                    # Fetch all outputs in finished_outputs that match the current_index
+                    while current_index in finished_outputs:
+                        yield output
+                        current_index += 1
+                else:
+                    unfinished_indices.append(i)
+            if len(unfinished_indices) == 0:
+                break
+            unfinished_inputs = [inputs[i] for i in unfinished_indices]
+        if current_index < len(inputs):
+            for i in range(current_index, len(inputs)):
+                yield finished_outputs[i] if i in finished_outputs else None
 
     def irun_unordered(
         self, 
         inputs, 
     ) -> Iterator[Tuple[int, str]]:
-        processed_inputs = self._inputs_processing(inputs)
-        for i, output in self.client.irun_unordered(
-            inputs=processed_inputs,
-            model=self.model,
-        ):
-            yield i, self._output_processing(processed_inputs[i], output)
+        inputs = self._inputs_processing(inputs)
+
+        unfinished_indices = None
+        unfinished_inputs = inputs
+        for _ in range(self.max_tries):
+            true_index_mapping = deepcopy(unfinished_indices) if unfinished_indices else []
+            unfinished_indices = []
+            for i, output in self.client.irun_unordered(inputs=unfinished_inputs, model=self.model):
+                # Convert to true index
+                if len(true_index_mapping) > 0:
+                    i = true_index_mapping[i]
+                # Process output
+                output = self._output_processing(inputs[i], output)
+                # Check output validity
+                if output is not None:
+                    yield (i, output)
+                else:
+                    unfinished_indices.append(i)
+            if len(unfinished_indices) == 0:
+                break
+            unfinished_inputs = [inputs[i] for i in unfinished_indices]
+        if len(unfinished_indices) > 0:
+            for i in unfinished_indices:
+                yield (i, None)
 
 
 class JSONOutputAgent(Agent):
@@ -116,20 +177,21 @@ class JSONOutputAgent(Agent):
             api_key=api_key,
             base_url=base_url,
             system_prompt=system_prompt,
+            max_tries=max_tries,
             **kwargs,
         )
-        self.max_tries = max_tries
         self.output_schema = output_schema
-        self.system_prompt = self.system_prompt + "\n\n" + self.output_schema_instruction if self.system_prompt is not None else self.output_schema_instruction
 
     @property
     def output_schema_instruction(self) -> str:
         return (
             "Output in JSON format that matches the following schema:\n"
             "{output_schema}"
-        ).format(output_schema=json.dumps(self.output_schema, indent=2))
+        ).format(output_schema=json.dumps(self.output_schema))
 
     def json_parser(self, output: str) -> dict:
+        if output is None:
+            return None
         try:
             # Remove prefix and suffix texts
             output = output.split("```json")
@@ -148,78 +210,43 @@ class JSONOutputAgent(Agent):
             return output
         except Exception:
             return None
-        
-    def _inputs_processing(self, inputs):
-        processed_inputs = super()._inputs_processing(inputs)
 
-        duplicated_processed_inputs = []
-        for processed_input in processed_inputs:
-            duplicated_processed_inputs.extend(processed_input * self.max_tries)
-        return duplicated_processed_inputs
+    def _inputs_processing(self, inputs):
+        """
+        Add output_schema_instruction to the inputs
+        - If input is a messages with system prompt, this function will append output_schema_instruction to the system prompt.
+        - If input is a messages without system prompt, this function will add output_schema_instruction as a system prompt.
+        - If input is a prompt, this function will convert input to message then add output_schema_instruction as a system prompt.
+        """
+        inputs = super()._inputs_processing(inputs)
+
+        processed_inputs = []
+        for input in inputs:
+            input = deepcopy(input)
+            if isinstance(input, str):
+                input = [
+                    {"role": "system", "content": self.output_schema_instruction},
+                    {"role": "user", "content": input},
+                ]
+                # input = input + "\n\n" + self.output_schema_instruction
+            elif isinstance(input, list) and isinstance(input[0], dict):
+                if input[0]["role"] == "system":
+                    input[0]["content"] = input[0]["content"] + "\n\n" + self.output_schema_instruction
+                else:
+                    input.insert(0, {"role": "system", "content": self.output_schema_instruction})
+            else:
+                raise ValueError(f"Unknown input type:\n{input}")
+            processed_inputs.append(input)
+        return processed_inputs
 
     def _output_processing(self, input, output) -> dict|list[dict]:
         output = super()._output_processing(input, output)
         return self.json_parser(output)
 
-    def run(
-        self, 
-        inputs, 
-    ) -> List[str]:
-        duplicated_outputs = super().run(inputs)
-        # Take the first valid output from the duplicated outputs
-        outputs = []
-        for i in range(len(inputs)):
-            for j in range(self.max_tries):
-                output = duplicated_outputs[i * self.max_tries + j]
-                if output is not None:
-                    outputs.append(output)
-                    break
-            if len(outputs) == i:
-                # All tries failed, return None
-                outputs.append(None)
-        assert len(outputs) == len(inputs)
-        return outputs
-
-    def irun(
-        self, 
-        inputs, 
-    ) -> Iterator[str]:
-        # Take the first valid output, skip the rest
-        tracking_index = 0
-        for i, output in enumerate(super().irun(inputs)):
-            if tracking_index * self.max_tries <= i < (tracking_index + 1) * self.max_tries:
-                if output is not None:
-                    tracking_index += 1
-                    yield output
-                else:
-                    if i == (tracking_index + 1) * self.max_tries - 1:
-                        # All tries failed, return None
-                        tracking_index += 1
-                        yield None
-
-    def irun_unordered(
-        self, 
-        inputs, 
-    ) -> Iterator[Tuple[int, str]]:
-        # Take the first valid output, skip the rest
-        tracking_index = 0
-        cached_outputs = {i: [] for i in range(len(inputs))}
-        for i, output in super().irun_unordered(inputs):
-            cached_outputs[i].append(output)
-            if i == tracking_index:
-                # Get current output
-                if output is not None:
-                    tracking_index += 1
-                    yield i, output
-                else:
-                    if len(cached_outputs[i]) >= self.max_tries:
-                        # All tries failed, return None
-                        tracking_index += 1
-                        yield i, None
-
 
 if __name__ == "__main__":
     from time import time
+    from random import randint
 
     agent = JSONOutputAgent(
         model="google/gemma-3-27b-it",
@@ -237,13 +264,58 @@ if __name__ == "__main__":
         },
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
-        system_prompt="Generate a list of 3 persons with name, age, and gender, that relavant to a given user input.",
+        max_tries=5,
     )
 
-    messages = [
-        {"role": "user", "content": "Thai singers"},
-    ]
+    inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
     
     start_time = time()
-    for i, output in enumerate(agent.irun(messages)):
-        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}, Output: {output}")
+    error_count = 0
+    for i, output in enumerate(agent.run(inputs)):
+        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
+        if output is None:
+            error_count += 1
+    print(f"Error: {error_count}")
+    print()
+    
+    prev_time = None
+    start_time = time()
+    error_count = 0
+    max_iteration_time = 0
+    for i, output in enumerate(agent.irun(inputs)):
+        iteration_time = 0
+        if prev_time:
+            iteration_time = time() - prev_time
+            if iteration_time > max_iteration_time:
+                max_iteration_time = iteration_time
+        if i == 0:
+            first_output_time = time() - start_time
+        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s ({iteration_time:.4f}s)\nInput: {inputs[i]}\nOutput: {output}")
+        if output is None:
+            error_count += 1
+        prev_time = time()
+    print(f"Error: {error_count}")
+    print(f"First Output Time: {first_output_time:4f}")
+    print(f"Max Iteration Time: {max_iteration_time:4f}")
+    print()
+
+    prev_time = time()
+    start_time = time()
+    error_count = 0
+    max_iteration_time = 0
+    for i, output in agent.irun_unordered(inputs):
+        iteration_time = 0
+        if prev_time:
+            iteration_time = time() - prev_time
+            if iteration_time > max_iteration_time:
+                max_iteration_time = iteration_time
+        if i == 0:
+            first_output_time = time() - start_time
+        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s ({iteration_time:.4f}s)\nInput: {inputs[i]}\nOutput: {output}")
+        if output is None:
+            error_count += 1
+        prev_time = time()
+    print(f"Error: {error_count}")
+    print(f"First Output Time: {first_output_time:4f}")
+    print(f"Max Iteration Time: {max_iteration_time:4f}")
+    print()

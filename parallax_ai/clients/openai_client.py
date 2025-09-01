@@ -13,7 +13,7 @@ def run(
 ):
     if isinstance(inputs, tuple):
         assert len(inputs) == 2, "inputs should be a tuple of (input, index)."
-        _, input = inputs
+        index, input = inputs
     else:
         input = inputs
         index = None
@@ -117,6 +117,7 @@ class ParallaxOpenAIClient:
         **kwargs,
     ):
         inputs, partial_run_func = self._prepare_run(inputs, model, **kwargs)
+        inputs = [(i, input) for i, input in enumerate(inputs)]
         with Pool(processes=self.max_parallel_processes) as pool:
             for index, output in pool.imap_unordered(partial_run_func, inputs):
                 yield (index, output)
