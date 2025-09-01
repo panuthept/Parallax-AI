@@ -157,59 +157,19 @@ class Agent(BaseAgent):
             for i in unfinished_indices:
                 yield (i, None)
 
-
-class JSONOutputAgent(Agent):
-    """ 
-    This class receives a JSON schema and provides an instruction and a method to parse and validate the model's output. 
-    """
-    def __init__(
-        self, 
-        model: str,
-        output_schema: dict|list[dict],
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
-        system_prompt: Optional[str] = None,
-        max_tries: int = 3,
-        **kwargs,
-    ):
-        super().__init__(
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            system_prompt=system_prompt,
-            max_tries=max_tries,
-            **kwargs,
-        )
-        self.output_schema = output_schema
-
+            
+class PresetOutputAgent(Agent):
     @property
     def output_schema_instruction(self) -> str:
-        return (
-            "Output in JSON format that matches the following schema:\n"
-            "{output_schema}"
-        ).format(output_schema=json.dumps(self.output_schema))
+        raise NotImplementedError
 
-    def json_parser(self, output: str) -> dict:
-        if output is None:
-            return None
-        try:
-            # Remove prefix and suffix texts
-            output = output.split("```json")
-            if len(output) != 2:
-                return None
-            output = output[1].split("```")
-            if len(output) != 2:
-                return None
-            output = output[0].strip()
+    @abstractmethod
+    def output_post_processing(self, output):
+        raise NotImplementedError
 
-            # Parse the JSON object
-            output = json.loads(output)
-
-            # Validate the JSON object
-            jsonschema.validate(instance=output, schema=self.output_schema)
-            return output
-        except Exception:
-            return None
+    @abstractmethod
+    def output_validation(self, output):
+        raise NotImplementedError
 
     def _inputs_processing(self, inputs):
         """
@@ -241,7 +201,109 @@ class JSONOutputAgent(Agent):
 
     def _output_processing(self, input, output) -> dict|list[dict]:
         output = super()._output_processing(input, output)
-        return self.json_parser(output)
+        output = self.output_post_processing(output)
+        return output if self.output_validation(output) else None
+
+
+class JSONOutputAgent(PresetOutputAgent):
+    """ 
+    This class receives a JSON schema and provides an instruction and a method to parse and validate the model's output. 
+    """
+    def __init__(
+        self, 
+        model: str,
+        output_schema: dict,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tries: int = 3,
+        **kwargs,
+    ):
+        super().__init__(
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            system_prompt=system_prompt,
+            max_tries=max_tries,
+            **kwargs,
+        )
+        self.output_schema = output_schema
+
+    @property
+    def output_schema_instruction(self) -> str:
+        return (
+            "Output in JSON format that matches the following schema:\n"
+            "{output_schema}"
+        ).format(output_schema=json.dumps(self.output_schema))
+
+    def output_post_processing(self, output: str) -> dict:
+        if output is None:
+            return None
+        try:
+            # Remove prefix and suffix texts
+            output = output.split("```json")
+            if len(output) != 2:
+                return None
+            output = output[1].split("```")
+            if len(output) != 2:
+                return None
+            output = output[0].strip()
+
+            # Parse the JSON object
+            output = json.loads(output)
+            return output
+        except Exception:
+            return None
+
+    def output_validation(self, output: dict) -> bool:
+        if output is None:
+            return False
+        try:
+            # Validate the JSON object
+            jsonschema.validate(instance=output, schema=self.output_schema)
+            return True
+        except Exception:
+            return False
+
+
+class KeywordOutputAgent(PresetOutputAgent):
+    """ 
+    This class receives a list of valid keywords and provides an instruction and a method to parse and validate the model's output. 
+    """
+    def __init__(
+        self, 
+        model: str,
+        output_keywords: list,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tries: int = 3,
+        **kwargs,
+    ):
+        super().__init__(
+            model=model,
+            api_key=api_key,
+            base_url=base_url,
+            system_prompt=system_prompt,
+            max_tries=max_tries,
+            **kwargs,
+        )
+        self.output_keywords = output_keywords
+        
+    @property
+    def output_schema_instruction(self) -> str:
+        return (
+            "Output a single keyword from the following list:\n"
+            "{output_keywords}"
+        ).format(output_keywords=self.output_keywords)
+
+    def output_post_processing(self, output: str) -> str:
+        return output.strip()
+
+    def output_validation(self, output: str) -> bool:
+        if output is None:
+            return False
+        return output in self.output_keywords
 
 
 if __name__ == "__main__":
@@ -267,54 +329,65 @@ if __name__ == "__main__":
         max_tries=5,
     )
 
+    second_agent = KeywordOutputAgent(
+        model="google/gemma-3-27b-it",
+        output_keywords=["Women", "Men"],
+        api_key="EMPTY",
+        base_url="http://localhost:8000/v1",
+        max_tries=5,
+        system_prompt="Given a person name, determine whether it is men or women name."
+    )
+
     inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
     
-    start_time = time()
-    error_count = 0
-    for i, output in enumerate(agent.run(inputs)):
-        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
-        if output is None:
-            error_count += 1
-    print(f"Error: {error_count}")
-    print()
+    # start_time = time()
+    # error_count = 0
+    # for i, output in enumerate(agent.run(inputs)):
+    #     print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
+    #     if output is None:
+    #         error_count += 1
+    # print(f"Error: {error_count}")
+    # print()
     
-    prev_time = None
-    start_time = time()
-    error_count = 0
-    max_iteration_time = 0
-    for i, output in enumerate(agent.irun(inputs)):
-        iteration_time = 0
-        if prev_time:
-            iteration_time = time() - prev_time
-            if iteration_time > max_iteration_time:
-                max_iteration_time = iteration_time
-        if i == 0:
-            first_output_time = time() - start_time
-        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s ({iteration_time:.4f}s)\nInput: {inputs[i]}\nOutput: {output}")
-        if output is None:
-            error_count += 1
-        prev_time = time()
-    print(f"Error: {error_count}")
-    print(f"First Output Time: {first_output_time:4f}")
-    print(f"Max Iteration Time: {max_iteration_time:4f}")
-    print()
+    # prev_time = None
+    # start_time = time()
+    # error_count = 0
+    # max_iteration_time = 0
+    # for i, output in enumerate(agent.irun(inputs)):
+    #     iteration_time = 0
+    #     if prev_time:
+    #         iteration_time = time() - prev_time
+    #         if iteration_time > max_iteration_time:
+    #             max_iteration_time = iteration_time
+    #     if i == 0:
+    #         first_output_time = time() - start_time
+    #     print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s ({iteration_time:.4f}s)\nInput: {inputs[i]}\nOutput: {output}")
+    #     if output is None:
+    #         error_count += 1
+    #     prev_time = time()
+    # print(f"Error: {error_count}")
+    # print(f"First Output Time: {first_output_time:4f}")
+    # print(f"Max Iteration Time: {max_iteration_time:4f}")
+    # print()
 
     prev_time = time()
     start_time = time()
     error_count = 0
     max_iteration_time = 0
     for i, output in agent.irun_unordered(inputs):
-        iteration_time = 0
-        if prev_time:
-            iteration_time = time() - prev_time
-            if iteration_time > max_iteration_time:
-                max_iteration_time = iteration_time
+        iteration_time = time() - prev_time
+        prev_time = time()
+        if iteration_time > max_iteration_time:
+            max_iteration_time = iteration_time
         if i == 0:
             first_output_time = time() - start_time
         print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s ({iteration_time:.4f}s)\nInput: {inputs[i]}\nOutput: {output}")
         if output is None:
             error_count += 1
-        prev_time = time()
+        else:
+            names = [person["name"] for person in output]
+            genders = second_agent.run(names)
+            print([(person["name"], gender) for person, gender in zip(output, genders)])
     print(f"Error: {error_count}")
     print(f"First Output Time: {first_output_time:4f}")
     print(f"Max Iteration Time: {max_iteration_time:4f}")
