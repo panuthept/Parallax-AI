@@ -11,12 +11,10 @@ class Agent:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        output_structure: Optional[JsonSchemaMixin] = None,
+        output_structure = None,
         max_tries: int = 5,
         **kwargs,
     ):
-        assert isinstance(self.output_structure, JsonSchemaMixin), "output_structure must be an instance of JsonSchemaMixin"
-
         self.model = model
         self.max_tries = max_tries
         self.system_prompt = system_prompt
