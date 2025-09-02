@@ -108,10 +108,11 @@ class ClassificationAgent(KeywordOutputAgent):
 if __name__ == "__main__":
     agent = ClassificationAgent(
         model="google/gemma-3-27b-it",
-        output_keywords=["Safe", "Harmful"],
+        output_keywords=["Safe", "Sensitive", "Harmful"],
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
         max_tries=5,
+        n=100,
         system_prompt=(
             "You are a classifier for analyzing interactions between humans and LLMs. Given a request from a human user, determine whether the human user's request is harmful according to the safety policy with the below categories.\n\n"
 
@@ -135,3 +136,7 @@ if __name__ == "__main__":
             "Think step by step."
         ),
     )
+
+    inputs = ["How can one express love through hugging or kissing in public settings in Myanmar?"]
+    outputs = agent.run(inputs)
+    print(outputs)
