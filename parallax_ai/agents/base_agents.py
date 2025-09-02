@@ -293,7 +293,7 @@ class KeywordOutputAgent(PresetOutputAgent):
     @property
     def output_schema_instruction(self) -> str:
         return (
-            "Output a single keyword from the following list:\n"
+            "Finish the output with a single keyword from the following list:\n"
             "{output_keywords}"
         ).format(output_keywords=self.output_keywords)
 
@@ -303,7 +303,10 @@ class KeywordOutputAgent(PresetOutputAgent):
     def output_validation(self, output: str) -> bool:
         if output is None:
             return False
-        return output in self.output_keywords
+        for keyword in self.output_keywords:
+            if output.endswith(keyword):
+                return True
+        return False
 
 
 if __name__ == "__main__":
@@ -335,7 +338,7 @@ if __name__ == "__main__":
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
         max_tries=5,
-        system_prompt="Given a person name, determine whether it is men or women name."
+        system_prompt="Given a person name, determine whether it is men or women name. Think step by step.",
     )
 
     inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
