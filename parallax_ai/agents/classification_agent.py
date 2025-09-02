@@ -1,5 +1,5 @@
 from copy import deepcopy
-from parallax_ai.agents.base_agents import Agent
+from parallax_ai.agents.agent import Agent
 from dataclasses_jsonschema import JsonSchemaMixin
 from typing import List, Tuple, Optional, Iterator
 

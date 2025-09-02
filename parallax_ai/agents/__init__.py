@@ -1,1 +1,2 @@
-from .base_agents import Agent
+from .agent import Agent
+from .classification_agent import ClassificationAgent
