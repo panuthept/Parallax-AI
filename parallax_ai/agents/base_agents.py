@@ -1,5 +1,4 @@
 import json
-import random
 import jsonschema
 from copy import deepcopy
 from abc import ABC, abstractmethod
