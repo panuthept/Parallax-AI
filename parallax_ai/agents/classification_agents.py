@@ -15,7 +15,7 @@ class ClassificationAgent(KeywordOutputAgent):
         base_url: Optional[str] = None,
         system_prompt: Optional[str] = None,
         max_tries: int = 3,
-        n: int = 10,
+        n: int = 100,
         **kwargs,
     ):
         super().__init__(
