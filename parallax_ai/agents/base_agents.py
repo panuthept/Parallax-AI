@@ -114,7 +114,7 @@ class Agent:
         inputs, 
         verbose: bool = False,
         **kwargs,
-    ) -> List[str]:
+    ) -> List[str]|List[JsonSchemaMixin]:
         inputs = self._inputs_processing(inputs)
 
         finished_outputs = {}
@@ -140,7 +140,7 @@ class Agent:
         self, 
         inputs, 
         **kwargs,
-    ) -> Iterator[str]:
+    ) -> Iterator[str]|Iterator[JsonSchemaMixin]:
         inputs = self._inputs_processing(inputs)
 
         current_index = 0
@@ -184,7 +184,7 @@ class Agent:
         self, 
         inputs, 
         **kwargs,
-    ) -> Iterator[Tuple[int, str]]:
+    ) -> Iterator[Tuple[int, str]]|Iterator[Tuple[int, JsonSchemaMixin]]:
         inputs = self._inputs_processing(inputs)
 
         unfinished_indices = None
@@ -215,6 +215,8 @@ class Agent:
 
 
 if __name__ == "__main__":
+    from time import time
+    from random import randint
     from typing import Literal
     from dataclasses import dataclass
     from dataclasses_jsonschema import JsonSchemaMixin
@@ -224,12 +226,6 @@ if __name__ == "__main__":
         name: str
         age: int
         gender: Literal["Male", "Female"]
-
-    # schema = MyDataClass.json_schema()
-    # print(schema)
-
-    from time import time
-    from random import randint
 
     agent = Agent(
         model="google/gemma-3-27b-it",

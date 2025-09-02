@@ -1,33 +1,40 @@
 from copy import deepcopy
+from parallax_ai.agents.base_agents import Agent
+from dataclasses_jsonschema import JsonSchemaMixin
 from typing import List, Tuple, Optional, Iterator
-# from parallax_ai.agents.base_agents import KeywordOutputAgent
 
 
-class ClassificationAgent(KeywordOutputAgent):
+class ClassificationAgent(Agent):
     """
     An agent that classifies input into predefined categories using keywords.
     """
     def __init__(
         self, 
         model: str,
-        output_keywords: list,
+        output_keys: List[str]|str,
+        output_structure,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         system_prompt: Optional[str] = None,
-        max_tries: int = 3,
+        max_tries: int = 5,
         n: int = 100,
         **kwargs,
     ):
         super().__init__(
             model=model,
-            output_keywords=output_keywords,
             api_key=api_key,
             base_url=base_url,
             system_prompt=system_prompt,
+            output_structure=output_structure,
             max_tries=max_tries,
             **kwargs,
         )
         self.n = n
+        self.output_keys = output_keys if isinstance(output_keys, list) else [output_keys]
+        self.output_classes = {}
+        for output_key in self.output_keys:
+            assert output_key in self.get_output_schema(), f"output_key '{output_key}' not found in output_structure"
+            self.output_classes[output_key] = self.get_output_schema()[output_key].get("enum", [])
 
     def _duplicate_inputs(self, inputs: List[str]) -> List[str]:
         duplicated_inputs = []
@@ -43,21 +50,25 @@ class ClassificationAgent(KeywordOutputAgent):
         **kwargs,
     ) -> List[dict[str, float]]:
         deplicated_inputs = self._duplicate_inputs(inputs)
-        deplicated_outputs = super().run(deplicated_inputs, verbose=verbose, **kwargs)
+        deplicated_outputs: List[JsonSchemaMixin] = super().run(deplicated_inputs, verbose=verbose, **kwargs)
 
         outputs = []
         for i in range(len(inputs)):
-            output = {keyword: 0 for keyword in self.output_keywords}
+            output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
             for j in range(self.n):
-                keyword = deplicated_outputs[i * self.n + j]
-                if keyword is not None:
-                    output[keyword] += 1
-            total = sum(output.values())
-            if total > 0:
-                output = {k: v / total for k, v in output.items()}
-            else:
-                output = None
-            outputs.append(output)
+                for output_key in self.output_keys:
+                    keyword = deplicated_outputs[i * self.n + j].to_dict().get(output_key)
+                    if keyword is not None:
+                        if keyword not in output_label[output_key]:
+                            output_label[output_key][keyword] = 0
+                        output_label[output_key][keyword] += 1
+            for output_key in self.output_keys:
+                total = sum(output_label[output_key].values())
+                if total > 0:
+                    output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
+                else:
+                    output_label[output_key] = None
+            outputs.append(output_label)
         return outputs
     
     def irun(
@@ -72,16 +83,21 @@ class ClassificationAgent(KeywordOutputAgent):
             true_index = index // self.n
             cached_outputs[true_index].append(output)
             if len(cached_outputs[true_index]) == self.n:
-                output = {keyword: 0 for keyword in self.output_keywords}
-                for keyword in cached_outputs[true_index]:
-                    if keyword is not None:
-                        output[keyword] += 1
-                total = sum(output.values())
-                if total > 0:
-                    output = {k: v / total for k, v in output.items()}
-                else:
-                    output = None
-                yield output
+                output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
+                for output in cached_outputs[true_index]:
+                    for output_key in self.output_keys:
+                        keyword = output.to_dict().get(output_key)
+                        if keyword is not None:
+                            if keyword not in output_label[output_key]:
+                                output_label[output_key][keyword] = 0
+                            output_label[output_key][keyword] += 1
+                for output_key in self.output_keys:
+                    total = sum(output_label[output_key].values())
+                    if total > 0:
+                        output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
+                    else:
+                        output_label[output_key] = None
+                yield output_label
                 del cached_outputs[true_index]
 
     def irun_unordered(
@@ -96,23 +112,37 @@ class ClassificationAgent(KeywordOutputAgent):
             true_index = index // self.n
             cached_outputs[true_index].append(output)
             if len(cached_outputs[true_index]) == self.n:
-                output = {keyword: 0 for keyword in self.output_keywords}
-                for keyword in cached_outputs[true_index]:
-                    if keyword is not None:
-                        output[keyword] += 1
-                total = sum(output.values())
-                if total > 0:
-                    output = {k: v / total for k, v in output.items()}
-                else:
-                    output = None
-                yield (true_index, output)
+                output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
+                for output in cached_outputs[true_index]:
+                    for output_key in self.output_keys:
+                        keyword = output.to_dict().get(output_key)
+                        if keyword is not None:
+                            if keyword not in output_label[output_key]:
+                                output_label[output_key][keyword] = 0
+                            output_label[output_key][keyword] += 1
+                for output_key in self.output_keys:
+                    total = sum(output_label[output_key].values())
+                    if total > 0:
+                        output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
+                    else:
+                        output_label[output_key] = None
+                yield (true_index, output_label)
                 del cached_outputs[true_index]
 
 
 if __name__ == "__main__":
+    from typing import Literal
+    from dataclasses import dataclass
+    from dataclasses_jsonschema import JsonSchemaMixin
+
+    @dataclass
+    class OutputStructure(JsonSchemaMixin):
+        safety_assessment: Literal["Safe", "Sensitive", "Harmful"]
+
     agent = ClassificationAgent(
         model="google/gemma-3-27b-it",
-        output_keywords=["Safe", "Sensitive", "Harmful"],
+        output_key="safety_assessment",
+        output_structure=OutputStructure,
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
         max_tries=5,
