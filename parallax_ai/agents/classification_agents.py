@@ -1,6 +1,6 @@
 from copy import deepcopy
 from typing import List, Tuple, Optional, Iterator
-from parallax_ai.agents.base_agents import KeywordOutputAgent
+# from parallax_ai.agents.base_agents import KeywordOutputAgent
 
 
 class ClassificationAgent(KeywordOutputAgent):
