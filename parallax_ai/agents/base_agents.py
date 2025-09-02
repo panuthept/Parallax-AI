@@ -298,7 +298,7 @@ class KeywordOutputAgent(PresetOutputAgent):
         ).format(output_keywords=self.output_keywords)
 
     def output_post_processing(self, output: str) -> str:
-        return output.strip()
+        return output.split()[-1].strip()
 
     def output_validation(self, output: str) -> bool:
         if output is None:
