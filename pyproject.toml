@@ -3,8 +3,8 @@ requires = ["setuptools>=42.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "parallax_ai"
-version = "0.3.2"
+name = "parallax-ai"
+version = "0.3.3"
 description = "Lightweight parallel AI API calls in Python."
 readme = "README.md"
 requires-python = ">=3.8"
