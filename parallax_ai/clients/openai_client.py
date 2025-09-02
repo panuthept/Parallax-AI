@@ -62,7 +62,7 @@ class ParallaxOpenAIClient:
         **kwargs,
     ):
         # inputs: can be 'str', 'list[dict]', 'list[str]', or 'list[list[dict]]'
-        if isinstance(inputs, str):
+        if inputs is None or isinstance(inputs, str):
             # Convert 'str' to 'list[str]'
             inputs = [inputs]
         elif isinstance(inputs, list):

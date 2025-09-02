@@ -37,13 +37,13 @@ class Agent(BaseAgent):
 
     def _inputs_processing(self, inputs):
         # Ensure that inputs is a list
-        if isinstance(inputs, str) or (isinstance(inputs, list) and isinstance(inputs[0], dict)):
+        if inputs is None or isinstance(inputs, str) or (isinstance(inputs, list) and isinstance(inputs[0], dict)):
             inputs = [inputs]
         # Add system prompt (if exists) to the inputs
         processed_inputs = []
         for input in inputs:
             input = deepcopy(input)
-            if self.system_prompt is None:
+            if input is None or self.system_prompt is None:
                 processed_inputs.append(input)
             else:
                 if isinstance(input, str):
@@ -67,7 +67,6 @@ class Agent(BaseAgent):
             return output.choices[0].text
         else:
             raise ValueError(f"Unknown input type:\n{input}")
-        return output
 
     def run(
         self, 
@@ -81,11 +80,14 @@ class Agent(BaseAgent):
             unfinished_indices = []
             outputs = self.client.run(inputs=unfinished_inputs, model=self.model)
             for i, output in enumerate(outputs):
-                output = self._output_processing(inputs[i], output)
-                if output is not None:
-                    finished_outputs[i] = output
+                if unfinished_inputs[i] is None:
+                    finished_outputs[i] = None
                 else:
-                    unfinished_indices.append(i)
+                    output = self._output_processing(inputs[i], output)
+                    if output is not None:
+                        finished_outputs[i] = output
+                    else:
+                        unfinished_indices.append(i)
             if len(unfinished_indices) == 0:
                 break
             unfinished_inputs = [inputs[i] for i in unfinished_indices]
@@ -105,21 +107,28 @@ class Agent(BaseAgent):
             true_index_mapping = deepcopy(unfinished_indices) if unfinished_indices else []
             unfinished_indices = []
             for i, output in enumerate(self.client.irun(inputs=unfinished_inputs, model=self.model)):
-                # Convert to true index
-                if len(true_index_mapping) > 0:
-                    i = true_index_mapping[i]
-                # Process output
-                output = self._output_processing(inputs[i], output)
-                # Check output validity
-                if output is not None:
-                    # Cache valid outputs
-                    finished_outputs[i] = output
+                if unfinished_inputs[i] is None:
+                    finished_outputs[i] = None
                     # Fetch all outputs in finished_outputs that match the current_index
                     while current_index in finished_outputs:
                         yield output
                         current_index += 1
                 else:
-                    unfinished_indices.append(i)
+                    # Convert to true index
+                    if len(true_index_mapping) > 0:
+                        i = true_index_mapping[i]
+                    # Process output
+                    output = self._output_processing(inputs[i], output)
+                    # Check output validity
+                    if output is not None:
+                        # Cache valid outputs
+                        finished_outputs[i] = output
+                        # Fetch all outputs in finished_outputs that match the current_index
+                        while current_index in finished_outputs:
+                            yield output
+                            current_index += 1
+                    else:
+                        unfinished_indices.append(i)
             if len(unfinished_indices) == 0:
                 break
             unfinished_inputs = [inputs[i] for i in unfinished_indices]
@@ -139,16 +148,19 @@ class Agent(BaseAgent):
             true_index_mapping = deepcopy(unfinished_indices) if unfinished_indices else []
             unfinished_indices = []
             for i, output in self.client.irun_unordered(inputs=unfinished_inputs, model=self.model):
-                # Convert to true index
-                if len(true_index_mapping) > 0:
-                    i = true_index_mapping[i]
-                # Process output
-                output = self._output_processing(inputs[i], output)
-                # Check output validity
-                if output is not None:
-                    yield (i, output)
+                if unfinished_inputs[i] is None:
+                    yield (i, None)
                 else:
-                    unfinished_indices.append(i)
+                    # Convert to true index
+                    if len(true_index_mapping) > 0:
+                        i = true_index_mapping[i]
+                    # Process output
+                    output = self._output_processing(inputs[i], output)
+                    # Check output validity
+                    if output is not None:
+                        yield (i, output)
+                    else:
+                        unfinished_indices.append(i)
             if len(unfinished_indices) == 0:
                 break
             unfinished_inputs = [inputs[i] for i in unfinished_indices]
@@ -181,6 +193,9 @@ class PresetOutputAgent(Agent):
 
         processed_inputs = []
         for input in inputs:
+            if input is None:
+                processed_inputs.append(None)
+                continue
             input = deepcopy(input)
             if isinstance(input, str):
                 input = [
