@@ -1,3 +1,4 @@
+from tqdm import tqdm
 from openai import OpenAI
 from functools import partial
 from multiprocessing import Pool
@@ -87,18 +88,6 @@ class ParallaxOpenAIClient:
         )
         return inputs, partial_func
 
-    def run(
-        self,
-        inputs,
-        model: str,
-        **kwargs,
-    ):
-        inputs, partial_run_func = self._prepare_run(inputs, model, **kwargs)
-        with Pool(processes=self.max_parallel_processes) as pool:
-            outputs = pool.map(partial_run_func, inputs)
-            outputs = [response for _, response in outputs]
-        return outputs
-
     def irun(
         self,
         inputs,
@@ -121,6 +110,20 @@ class ParallaxOpenAIClient:
         with Pool(processes=self.max_parallel_processes) as pool:
             for index, output in pool.imap_unordered(partial_run_func, inputs):
                 yield (index, output)
+
+    def run(
+        self,
+        inputs,
+        model: str,
+        verbose: bool = False,
+        **kwargs,
+    ):
+        outputs = []
+        for i, output in tqdm(self.irun_unordered(inputs=inputs, model=model), total=len(inputs), disable=not verbose):
+            outputs.append((i, output))
+        outputs = sorted(outputs, key=lambda x: x[0])
+        outputs = [output for _, output in outputs]
+        return outputs
 
 
 if __name__ == "__main__":

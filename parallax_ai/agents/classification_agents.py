@@ -39,9 +39,11 @@ class ClassificationAgent(KeywordOutputAgent):
     def run(
         self, 
         inputs, 
+        verbose: bool = False,
+        **kwargs,
     ) -> List[dict[str, float]]:
         deplicated_inputs = self._duplicate_inputs(inputs)
-        deplicated_outputs = super().run(deplicated_inputs)
+        deplicated_outputs = super().run(deplicated_inputs, verbose=verbose, **kwargs)
 
         outputs = []
         for i in range(len(inputs)):
@@ -61,6 +63,7 @@ class ClassificationAgent(KeywordOutputAgent):
     def irun(
         self, 
         inputs, 
+        **kwargs,
     ) -> Iterator[dict[str, float]]:
         deplicated_inputs = self._duplicate_inputs(inputs)
 
@@ -84,6 +87,7 @@ class ClassificationAgent(KeywordOutputAgent):
     def irun_unordered(
         self, 
         inputs, 
+        **kwargs,
     ) -> Iterator[Tuple[int, dict[str, float]]]:
         deplicated_inputs = self._duplicate_inputs(inputs)
 

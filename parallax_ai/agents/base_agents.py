@@ -71,6 +71,8 @@ class Agent(BaseAgent):
     def run(
         self, 
         inputs, 
+        verbose: bool = False,
+        **kwargs,
     ) -> List[str]:
         inputs = self._inputs_processing(inputs)
 
@@ -78,7 +80,7 @@ class Agent(BaseAgent):
         unfinished_inputs = inputs
         for _ in range(self.max_tries):
             unfinished_indices = []
-            outputs = self.client.run(inputs=unfinished_inputs, model=self.model)
+            outputs = self.client.run(inputs=unfinished_inputs, model=self.model, verbose=verbose, **kwargs)
             for i, output in enumerate(outputs):
                 if unfinished_inputs[i] is None:
                     finished_outputs[i] = None
@@ -96,6 +98,7 @@ class Agent(BaseAgent):
     def irun(
         self, 
         inputs, 
+        **kwargs,
     ) -> Iterator[str]:
         inputs = self._inputs_processing(inputs)
 
@@ -106,7 +109,7 @@ class Agent(BaseAgent):
         for _ in range(self.max_tries):
             true_index_mapping = deepcopy(unfinished_indices) if unfinished_indices else []
             unfinished_indices = []
-            for i, output in enumerate(self.client.irun(inputs=unfinished_inputs, model=self.model)):
+            for i, output in enumerate(self.client.irun(inputs=unfinished_inputs, model=self.model, **kwargs)):
                 if unfinished_inputs[i] is None:
                     finished_outputs[i] = None
                     # Fetch all outputs in finished_outputs that match the current_index
@@ -139,6 +142,7 @@ class Agent(BaseAgent):
     def irun_unordered(
         self, 
         inputs, 
+        **kwargs,
     ) -> Iterator[Tuple[int, str]]:
         inputs = self._inputs_processing(inputs)
 
@@ -147,7 +151,7 @@ class Agent(BaseAgent):
         for _ in range(self.max_tries):
             true_index_mapping = deepcopy(unfinished_indices) if unfinished_indices else []
             unfinished_indices = []
-            for i, output in self.client.irun_unordered(inputs=unfinished_inputs, model=self.model):
+            for i, output in self.client.irun_unordered(inputs=unfinished_inputs, model=self.model, **kwargs):
                 if unfinished_inputs[i] is None:
                     yield (i, None)
                 else:
