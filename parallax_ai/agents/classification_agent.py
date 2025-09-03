@@ -86,6 +86,8 @@ class ClassificationAgent(Agent):
                 output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
                 for output in cached_outputs[true_index]:
                     for output_key in self.output_keys:
+                        if output is None:
+                            continue
                         keyword = output.to_dict().get(output_key)
                         if keyword is not None:
                             if keyword not in output_label[output_key]:
@@ -115,6 +117,8 @@ class ClassificationAgent(Agent):
                 output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
                 for output in cached_outputs[true_index]:
                     for output_key in self.output_keys:
+                        if output is None:
+                            continue
                         keyword = output.to_dict().get(output_key)
                         if keyword is not None:
                             if keyword not in output_label[output_key]:
@@ -146,7 +150,7 @@ if __name__ == "__main__":
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
         max_tries=5,
-        n=100,
+        n=10,
         system_prompt=(
             "You are a classifier for analyzing interactions between humans and LLMs. Given a request from a human user, determine whether the human user's request is harmful according to the safety policy with the below categories.\n\n"
 
