@@ -74,6 +74,8 @@ class ParallaxOpenAIClient:
                 inputs = inputs
             elif isinstance(inputs[0], list) and isinstance(inputs[0][0], dict):
                 inputs = inputs
+            elif inputs[0] is None:
+                inputs = inputs
             else:
                 raise ValueError(f"Unknown inputs format:\n{inputs}")
         else:
