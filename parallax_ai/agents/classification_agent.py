@@ -141,7 +141,7 @@ if __name__ == "__main__":
 
     agent = ClassificationAgent(
         model="google/gemma-3-27b-it",
-        output_key="safety_assessment",
+        output_keys="safety_assessment",
         output_structure=OutputStructure,
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
