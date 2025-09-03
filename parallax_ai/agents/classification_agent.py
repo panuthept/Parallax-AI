@@ -33,8 +33,8 @@ class ClassificationAgent(Agent):
         self.output_keys = output_keys if isinstance(output_keys, list) else [output_keys]
         self.output_classes = {}
         for output_key in self.output_keys:
-            assert output_key in self.get_output_schema(), f"output_key '{output_key}' not found in output_structure"
-            self.output_classes[output_key] = self.get_output_schema()[output_key].get("enum", [])
+            assert output_key in self.get_output_schema()["properties"], f"output_key '{output_key}' not found in output_structure"
+            self.output_classes[output_key] = self.get_output_schema()["properties"][output_key].get("enum", [])
 
     def _duplicate_inputs(self, inputs: List[str]) -> List[str]:
         duplicated_inputs = []
