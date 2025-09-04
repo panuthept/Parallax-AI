@@ -34,11 +34,9 @@ class Agent:
         self.output_structure = output_structure
         self.client = ParallaxOpenAIClient(api_key=api_key, base_url=base_url)
 
-    def get_output_schema(self):
-        output_schema = self.output_structure.json_schema() if self.output_structure is not None else None
-        output_schema.pop("$schema", None)
-        output_schema.pop("description", None)
-        return output_schema
+    @property
+    def system_prompt(self):
+        return self.model_context.render_system_prompt(self.output_structure)
 
     def __convert_to_conversational_inputs(self, inputs):
         processed_inputs = []
