@@ -2,5 +2,5 @@
 
 __version__ = "0.3.7"
 
-from .agents import Agent, ClassificationAgent
 from .clients import ParallaxOpenAIClient
+from .agents import Agent, ModelContext, Context, ClassificationAgent

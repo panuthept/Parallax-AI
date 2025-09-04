@@ -3,21 +3,34 @@ from copy import deepcopy
 from typing import List, Tuple, Optional, Iterator
 from dataclasses_jsonschema import JsonSchemaMixin
 from parallax_ai.clients import ParallaxOpenAIClient
+from parallax_ai.agents import ModelContext, Context
+
 
 class Agent:
     def __init__(
         self, 
         model: str,
+        input_structure = None,     # If input_structure is provided, inputs must be instances of input_structure
+        output_structure = None,    # If output_structure is provided, outputs will be validated against output_structure and converted to instances of output_structure
+        model_context: Optional[ModelContext] = None,   # This allows dynamic and trainable contexts to be used as system prompts
+        system_prompt: Optional[str] = None,   # Deprecated, use model_context instead. If both are provided, model_context will be used.
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        system_prompt: Optional[str] = None,
-        output_structure = None,
         max_tries: int = 5,
         **kwargs,
     ):
+        if system_prompt is not None and model_context is not None and model_context.system_prompt is not None:
+            print("Warning: Both system_prompt and model_context.system_prompt are provided. system_prompt will be ignored.")
+        if model_context is None:
+            model_context = ModelContext()
+        if system_prompt is not None and model_context.system_prompt is None:
+            # Create a ModelContext with the provided system_prompt
+            model_context.system_prompt = [Context(name="system_prompt", content=self.system_prompt)]
+
         self.model = model
         self.max_tries = max_tries
-        self.system_prompt = system_prompt
+        self.model_context = model_context
+        self.input_structure = input_structure
         self.output_structure = output_structure
         self.client = ParallaxOpenAIClient(api_key=api_key, base_url=base_url)
 
@@ -26,16 +39,6 @@ class Agent:
         output_schema.pop("$schema", None)
         output_schema.pop("description", None)
         return output_schema
-
-    def __get_system_prompt(self):
-        system_prompt = self.system_prompt
-        if self.output_structure is not None:
-            system_prompt = system_prompt + "\n\n" if system_prompt is not None else ""
-            system_prompt += (
-                "The output must be JSON that matches the following schema:\n"
-                "{output_structure}"
-            ).format(output_structure=json.dumps(self.get_output_schema()))
-        return system_prompt
 
     def __convert_to_conversational_inputs(self, inputs):
         processed_inputs = []
@@ -46,12 +49,14 @@ class Agent:
                 processed_inputs.append([{"role": "user", "content": input}])
             elif isinstance(input, list) and isinstance(input[0], dict):
                 processed_inputs.append(input)
+            elif self.input_structure is not None and isinstance(input, self.input_structure):
+                processed_inputs.append([{"role": "user", "content": self.model_context.render_input(input)}])
             else:
                 raise ValueError(f"Unknown input type:\n{input}")
         return processed_inputs
 
     def __add_system_prompt_to_inputs(self, inputs):
-        system_prompt = self.__get_system_prompt()
+        system_prompt = self.model_context.render_system_prompt(self.output_structure)
 
         processed_inputs = []
         for input in inputs:
@@ -69,7 +74,7 @@ class Agent:
 
     def _inputs_processing(self, inputs):
         # Ensure that inputs is a list
-        if inputs is None or isinstance(inputs, str) or (isinstance(inputs, list) and isinstance(inputs[0], dict)):
+        if inputs is None or isinstance(inputs, str) or (isinstance(inputs, list) and isinstance(inputs[0], dict)) or (self.input_structure is not None and isinstance(inputs, self.input_structure)):
             inputs = [inputs]
         # Convert all inputs to conversational format
         inputs = self.__convert_to_conversational_inputs(inputs)
@@ -95,8 +100,7 @@ class Agent:
             output = output[0].strip()
             # Parse the JSON object
             output = json.loads(output)
-            # # Validate the JSON object
-            # jsonschema.validate(instance=output, schema=self.output_structure.json_schema())
+            # Validate the JSON object and convert to output_structure instance
             return self.output_structure.from_dict(output)
         except Exception:
             return None
@@ -219,54 +223,66 @@ if __name__ == "__main__":
     from random import randint
     from typing import Literal
     from dataclasses import dataclass
-    from dataclasses_jsonschema import JsonSchemaMixin
 
+    @dataclass
+    class InputStructure(JsonSchemaMixin):
+        topic: str
+    print(InputStructure.json_schema())
+    
     @dataclass
     class OutputStructure(JsonSchemaMixin):
         name: str
         age: int
         gender: Literal["Male", "Female"]
+    print(OutputStructure.json_schema())
 
     agent = Agent(
         model="google/gemma-3-27b-it",
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
+        input_structure=InputStructure,
         output_structure=OutputStructure,
+        model_context=ModelContext(
+            system_prompt=[
+                Context(name="task_definition", content="Given a topic, generate a list of people related to the topic.", title="Task Definition", trainable=False),
+                Context(name="method", content="Think step by step before answering.", title="Methodology", trainable=True),
+            ],
+        ),
         max_tries=5,
     )
     print(agent.get_output_schema())
 
     inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
     
-    # start_time = time()
-    # error_count = 0
-    # for i, output in enumerate(agent.run(inputs)):
-    #     print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
-    #     if output is None:
-    #         error_count += 1
-    # print(f"Error: {error_count}")
-    # print()
+    start_time = time()
+    error_count = 0
+    for i, output in enumerate(agent.run(inputs)):
+        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
+        if output is None:
+            error_count += 1
+    print(f"Error: {error_count}")
+    print()
     
-    # prev_time = None
-    # start_time = time()
-    # error_count = 0
-    # max_iteration_time = 0
-    # for i, output in enumerate(agent.irun(inputs)):
-    #     iteration_time = 0
-    #     if prev_time:
-    #         iteration_time = time() - prev_time
-    #         if iteration_time > max_iteration_time:
-    #             max_iteration_time = iteration_time
-    #     if i == 0:
-    #         first_output_time = time() - start_time
-    #     print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s ({iteration_time:.4f}s)\nInput: {inputs[i]}\nOutput: {output}")
-    #     if output is None:
-    #         error_count += 1
-    #     prev_time = time()
-    # print(f"Error: {error_count}")
-    # print(f"First Output Time: {first_output_time:4f}")
-    # print(f"Max Iteration Time: {max_iteration_time:4f}")
-    # print()
+    prev_time = None
+    start_time = time()
+    error_count = 0
+    max_iteration_time = 0
+    for i, output in enumerate(agent.irun(inputs)):
+        iteration_time = 0
+        if prev_time:
+            iteration_time = time() - prev_time
+            if iteration_time > max_iteration_time:
+                max_iteration_time = iteration_time
+        if i == 0:
+            first_output_time = time() - start_time
+        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s ({iteration_time:.4f}s)\nInput: {inputs[i]}\nOutput: {output}")
+        if output is None:
+            error_count += 1
+        prev_time = time()
+    print(f"Error: {error_count}")
+    print(f"First Output Time: {first_output_time:4f}")
+    print(f"Max Iteration Time: {max_iteration_time:4f}")
+    print()
 
     prev_time = time()
     start_time = time()
