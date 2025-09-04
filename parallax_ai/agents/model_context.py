@@ -39,11 +39,15 @@ class ModelContext:
                 system_prompt = self.system_prompt_template.format(**{content.name: content.render() for content in self.system_prompt})
 
             if output_structure is not None:
+                output_schema = output_structure.json_schema() if output_structure is not None else None
+                output_schema.pop("$schema", None)
+                output_schema.pop("description", None)
+
                 system_prompt = system_prompt + "\n\n" if system_prompt is not None else ""
                 system_prompt += (
                     "The output must be JSON that matches the following schema:\n"
                     "{output_structure}"
-                ).format(output_structure=json.dumps(self.get_output_schema()))
+                ).format(output_structure=json.dumps(output_schema, indent=2))
             return system_prompt
             
         def render_input(self, input_instance) -> str:

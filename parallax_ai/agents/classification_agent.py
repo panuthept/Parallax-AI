@@ -28,7 +28,6 @@ class ClassificationAgent(Agent):
             model_context=model_context,
             api_key=api_key,
             base_url=base_url,
-            output_structure=output_structure,
             max_tries=max_tries,
             **kwargs,
         )
