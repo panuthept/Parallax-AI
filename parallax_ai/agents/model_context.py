@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class Context:
+class Field:
     name: str
     content: str
     desc: str = None # This description is for optimizing the context when trainable is True
@@ -18,7 +18,7 @@ class Context:
 class ModelContext:
         input_template: str = None
         system_prompt_template: str = None
-        system_prompt: List[Context] = None
+        system_prompt: List[Field] = None
 
         def to_json(self, path):
             data = {
@@ -36,12 +36,12 @@ class ModelContext:
             return ModelContext(
                 input_template=data.get("input_template", None),
                 system_prompt_template=data.get("system_prompt_template", None),
-                system_prompt=[Context(**context) for context in data.get("system_prompt", [])] if data.get("system_prompt", None) is not None else None,
+                system_prompt=[Field(**context) for context in data.get("system_prompt", [])] if data.get("system_prompt", None) is not None else None,
             )
 
         def __post_init__(self):
             if isinstance(self.system_prompt, str):
-                self.system_prompt = [Context(name="system_prompt", content=self.system_prompt)]
+                self.system_prompt = [Field(name="system_prompt", content=self.system_prompt)]
             elif isinstance(self.system_prompt, list):
                 self.system_prompt = self.system_prompt
             elif self.system_prompt is None:
@@ -85,8 +85,8 @@ class ModelContext:
 if __name__ == "__main__":
     model_context = ModelContext(
         system_prompt=[
-            Context(name="task_definition", content="Given a topic, generate a list of people related to the topic.", title="Task Definition", trainable=False),
-            Context(name="method", content="Think step by step before answering.", title="Methodology", trainable=True),
+            Field(name="task_definition", content="Given a topic, generate a list of people related to the topic.", title="Task Definition", trainable=False),
+            Field(name="method", content="Think step by step before answering.", title="Methodology", trainable=True),
         ],
     )
     print(model_context.render_system_prompt())

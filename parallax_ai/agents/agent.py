@@ -3,7 +3,7 @@ from copy import deepcopy
 from typing import List, Tuple, Optional, Iterator
 from dataclasses_jsonschema import JsonSchemaMixin
 from parallax_ai.clients import ParallaxOpenAIClient
-from parallax_ai.agents.model_context import ModelContext, Context
+from parallax_ai.agents.model_context import ModelContext, Field
 
 
 class Agent:
@@ -25,7 +25,7 @@ class Agent:
             model_context = ModelContext()
         if system_prompt is not None and model_context.system_prompt is None:
             # Create a ModelContext with the provided system_prompt
-            model_context.system_prompt = [Context(name="system_prompt", content=system_prompt)]
+            model_context.system_prompt = [Field(name="system_prompt", content=system_prompt)]
 
         self.model = model
         self.max_tries = max_tries
@@ -242,8 +242,8 @@ if __name__ == "__main__":
         output_structure=OutputStructure,
         model_context=ModelContext(
             system_prompt=[
-                Context(name="task_definition", content="Given a topic, generate a list of people related to the topic.", title="Task Definition", trainable=False),
-                Context(name="method", content="Think step by step before answering.", title="Methodology", trainable=True),
+                Field(name="task_definition", content="Given a topic, generate a list of people related to the topic.", title="Task Definition", trainable=False),
+                Field(name="method", content="Think step by step before answering.", title="Methodology", trainable=True),
             ],
         ),
         max_tries=5,
