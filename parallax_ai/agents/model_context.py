@@ -20,6 +20,25 @@ class ModelContext:
         system_prompt_template: str = None
         system_prompt: List[Context] = None
 
+        def to_json(self, path):
+            data = {
+                "input_template": self.input_template,
+                "system_prompt_template": self.system_prompt_template,
+                "system_prompt": [context.__dict__ for context in self.system_prompt] if self.system_prompt is not None else None,
+            }
+            with open(path, "w") as f:
+                json.dump(data, f, indent=2)
+        
+        @classmethod
+        def from_json(cls, path):
+            with open(path, "r") as f:
+                data = json.load(f)
+            return ModelContext(
+                input_template=data.get("input_template", None),
+                system_prompt_template=data.get("system_prompt_template", None),
+                system_prompt=[Context(**context) for context in data.get("system_prompt", [])] if data.get("system_prompt", None) is not None else None,
+            )
+
         def __post_init__(self):
             if isinstance(self.system_prompt, str):
                 self.system_prompt = [Context(name="system_prompt", content=self.system_prompt)]
