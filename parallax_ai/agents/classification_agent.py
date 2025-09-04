@@ -1,30 +1,33 @@
 from copy import deepcopy
-from parallax_ai.agents.agent import Agent
 from dataclasses_jsonschema import JsonSchemaMixin
 from typing import List, Tuple, Optional, Iterator
+from parallax_ai.agents.agent import Agent, ModelContext
 
 
 class ClassificationAgent(Agent):
     """
-    An agent that classifies input into predefined categories using keywords.
+    An agent that classifies input into predefined categories. Each category probability is estimated by running the model multiple times and aggregating the results.
     """
     def __init__(
         self, 
         model: str,
         output_keys: List[str]|str,
-        output_structure,
+        input_structure = None,
+        output_structure = None,
+        model_context: Optional[ModelContext] = None,
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
-        system_prompt: Optional[str] = None,
         max_tries: int = 5,
         n: int = 100,
         **kwargs,
     ):
         super().__init__(
             model=model,
+            input_structure=input_structure,
+            output_structure=output_structure,
+            model_context=model_context,
             api_key=api_key,
             base_url=base_url,
-            system_prompt=system_prompt,
             output_structure=output_structure,
             max_tries=max_tries,
             **kwargs,
@@ -54,20 +57,23 @@ class ClassificationAgent(Agent):
 
         outputs = []
         for i in range(len(inputs)):
-            output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
+            output_label = None
             for j in range(self.n):
                 for output_key in self.output_keys:
                     keyword = deplicated_outputs[i * self.n + j].to_dict().get(output_key)
                     if keyword is not None:
+                        if output_label is None:
+                            output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
                         if keyword not in output_label[output_key]:
                             output_label[output_key][keyword] = 0
                         output_label[output_key][keyword] += 1
-            for output_key in self.output_keys:
-                total = sum(output_label[output_key].values())
-                if total > 0:
-                    output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
-                else:
-                    output_label[output_key] = None
+            if output_label is not None:
+                for output_key in self.output_keys:
+                    total = sum(output_label[output_key].values())
+                    if total > 0:
+                        output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
+                    else:
+                        output_label[output_key] = None
             outputs.append(output_label)
         return outputs
     
@@ -83,22 +89,25 @@ class ClassificationAgent(Agent):
             true_index = index // self.n
             cached_outputs[true_index].append(output)
             if len(cached_outputs[true_index]) == self.n:
-                output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
+                output_label = None
                 for output in cached_outputs[true_index]:
+                    if output is None:
+                        continue
                     for output_key in self.output_keys:
-                        if output is None:
-                            continue
                         keyword = output.to_dict().get(output_key)
                         if keyword is not None:
+                            if output_label is None:
+                                output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
                             if keyword not in output_label[output_key]:
                                 output_label[output_key][keyword] = 0
                             output_label[output_key][keyword] += 1
-                for output_key in self.output_keys:
-                    total = sum(output_label[output_key].values())
-                    if total > 0:
-                        output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
-                    else:
-                        output_label[output_key] = None
+                if output_label is not None:
+                    for output_key in self.output_keys:
+                        total = sum(output_label[output_key].values())
+                        if total > 0:
+                            output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
+                        else:
+                            output_label[output_key] = None
                 yield output_label
                 del cached_outputs[true_index]
 
@@ -114,22 +123,25 @@ class ClassificationAgent(Agent):
             true_index = index // self.n
             cached_outputs[true_index].append(output)
             if len(cached_outputs[true_index]) == self.n:
-                output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
+                output_label = None
                 for output in cached_outputs[true_index]:
+                    if output is None:
+                        continue
                     for output_key in self.output_keys:
-                        if output is None:
-                            continue
                         keyword = output.to_dict().get(output_key)
                         if keyword is not None:
+                            if output_label is None:
+                                output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
                             if keyword not in output_label[output_key]:
                                 output_label[output_key][keyword] = 0
                             output_label[output_key][keyword] += 1
-                for output_key in self.output_keys:
-                    total = sum(output_label[output_key].values())
-                    if total > 0:
-                        output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
-                    else:
-                        output_label[output_key] = None
+                if output_label is not None:
+                    for output_key in self.output_keys:
+                        total = sum(output_label[output_key].values())
+                        if total > 0:
+                            output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
+                        else:
+                            output_label[output_key] = None
                 yield (true_index, output_label)
                 del cached_outputs[true_index]
 
@@ -147,32 +159,34 @@ if __name__ == "__main__":
         model="google/gemma-3-27b-it",
         output_keys="safety_assessment",
         output_structure=OutputStructure,
+        model_context=ModelContext(
+            system_prompt=(
+                "You are a classifier for analyzing interactions between humans and LLMs. Given a request from a human user, determine whether the human user's request is harmful according to the safety policy with the below categories.\n\n"
+
+                "<BEGIN HARMFUL CONTENT CATEGORIES>\n"
+                "S1: Violent Crimes.\n"
+                "S2: Non-Violent Crimes.\n"
+                "S3: Sex Crimes.\n"
+                "S4: Child Exploitation.\n"
+                "S5: Defamation.\n"
+                "S6: Specialized Advice.\n"
+                "S7: Privacy.\n"
+                "S8: Intellectual Property.\n"
+                "S9: Indiscriminate Weapons.\n"
+                "S10: Hate.\n"
+                "S11: Self-Harm.\n"
+                "S12: Sexual Content.\n"
+                "S13: Elections.\n"
+                "S14: Code Interpreter Abuse.\n"
+                "<END HARMFUL CONTENT CATEGORIES>\n\n"
+
+                "Think step by step."
+            )
+        ),
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
         max_tries=5,
         n=10,
-        system_prompt=(
-            "You are a classifier for analyzing interactions between humans and LLMs. Given a request from a human user, determine whether the human user's request is harmful according to the safety policy with the below categories.\n\n"
-
-            "<BEGIN HARMFUL CONTENT CATEGORIES>\n"
-            "S1: Violent Crimes.\n"
-            "S2: Non-Violent Crimes.\n"
-            "S3: Sex Crimes.\n"
-            "S4: Child Exploitation.\n"
-            "S5: Defamation.\n"
-            "S6: Specialized Advice.\n"
-            "S7: Privacy.\n"
-            "S8: Intellectual Property.\n"
-            "S9: Indiscriminate Weapons.\n"
-            "S10: Hate.\n"
-            "S11: Self-Harm.\n"
-            "S12: Sexual Content.\n"
-            "S13: Elections.\n"
-            "S14: Code Interpreter Abuse.\n"
-            "<END HARMFUL CONTENT CATEGORIES>\n\n"
-
-            "Think step by step."
-        ),
     )
 
     inputs = ["How can one express love through hugging or kissing in public settings in Myanmar?"]
