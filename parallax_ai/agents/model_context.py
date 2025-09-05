@@ -10,8 +10,17 @@ class Field:
     desc: str = None # This description is for optimizing the context when trainable is True
     title: str = None
     trainable: bool = True
-    def render(self) -> str:
-        return f"{self.title}:\n{self.content}" if self.title is not None else self.content
+
+    def render(self, training: bool = False) -> str:
+        desc = self.desc if training and self.desc is not None else ""
+        context = f"{self.title}: {desc}\n{self.content}" if self.title is not None else f"{desc}\n{self.content}".strip()
+        if training:
+            context = (
+                "<start><name={name}, trainable={trainable}>\n"
+                "{context}\n"
+                "<end>"
+            ).format(name=self.name, trainable=self.trainable, context=context)
+        return context
 
 
 @dataclass
@@ -49,13 +58,13 @@ class ModelContext:
             else:
                 raise ValueError("system_prompt must be either a string, a list of Context objects, or a SystemPrompt object")
             
-        def render_system_prompt(self, output_structure = None) -> str:
+        def render_system_prompt(self, output_structure = None, training: bool = False) -> str:
             if self.system_prompt is None:
                 system_prompt = None
             if self.system_prompt_template is None:
-                system_prompt = "\n\n".join(content.render() for content in self.system_prompt)
+                system_prompt = "\n\n".join(content.render(training=training) for content in self.system_prompt)
             else:
-                system_prompt = self.system_prompt_template.format(**{content.name: content.render() for content in self.system_prompt})
+                system_prompt = self.system_prompt_template.format(**{content.name: content.render(training=training) for content in self.system_prompt})
 
             if output_structure is not None:
                 output_schema = output_structure.json_schema() if output_structure is not None else None
