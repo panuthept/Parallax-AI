@@ -38,6 +38,26 @@ class ClassificationAgent(Agent):
             assert output_key in self.output_structure.json_schema()["properties"], f"output_key '{output_key}' not found in output_structure"
             self.output_classes[output_key] = self.output_structure.json_schema()["properties"][output_key].get("enum", [])
 
+    @classmethod
+    def from_agent(
+        cls, 
+        agent: Agent, 
+        output_keys: List[str]|str,
+        n: int = 100,
+        **kwargs,
+    ):
+        return ClassificationAgent(
+            model=agent.model,
+            output_keys=output_keys,
+            input_structure=agent.input_structure,
+            output_structure=agent.output_structure,
+            model_context=agent.model_context,
+            api_key=agent.api_key,
+            base_url=agent.base_url,
+            max_tries=agent.max_tries,
+            n=n,
+        )
+
     def _duplicate_inputs(self, inputs: List[str]) -> List[str]:
         duplicated_inputs = []
         for input in inputs:
