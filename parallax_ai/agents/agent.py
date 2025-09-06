@@ -34,9 +34,6 @@ class Agent:
         self.output_structure = output_structure
         self.client = ParallaxOpenAIClient(api_key=api_key, base_url=base_url)
 
-    def get_system_prompt(self, training: bool = False):
-        return self.model_context.render_system_prompt(training=training) if training else self.model_context.render_system_prompt(self.output_structure ,training=training)
-
     def __convert_to_conversational_inputs(self, inputs):
         processed_inputs = []
         for input in inputs:
