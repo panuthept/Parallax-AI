@@ -61,7 +61,7 @@ class Mutator:
 
     def mutate(self, model_context: ModelContext, inputs, targets, outputs) -> List[ModelContext]:
         system_prompt = model_context.render_system_prompt(trainable_field=self.field_name)
-        error_cases = [f"Input: {input.prompt}\nWhat model think it is: {output.safety_assessment}\nWhat human native people think it is: {target.safety_assessment}\n" for input, target, output in zip(inputs, targets, outputs) if output != target]
+        error_cases = [f"Input: {input.prompt}\nWhat model think it is: {output.safety_assessment}\nWhat human native people think it is: {target.safety_assessment}\n" for input, target, output in zip(inputs, targets, outputs) if output != target and output is not None]
         if len(error_cases) == 0:
             return [model_context]
         error_cases = ("\n" + "-" * 100 + "\n").join(error_cases)
