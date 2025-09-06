@@ -49,8 +49,10 @@ class Agent:
                 raise ValueError(f"Unknown input type:\n{input}")
         return processed_inputs
 
-    def __add_system_prompt_to_inputs(self, inputs):
-        system_prompt = self.model_context.render_system_prompt(self.output_structure)
+    def __add_system_prompt_to_inputs(self, inputs, model_context: ModelContext = None):
+        if model_context is None:
+            model_context = self.model_context
+        system_prompt = model_context.render_system_prompt(self.output_structure)
 
         processed_inputs = []
         for input in inputs:
@@ -66,14 +68,14 @@ class Agent:
                 processed_inputs.append(input)
         return processed_inputs
 
-    def _inputs_processing(self, inputs):
+    def _inputs_processing(self, inputs, model_context: ModelContext = None):
         # Ensure that inputs is a list
         if inputs is None or isinstance(inputs, str) or (isinstance(inputs, list) and isinstance(inputs[0], dict)) or (self.input_structure is not None and isinstance(inputs, self.input_structure)):
             inputs = [inputs]
         # Convert all inputs to conversational format
         inputs = self.__convert_to_conversational_inputs(inputs)
         # Add system prompt (if any) to the inputs
-        return self.__add_system_prompt_to_inputs(inputs)
+        return self.__add_system_prompt_to_inputs(inputs, model_context=model_context)
     
     def __get_text_output(self, output) -> str:
         return output.choices[0].message.content
@@ -106,6 +108,40 @@ class Agent:
         output = self.__get_text_output(output)
         # Parser and validate JSON output (if any)
         return self.__parse_and_validate_output(output)
+
+    def parallel_run(
+        self, 
+        inputs, 
+        model_contexts: List[ModelContext],
+        verbose: bool = False,
+        **kwargs,
+    ) -> List[List[str]|List[JsonSchemaMixin]]:
+        n = len(inputs)
+
+        processed_inputs = []
+        for model_context in model_contexts:
+            processed_inputs.extend(self._inputs_processing(inputs, model_context=model_context))
+
+        finished_outputs = {}
+        unfinished_inputs = processed_inputs
+        for _ in range(self.max_tries):
+            unfinished_indices = []
+            outputs = self.client.run(inputs=unfinished_inputs, model=self.model, verbose=verbose, **kwargs)
+            for i, output in enumerate(outputs):
+                if unfinished_inputs[i] is None:
+                    finished_outputs[i] = None
+                else:
+                    output = self._output_processing(output)
+                    if output is not None:
+                        finished_outputs[i] = output
+                    else:
+                        unfinished_indices.append(i)
+            if len(unfinished_indices) == 0:
+                break
+            unfinished_inputs = [processed_inputs[i] for i in unfinished_indices]
+        finished_outputs = [finished_outputs[i] if i in finished_outputs else None for i in range(len(processed_inputs))]
+        outputs = [finished_outputs[i:i+n] for i in range(0, len(processed_inputs), n)]
+        return outputs
 
     def run(
         self, 

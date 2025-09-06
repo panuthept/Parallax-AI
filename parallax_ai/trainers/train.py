@@ -3,8 +3,8 @@ from tqdm import tqdm
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, Iterator
-from parallax_ai.agents import Agent, ModelContext
 from dataclasses_jsonschema import JsonSchemaMixin
+from parallax_ai.agents import Agent, ModelContext
 
 
 class Mutator:
@@ -94,13 +94,10 @@ class Trainer:
     def eval_step(self, samples):
         inputs = [input for input, _ in samples]
         targets = [target for _, target in samples]
+        model_contexts = [model_context for model_context, _ in self.best_candidates]
 
         scores = []
-        for model_context, _ in self.best_candidates:
-            # Set model context
-            self.agent.model_context = model_context
-            # Get initial performance
-            outputs = self.agent.run(inputs)
+        for outputs in self.agent.parallel_run(inputs, model_contexts, verbose=True):
             performance = self.metrics(outputs, targets)
             scores.append(performance)
         return list(sorted(scores, reverse=True))[0]
@@ -110,31 +107,29 @@ class Trainer:
         targets = [target for _, target in samples]
 
         for mutator in self.mutators:
+            model_contexts = [model_context for model_context, _ in self.best_candidates]
+
             scores = []
             init_scores = []
-            for model_context, _ in self.best_candidates:
-                # Set model context
-                self.agent.model_context = model_context
-                # Get initial performance
-                outputs = self.agent.run(inputs)
+            mutated_model_contexts = []
+            for i, outputs in enumerate(self.agent.parallel_run(inputs, model_contexts, verbose=False)):
+                model_context = model_contexts[i]
                 init_performance = self.metrics(outputs, targets)
                 init_scores.append(init_performance)
                 scores.append((model_context, init_performance))
                 # Mutate model context
-                mutated_model_contexts = mutator.mutate(model_context, inputs, targets, outputs)
-                # Evaluate the mutated model context
-                for mutated_model_context in mutated_model_contexts:
-                    # Set model context
-                    self.agent.model_context = mutated_model_context
-                    # Get performance
-                    outputs = self.agent.run(inputs)
-                    performance = self.metrics(outputs, targets)
-                    if performance > init_performance:
-                        scores.append((mutated_model_context, performance))
+                mutated_model_contexts.extend(mutator.mutate(model_context, inputs, targets, outputs))
+
+            # Evaluate the mutated model context
+            for i, outputs in enumerate(self.agent.parallel_run(inputs, mutated_model_contexts, verbose=False)):
+                mutated_model_context = mutated_model_contexts[i]
+                performance = self.metrics(outputs, targets)
+                scores.append((mutated_model_context, performance))
+
             # Get top performers
             self.best_candidates = list(sorted(scores, key=lambda x: x[1], reverse=True))[:self.beam_size]
-            # print(f"Initial performance: {init_scores}")
-            # print(f"Mutated performance: {[score for _, score in self.best_candidates]}")
+            print(f"Initial performance: {init_scores}")
+            print(f"Mutated performance: {[score for _, score in self.best_candidates]}")
         return self.best_candidates[0][1]
 
     def train(
@@ -302,4 +297,4 @@ if __name__ == "__main__":
         metrics=Metrics(),
         beam_size=5,
     )
-    trainer.train(dataset, batch_size=32, epochs=10, eval_step=4)
+    trainer.train(dataset, batch_size=64, epochs=10, eval_step=4)
