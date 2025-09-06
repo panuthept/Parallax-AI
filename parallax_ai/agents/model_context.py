@@ -9,17 +9,25 @@ class Field:
     content: str
     desc: str = None # This description is for optimizing the context when trainable is True
     title: str = None
-    trainable: bool = True
 
     def render(self, training: bool = False) -> str:
-        desc = self.desc if training and self.desc is not None else ""
-        context = f"{self.title}: {desc}\n{self.content}" if self.title is not None else f"{desc}\n{self.content}".strip()
+        title = self.title if self.title is not None else ""
+        desc = self.desc if self.desc is not None else ""
         if training:
             context = (
-                "<start><name={name}, trainable={trainable}>\n"
-                "{context}\n"
-                "<end>"
-            ).format(name=self.name, trainable=self.trainable, context=context)
+                "{title}:\n"
+                "----------------------------- Editable Field ------------------------------------\n"
+                "{content}\n"
+                "---------------------------------------------------------------------------------"
+            ).format(title=title, desc=desc, content=self.content)
+        else:
+            if title != "":
+                context = (
+                    "{title}:\n"
+                    "{content}"
+                ).format(title=title, content=self.content)
+            else:
+                context = self.content
         return context
 
 
@@ -58,13 +66,23 @@ class ModelContext:
             else:
                 raise ValueError("system_prompt must be either a string, a list of Context objects, or a SystemPrompt object")
             
-        def render_system_prompt(self, output_structure = None, training: bool = False) -> str:
+        def update_system_prompt(self, name, content):
+            for field in self.system_prompt:
+                if field.name == name:
+                    field.content = content
+
+        def render_system_prompt(self, output_structure = None, trainable_field: List[str]|str = None) -> str:
             if self.system_prompt is None:
+                if trainable_field is not None:
+                    raise ValueError("System prompt is None. There is no trainable field.")
                 system_prompt = None
+
+            trainable_field = trainable_field if trainable_field is not None else []
+            trainable_field = [trainable_field] if not isinstance(trainable_field, list) else trainable_field
             if self.system_prompt_template is None:
-                system_prompt = "\n\n".join(content.render(training=training) for content in self.system_prompt)
+                system_prompt = "\n\n".join(field.render(training=field.name in trainable_field) for field in self.system_prompt)
             else:
-                system_prompt = self.system_prompt_template.format(**{content.name: content.render(training=training) for content in self.system_prompt})
+                system_prompt = self.system_prompt_template.format(**{field.name: field.render(training=field.name in trainable_field) for field in self.system_prompt})
 
             if output_structure is not None:
                 output_schema = output_structure.json_schema() if output_structure is not None else None
@@ -94,8 +112,8 @@ class ModelContext:
 if __name__ == "__main__":
     model_context = ModelContext(
         system_prompt=[
-            Field(name="task_definition", content="Given a topic, generate a list of people related to the topic.", title="Task Definition", trainable=False),
-            Field(name="method", content="Think step by step before answering.", title="Methodology", trainable=True),
+            Field(name="task_definition", content="Given a topic, generate a list of people related to the topic.", title="Task Definition"),
+            Field(name="method", content="Think step by step before answering.", title="Methodology"),
         ],
     )
     print(model_context.render_system_prompt())
