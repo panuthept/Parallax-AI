@@ -71,6 +71,8 @@ class Mutator:
         new_model_contexts = []
         mutated_outputs = self.mutator.run(inputs=[self.input_structure(system_prompt, error_cases, field_content, field_desc) for _ in range(self.n)])
         for mutated_output in mutated_outputs:
+            if mutated_output is None:
+                continue
             new_model_context = deepcopy(model_context)
             new_model_context.update_system_prompt(self.field_name, mutated_output.revised_content)
             new_model_contexts.append(new_model_context)
