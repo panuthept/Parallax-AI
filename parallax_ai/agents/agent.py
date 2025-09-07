@@ -32,7 +32,7 @@ class Agent:
         self.model_context = model_context
         self.input_structure = input_structure
         self.output_structure = output_structure
-        self.client = ParallaxOpenAIClient(api_key=api_key, base_url=base_url)
+        self.client = ParallaxOpenAIClient(api_key=api_key, base_url=base_url, **kwargs)
 
     def __convert_to_conversational_inputs(self, inputs):
         processed_inputs = []
