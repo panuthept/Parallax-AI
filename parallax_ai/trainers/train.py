@@ -6,13 +6,13 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple, Iterator
 from dataclasses_jsonschema import JsonSchemaMixin
 from parallax_ai.agents import Agent, ModelContext
+from sklearn.metrics import precision_recall_curve, auc
 
 
 class Mutator:
     def __init__(
         self,
         field_name: str,
-        output_structure,
         model: str = "google/gemma-3-27b-it",
         api_key: str = "EMPTY",
         base_url: str = "http://localhost:8000/v1",
@@ -24,37 +24,55 @@ class Mutator:
         class MutatorInputStructure(JsonSchemaMixin):
             system_prompt: str
             error_cases: str
+            field_name: str
             field_content: str
             field_desc: str
+
+        @dataclass
+        class MutatorOutputStructure(JsonSchemaMixin):
+            gaps: str
+            conflicts: str
+            revised_content: str
 
         self.n = n
         self.max_samples = max_samples
         self.field_name = field_name
         self.input_structure=MutatorInputStructure
-        self.output_structure=output_structure
+        self.output_structure=MutatorOutputStructure
         self.mutator = Agent(
             model=model,
             input_structure=MutatorInputStructure,
-            output_structure=output_structure,
+            output_structure=MutatorOutputStructure,
             model_context=ModelContext(
                 input_template=(
                     "System Prompt:\n"
-                    "{system_prompt}\n\n"
+                    "--------------------------------------------------------------------------------------------\n"
+                    "{system_prompt}\n"
+                    "--------------------------------------------------------------------------------------------\n\n"
 
-                    "Error Cases:\n"
-                    "{error_cases}\n\n"
-
-                    "Editable Field:\n"
+                    "Target Field Name: {field_name}\n"
+                    "Field Description: {field_desc}\n"
+                    "Current Field Content:\n"
                     "{field_content}\n\n"
 
-                    "Field Description:\n"
-                    "{field_desc}"
+                    "Error Cases:\n"
+                    "{error_cases}"
                 ),
                 system_prompt=(
-                    "Optimize the 'System Prompt' to indentify the 'Error Cases'.\n"
-                    "To improve the 'System Prompt' effectively, follow these steps:\n"
-                    "1. Analyze the error cases: Go through the agent model’s error cases and identify conflict between system prompt and gold label.\n"
-                    "2. Revise the Editable Field: Update the 'Editable Field' in the system prompt to address the identified weaknesses. This may involve clarifying ambiguous instructions, adding stricter constraints, restructuring guidance, or including concrete examples that steer the model toward correct behavior."
+                    "Inputs\n"
+                    "System Prompt: The initial prompt that defines the agent model’s behavior.\n"
+                    "Target Field: The specific field within the System Prompt that needs to be revised.\n"
+                    "Error Cases: Instances where the agent model produced undesired outputs, annotated with gold labels.\n\n"
+
+                    "Instruction\n"
+                    "Revise the target field in the provided System Prompt to reduce errors and ensure alignment with gold labels.\n"
+                    "Do not edit any other fields in the System Prompt. Focus solely on optimizing the specified target field.\n\n"
+
+                    "Steps to Improve the System Prompt\n"
+                    "1. Review error cases: Examine the agent model’s error cases to understand where the current target field fails.\n"
+                    "2. Identify gaps: Pinpoint essential information missing from the target field that could help prevent errors.\n"
+                    "3. Spot conflicts: Detect any content in the target field that contradicts or misleads relative to the gold labels.\n"
+                    "4. Revise target field: Update the target field to fill gaps and resolve conflicts, ensuring clarity and alignment."
                 ),
             ),
             api_key=api_key,
@@ -63,7 +81,7 @@ class Mutator:
         )
 
     def mutate(self, model_context: ModelContext, inputs, targets, outputs, allow_mutators) -> List[ModelContext]:
-        system_prompt = model_context.render_system_prompt(trainable_field=self.field_name)
+        system_prompt = model_context.render_system_prompt()
         field_content = [field.content for field in model_context.system_prompt if field.name == self.field_name][0]
         field_desc = [field.desc for field in model_context.system_prompt if field.name == self.field_name][0]
         error_cases = [f"Input: {input.prompt}\nWhat model think it is: {output.safety_assessment}\nWhat human native people think it is: {target.safety_assessment}\n" for input, target, output, mutator_names in zip(inputs, targets, outputs, allow_mutators) if self.field_name in mutator_names and output != target and output is not None]
@@ -78,7 +96,7 @@ class Mutator:
             sampled_error_cases.append(("\n" + "-" * 100 + "\n").join(random.sample(error_cases, k=min(self.max_samples, len(error_cases)))))
 
         new_model_contexts = []
-        mutated_outputs = self.mutator.run(inputs=[self.input_structure(system_prompt, sampled_error_cases[i], field_content, field_desc) for i in range(len(sampled_error_cases))])
+        mutated_outputs = self.mutator.run(inputs=[self.input_structure(system_prompt, sampled_error_cases[i], self.field_name, field_content, field_desc) for i in range(len(sampled_error_cases))])
         for mutated_output in mutated_outputs:
             if mutated_output is None:
                 continue
@@ -114,15 +132,16 @@ class Trainer:
         return list(sorted(scores, reverse=True))[0]
 
     def train_step(self, samples, verbose: bool = False):
-        cached_outputs = {}
         inputs = [input for input, _, _ in samples]
         targets = [target for _, target, _ in samples]
         allow_mutators = [mutator_names for _, _, mutator_names in samples]
+
         if len(inputs) == 0:
             return self.best_candidates[0][1]
 
         scores = []
         init_scores = []
+        cached_outputs = {}
         model_contexts = [model_context for model_context, _ in self.best_candidates]
         for i, outputs in enumerate(self.agent.parallel_run(inputs, model_contexts, verbose=verbose)):
             model_context = model_contexts[i]
@@ -161,8 +180,7 @@ class Trainer:
 
     def train(
         self, 
-        train_dataset, 
-        eval_dataset = None,
+        dataset, 
         batch_size: int = 32,
         eval_step: int = 10,
         epochs: int = 1,
@@ -170,18 +188,18 @@ class Trainer:
         verbose: bool = False,
     ):
         train_score = None
-        eval_score = self.eval_step(list(eval_dataset.fetch(len(eval_dataset)))[0]) if eval_dataset is not None else 0.0
+        eval_score = self.eval_step(list(dataset.fetch(dataset.get_test_size(), split="test"))[0]) if dataset.get_test_size() > 0 else 0.0
 
         training_step = 0
-        total_step = ((len(train_dataset) // batch_size) + int(len(train_dataset) % batch_size > 0)) * epochs
+        total_step = ((len(dataset) // batch_size) + int(len(dataset) % batch_size > 0)) * epochs
         with tqdm(total=total_step, desc=f"Train Step: {training_step}/{total_step}, Eval Score: {eval_score*100:.2f}") as pbar:
             for epoch_id in range(epochs):
-                for samples in train_dataset.fetch(batch_size):
+                for samples in dataset.fetch(batch_size, split="train"):
                     train_score = self.train_step(samples, verbose=verbose)
 
                     training_step += 1
                     if training_step % eval_step == 0:
-                        eval_score = self.eval_step(list(eval_dataset.fetch(len(eval_dataset)))[0]) if eval_dataset is not None else 0.0
+                        eval_score = self.eval_step(list(dataset.fetch(dataset.get_test_size(), split="test"))[0]) if dataset.get_test_size() > 0 else 0.0
 
                     pbar.update(1)
                     pbar.set_description(f"Train Step: {training_step}/{total_step}, Eval Score: {eval_score*100:.2f}, Train Score: {train_score*100:.2f}")
@@ -192,23 +210,39 @@ class Trainer:
 
 class Metrics:
     def __call__(self, outputs, targets):
-        accuracy = np.mean([int(output == target) if output is not None and target is not None else 0 for output, target in zip(outputs, targets)])
-        return accuracy.item()
+        targets = [int(label == "Harmful") for label in targets]
+        outputs = [int(label == "Harmful") for label in outputs]
+        precisions, recalls, _ = precision_recall_curve(targets, outputs)
+        auprc = auc(recalls, precisions)
+        return auprc
 
 
 class Dataset:
     def __init__(
             self, 
-            subsets: List[Tuple[str, str, str]]
+            subsets: List[Tuple[str, str, str]],
+            test_split: float = 0.0,
         ):
         self.samples = []
         for subset, split, language in subsets:
-            self.samples.extend(self.get_samples(subset, split, language))
+            self.samples.extend(self.get_samples(subset, split, language, test_split=test_split))
+    
+    def get_train_size(self):
+        return sum([sample for sample in self.samples if sample["split"] == "train"])
+
+    def get_test_size(self):
+        return sum([sample for sample in self.samples if sample["split"] == "test"])
 
     def __len__(self):
         return len(self.samples)
         
-    def get_samples(self, subset: str = "cultural_content_generation", split: str = "TH_EN", language: str = None):
+    def get_samples(
+        self, 
+        subset: str = "cultural_content_generation", 
+        split: str = "TH_EN", 
+        language: str = None,
+        test_split: float = 0.0,
+    ):
         from datasets import load_dataset
         dataset = load_dataset("aisingapore/SEASafeguardBench", subset, split=split)
 
@@ -256,7 +290,7 @@ class Dataset:
                         "prompt_label": data["prompt_label"],
                         "response": None,
                         "response_label": None,
-                        "cultural": None,
+                        "cultural": split_to_cultural_mapping[split],
                     })
                 if language is None or language == "Local":
                     samples.append({
@@ -264,13 +298,21 @@ class Dataset:
                         "prompt_label": data["prompt_label"],
                         "response": None,
                         "response_label": None,
-                        "cultural": None,
+                        "cultural": split_to_cultural_mapping[split],
                     })
+        
+        test_size = int(len(dataset) * test_split)
+        train_size = len(dataset) - test_size
+        random.shuffle(samples)
+        for i, sample in enumerate(samples):
+            split = "train" if i < train_size else "test"
+            sample["split"] = split
+
         return samples
 
-    def fetch(self, batch_size: int = 32) -> Iterator[List[Tuple['InputStructure', 'OutputStructure']]]:
+    def fetch(self, split: str = None, batch_size: int = 32) -> Iterator[List[Tuple['InputStructure', 'OutputStructure']]]:
         for i in range(0, len(self.samples), batch_size):
-            yield [(InputStructure(sample["prompt"]), OutputStructure(sample["prompt_label"]), ["safety_policy", sample["cultural"], "methodology"]) for sample in self.samples[i:i+batch_size]]
+            yield [(InputStructure(sample["prompt"]), OutputStructure(sample["prompt_label"]), ["safety_policy", sample["cultural"], "methodology"]) for sample in self.samples[i:i+batch_size] if split is not None and sample["split"] == split]
 
 
 if __name__ == "__main__":
@@ -326,29 +368,36 @@ if __name__ == "__main__":
         max_parallel_processes=430,
     )
 
-    @dataclass
-    class MutatorOutputStructure(JsonSchemaMixin):
-        conflict: str
-        revised_content: str
-
     revise_mutators = [
         Mutator(field_name=field.name, output_structure=MutatorOutputStructure, max_samples=8, n=5)
     for field in agent.model_context.system_prompt]
     
-    train_dataset = Dataset([
-        ("cultural_content_generation", "IN_EN", "English"),
-        ("cultural_content_generation", "MS_EN", "English"),
-        ("cultural_content_generation", "MY_EN", "English"),
-        ("cultural_content_generation", "TH_EN", "English"),
-        ("cultural_content_generation", "TA_EN", "English"),
-        ("cultural_content_generation", "TL_EN", "English"),
-        ("cultural_content_generation", "VI_EN", "English"),
-    ])
-    print(f"Train data size: {len(train_dataset)}")
+    dataset = Dataset(
+        subsets=[
+            ("cultural_content_generation", "IN_EN", "English"),
+            ("cultural_content_generation", "MS_EN", "English"),
+            ("cultural_content_generation", "MY_EN", "English"),
+            ("cultural_content_generation", "TH_EN", "English"),
+            ("cultural_content_generation", "TA_EN", "English"),
+            ("cultural_content_generation", "TL_EN", "English"),
+            ("cultural_content_generation", "VI_EN", "English"),
+            ("cultural_in_the_wild", "IN_EN", "English"),
+            ("cultural_in_the_wild", "MS_EN", "English"),
+            ("cultural_in_the_wild", "MY_EN", "English"),
+            ("cultural_in_the_wild", "TH_EN", "English"),
+            ("cultural_in_the_wild", "TA_EN", "English"),
+            ("cultural_in_the_wild", "TL_EN", "English"),
+            ("cultural_in_the_wild", "VI_EN", "English"),
+        ],
+        test_split=0.0,
+    )
+    print(f"Train data size: {dataset.get_train_size()}")
+    print(f"Test data size: {dataset.get_test_size()}")
+    
     trainer = Trainer(
         agent=agent, 
         mutators=revise_mutators[1:], 
         metrics=Metrics(),
         beam_size=5,
     )
-    trainer.train(train_dataset, batch_size=1505, epochs=100, eval_step=1, verbose=False)
+    trainer.train(dataset, batch_size=430, epochs=100, eval_step=1, verbose=False)

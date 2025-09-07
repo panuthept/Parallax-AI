@@ -11,24 +11,14 @@ class Field:
     desc: str = None # This description is for optimizing the context when trainable is True
     title: str = None
 
-    def render(self, training: bool = False) -> str:
-        title = self.title if self.title is not None else ""
-        desc = self.desc if self.desc is not None else ""
-        if training:
+    def render(self) -> str:
+        if self.title is not None:
             context = (
                 "{title}:\n"
-                "----------------------------- Editable Field ------------------------------------\n"
-                "{content}\n"
-                "---------------------------------------------------------------------------------"
-            ).format(title=title, desc=desc, content=self.content)
+                "{content}"
+            ).format(title=self.title, content=self.content)
         else:
-            if title != "":
-                context = (
-                    "{title}:\n"
-                    "{content}"
-                ).format(title=title, content=self.content)
-            else:
-                context = self.content
+            context = self.content
         return context
 
 
@@ -74,18 +64,14 @@ class ModelContext:
                 if field.name == name:
                     field.content = content
 
-        def render_system_prompt(self, output_structure = None, trainable_field: List[str]|str = None) -> str:
+        def render_system_prompt(self, output_structure = None) -> str:
             if self.system_prompt is None:
-                if trainable_field is not None:
-                    raise ValueError("System prompt is None. There is no trainable field.")
                 system_prompt = None
 
-            trainable_field = trainable_field if trainable_field is not None else []
-            trainable_field = [trainable_field] if not isinstance(trainable_field, list) else trainable_field
             if self.system_prompt_template is None:
-                system_prompt = "\n\n".join(field.render(training=field.name in trainable_field) for field in self.system_prompt)
+                system_prompt = "\n\n".join(field.render() for field in self.system_prompt)
             else:
-                system_prompt = self.system_prompt_template.format(**{field.name: field.render(training=field.name in trainable_field) for field in self.system_prompt})
+                system_prompt = self.system_prompt_template.format(**{field.name: field.render() for field in self.system_prompt})
 
             if output_structure is not None:
                 output_schema = output_structure.json_schema() if output_structure is not None else None
