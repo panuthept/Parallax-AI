@@ -1,4 +1,5 @@
 import json
+import uuid
 from typing import List
 from dataclasses import dataclass
 
@@ -33,6 +34,7 @@ class Field:
 
 @dataclass
 class ModelContext:
+        id: str = None
         input_template: str = None
         system_prompt_template: str = None
         system_prompt: List[Field] = None
@@ -57,6 +59,7 @@ class ModelContext:
             )
 
         def __post_init__(self):
+            self.id = uuid.uuid4()
             if isinstance(self.system_prompt, str):
                 self.system_prompt = [Field(name="system_prompt", content=self.system_prompt)]
             elif isinstance(self.system_prompt, list):
