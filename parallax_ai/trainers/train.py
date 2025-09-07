@@ -1,3 +1,4 @@
+import random
 import numpy as np
 from tqdm import tqdm
 from copy import deepcopy
@@ -16,6 +17,7 @@ class Mutator:
         api_key: str = "EMPTY",
         base_url: str = "http://localhost:8000/v1",
         max_tries: int = 5,
+        max_samples: int = None,
         n: int = 5,
     ):
         @dataclass
@@ -26,6 +28,7 @@ class Mutator:
             field_desc: str
 
         self.n = n
+        self.max_samples = max_samples
         self.field_name = field_name
         self.input_structure=MutatorInputStructure
         self.output_structure=output_structure
@@ -59,17 +62,23 @@ class Mutator:
             max_tries=max_tries,
         )
 
-    def mutate(self, model_context: ModelContext, inputs, targets, outputs) -> List[ModelContext]:
+    def mutate(self, model_context: ModelContext, inputs, targets, outputs, allow_mutators) -> List[ModelContext]:
         system_prompt = model_context.render_system_prompt(trainable_field=self.field_name)
-        error_cases = [f"Input: {input.prompt}\nWhat model think it is: {output.safety_assessment}\nWhat human native people think it is: {target.safety_assessment}\n" for input, target, output in zip(inputs, targets, outputs) if output != target and output is not None]
+        field_content = [field.content for field in model_context.system_prompt if field.name == self.field_name][0]
+        field_desc = [field.desc for field in model_context.system_prompt if field.name == self.field_name][0]
+        error_cases = [f"Input: {input.prompt}\nWhat model think it is: {output.safety_assessment}\nWhat human native people think it is: {target.safety_assessment}\n" for input, target, output, mutator_names in zip(inputs, targets, outputs, allow_mutators) if self.field_name in mutator_names and output != target and output is not None]
         if len(error_cases) == 0:
             return [model_context]
-        error_cases = ("\n" + "-" * 100 + "\n").join(error_cases)
-        field_content = [field.content for field in model_context.system_prompt if field.name == self.field_name]
-        field_desc = [field.desc for field in model_context.system_prompt if field.name == self.field_name]
+
+        if self.max_samples is None:
+            max_samples = len(error_cases)
+
+        sampled_error_cases = []
+        for _ in range(self.n):
+            sampled_error_cases.append(("\n" + "-" * 100 + "\n").join(random.sample(error_cases, k=min(self.max_samples, len(error_cases)))))
 
         new_model_contexts = []
-        mutated_outputs = self.mutator.run(inputs=[self.input_structure(system_prompt, error_cases, field_content, field_desc) for _ in range(self.n)])
+        mutated_outputs = self.mutator.run(inputs=[self.input_structure(system_prompt, sampled_error_cases[i], field_content, field_desc) for i in range(len(sampled_error_cases))])
         for mutated_output in mutated_outputs:
             if mutated_output is None:
                 continue
@@ -93,68 +102,86 @@ class Trainer:
         self.metrics = metrics
         self.beam_size = beam_size
 
-    def eval_step(self, samples):
-        inputs = [input for input, _ in samples]
-        targets = [target for _, target in samples]
+    def eval_step(self, samples, verbose: bool = False):
+        inputs = [input for input, _, _ in samples]
+        targets = [target for _, target, _ in samples]
         model_contexts = [model_context for model_context, _ in self.best_candidates]
 
         scores = []
-        for outputs in self.agent.parallel_run(inputs, model_contexts, verbose=True):
+        for outputs in self.agent.parallel_run(inputs, model_contexts, verbose=verbose):
             performance = self.metrics(outputs, targets)
             scores.append(performance)
         return list(sorted(scores, reverse=True))[0]
 
-    def train_step(self, samples):
-        inputs = [input for input, _ in samples]
-        targets = [target for _, target in samples]
+    def train_step(self, samples, verbose: bool = False):
+        cached_outputs = {}
+        inputs = [input for input, _, _ in samples]
+        targets = [target for _, target, _ in samples]
+        allow_mutators = [mutator_names for _, _, mutator_names in samples]
+        if len(inputs) == 0:
+            return self.best_candidates[0][1]
 
-        for mutator in self.mutators:
-            model_contexts = [model_context for model_context, _ in self.best_candidates]
+        scores = []
+        init_scores = []
+        model_contexts = [model_context for model_context, _ in self.best_candidates]
+        for i, outputs in enumerate(self.agent.parallel_run(inputs, model_contexts, verbose=verbose)):
+            model_context = model_contexts[i]
+            cached_outputs[model_context.id] = outputs
+            # Evaluate model context
+            init_performance = self.metrics(outputs, targets)
+            scores.append((model_context, init_performance))
+            init_scores.append(init_performance)
+        print(f"Initial performance: {init_scores}")
 
-            scores = []
-            init_scores = []
+        for i, mutator in enumerate(self.mutators):
+            model_contexts = [model_context for model_context, _ in scores]
+
             mutated_model_contexts = []
-            for i, outputs in enumerate(self.agent.parallel_run(inputs, model_contexts, verbose=False)):
-                model_context = model_contexts[i]
-                init_performance = self.metrics(outputs, targets)
-                init_scores.append(init_performance)
-                scores.append((model_context, init_performance))
+            # Mutate existing model context
+            for model_context in model_contexts:
+                # Retrieve outputs
+                outputs = cached_outputs[model_context.id]
                 # Mutate model context
-                mutated_model_contexts.extend(mutator.mutate(model_context, inputs, targets, outputs))
+                mutated_model_contexts.extend(mutator.mutate(model_context, inputs, targets, outputs, allow_mutators))
 
             # Evaluate the mutated model context
-            for i, outputs in enumerate(self.agent.parallel_run(inputs, mutated_model_contexts, verbose=False)):
-                mutated_model_context = mutated_model_contexts[i]
+            for j, outputs in enumerate(self.agent.parallel_run(inputs, mutated_model_contexts, verbose=verbose)):
+                mutated_model_context = mutated_model_contexts[j]
+                # Update cache
+                cached_outputs[mutated_model_context.id] = outputs
+                # Evaluate model context
                 performance = self.metrics(outputs, targets)
                 scores.append((mutated_model_context, performance))
 
             # Get top performers
-            self.best_candidates = list(sorted(scores, key=lambda x: x[1], reverse=True))[:self.beam_size]
-            print(f"Initial performance: {init_scores}")
-            print(f"Mutated performance: {[score for _, score in self.best_candidates]}")
+            scores = list(sorted(scores, key=lambda x: x[1], reverse=True))[:self.beam_size]
+            print(f"Mutated performance ({mutator.field_name}): {[score for _, score in scores]}")
+        self.best_candidates = scores
         return self.best_candidates[0][1]
 
     def train(
         self, 
         train_dataset, 
+        eval_dataset = None,
         batch_size: int = 32,
         eval_step: int = 10,
         epochs: int = 1,
-        save_path: str = "./trained_model_context.json"
+        save_path: str = "./trained_model_context.json",
+        verbose: bool = False,
     ):
         train_score = None
-        eval_score = self.eval_step(list(train_dataset.fetch(len(train_dataset)))[0])
+        eval_score = self.eval_step(list(eval_dataset.fetch(len(eval_dataset)))[0]) if eval_dataset is not None else 0.0
 
         training_step = 0
         total_step = ((len(train_dataset) // batch_size) + int(len(train_dataset) % batch_size > 0)) * epochs
         with tqdm(total=total_step, desc=f"Train Step: {training_step}/{total_step}, Eval Score: {eval_score*100:.2f}") as pbar:
             for epoch_id in range(epochs):
                 for samples in train_dataset.fetch(batch_size):
-                    train_score = self.train_step(samples)
+                    train_score = self.train_step(samples, verbose=verbose)
 
                     training_step += 1
                     if training_step % eval_step == 0:
-                        eval_score = self.eval_step(list(train_dataset.fetch(len(train_dataset)))[0])
+                        eval_score = self.eval_step(list(eval_dataset.fetch(len(eval_dataset)))[0]) if eval_dataset is not None else 0.0
 
                     pbar.update(1)
                     pbar.set_description(f"Train Step: {training_step}/{total_step}, Eval Score: {eval_score*100:.2f}, Train Score: {train_score*100:.2f}")
@@ -185,6 +212,16 @@ class Dataset:
         from datasets import load_dataset
         dataset = load_dataset("aisingapore/SEASafeguardBench", subset, split=split)
 
+        split_to_cultural_mapping = {
+            "IN_EN": "in_cultural_knowledge",
+            "MS_EN": "ms_cultural_knowledge",
+            "MY_EN": "my_cultural_knowledge",
+            "TH_EN": "th_cultural_knowledge",
+            "TA_EN": "sg_cultural_knowledge",
+            "TL_EN": "ph_cultural_knowledge",
+            "VI_EN": "vi_cultural_knowledge",
+        }
+
         samples = []
         for data in dataset:
             if subset == "general":
@@ -193,6 +230,7 @@ class Dataset:
                     "prompt_label": data["prompt_label"],
                     "response": data["response"],
                     "response_label": data["response_label"],
+                    "cultural": None,
                 })
             elif subset == "cultural_content_generation":
                 if language is None or language == "English":
@@ -201,6 +239,7 @@ class Dataset:
                         "prompt_label": data["prompt_label"],
                         "response": data["en_response"],
                         "response_label": data["response_label"],
+                        "cultural": split_to_cultural_mapping[split],
                     })
                 if language is None or language == "Local":
                     samples.append({
@@ -208,6 +247,7 @@ class Dataset:
                         "prompt_label": data["prompt_label"],
                         "response": data["local_response"],
                         "response_label": data["response_label"],
+                        "cultural": split_to_cultural_mapping[split],
                     })
             else:
                 if language is None or language == "English":
@@ -216,6 +256,7 @@ class Dataset:
                         "prompt_label": data["prompt_label"],
                         "response": None,
                         "response_label": None,
+                        "cultural": None,
                     })
                 if language is None or language == "Local":
                     samples.append({
@@ -223,12 +264,13 @@ class Dataset:
                         "prompt_label": data["prompt_label"],
                         "response": None,
                         "response_label": None,
+                        "cultural": None,
                     })
         return samples
 
     def fetch(self, batch_size: int = 32) -> Iterator[List[Tuple['InputStructure', 'OutputStructure']]]:
         for i in range(0, len(self.samples), batch_size):
-            yield [(InputStructure(sample["prompt"]), OutputStructure(sample["prompt_label"])) for sample in self.samples[i:i+batch_size]]
+            yield [(InputStructure(sample["prompt"]), OutputStructure(sample["prompt_label"]), ["safety_policy", sample["cultural"], "methodology"]) for sample in self.samples[i:i+batch_size]]
 
 
 if __name__ == "__main__":
@@ -281,6 +323,7 @@ if __name__ == "__main__":
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
         max_tries=5,
+        max_parallel_processes=430,
     )
 
     @dataclass
@@ -288,15 +331,24 @@ if __name__ == "__main__":
         conflict: str
         revised_content: str
 
-    revise_mutators = {
-        field.name: Mutator(field_name=field.name, output_structure=MutatorOutputStructure)
-    for field in agent.model_context.system_prompt}
+    revise_mutators = [
+        Mutator(field_name=field.name, output_structure=MutatorOutputStructure, max_samples=8, n=5)
+    for field in agent.model_context.system_prompt]
     
-    dataset = Dataset([("cultural_content_generation", "TH_EN", None)])
+    train_dataset = Dataset([
+        ("cultural_content_generation", "IN_EN", "English"),
+        ("cultural_content_generation", "MS_EN", "English"),
+        ("cultural_content_generation", "MY_EN", "English"),
+        ("cultural_content_generation", "TH_EN", "English"),
+        ("cultural_content_generation", "TA_EN", "English"),
+        ("cultural_content_generation", "TL_EN", "English"),
+        ("cultural_content_generation", "VI_EN", "English"),
+    ])
+    print(f"Train data size: {len(train_dataset)}")
     trainer = Trainer(
         agent=agent, 
-        mutators=[revise_mutators[field_name] for field_name in ["safety_policy", "th_cultural_knowledge", "methodology"]], 
+        mutators=revise_mutators[1:], 
         metrics=Metrics(),
         beam_size=5,
     )
-    trainer.train(dataset, batch_size=64, epochs=10, eval_step=4)
+    trainer.train(train_dataset, batch_size=1505, epochs=100, eval_step=1, verbose=False)
