@@ -1,3 +1,5 @@
+import os
+import uuid
 import random
 import numpy as np
 from tqdm import tqdm
@@ -7,6 +9,126 @@ from typing import Dict, List, Tuple, Iterator
 from dataclasses_jsonschema import JsonSchemaMixin
 from parallax_ai.agents import Agent, ModelContext
 from sklearn.metrics import precision_recall_curve, auc
+
+
+class Metrics:
+    def __call__(self, outputs, targets):
+        indices = [i for i, (target, output) in enumerate(zip(targets, outputs)) if output is not None]
+        targets = [int(targets[i].safety_assessment == "Harmful") for i in indices]
+        outputs = [int(outputs[i].safety_assessment == "Harmful") for i in indices]
+        precisions, recalls, _ = precision_recall_curve(targets, outputs)
+        auprc = auc(recalls, precisions)
+        return auprc
+
+
+@dataclass
+class Sample:
+    id: uuid.UUID
+    input: str
+    target: str
+    allow_mutators: List[str] = None
+    relationship: Dict['Sample', float] = None
+
+
+class Dataset:
+    def __init__(
+            self, 
+            subsets: List[Tuple[str, str, str]],
+            test_split: float = 0.0,
+        ):
+        self.samples = {}
+        for subset, split, language in subsets:
+            self.samples.update(self._get_samples(subset, split, language))
+
+        # Split into train and test
+        sample_ids = list(self.samples.keys())
+        test_size = int(len(sample_ids) * test_split)
+        train_size = len(sample_ids) - test_size
+        random.shuffle(sample_ids)
+
+        self.train_ids = []
+        self.test_ids = []
+        for i, sample_id in enumerate(sample_ids):
+            split = "train" if i < train_size else "test"
+            if split == "train":
+                self.train_ids.append(sample_id)
+            else:
+                self.test_ids.append(sample_id)
+    
+    def get_train_size(self):
+        return len(self.train_ids)
+
+    def get_test_size(self):
+        return len(self.test_ids)
+
+    def __len__(self):
+        return self.get_train_size() + self.get_test_size()
+        
+    def _get_samples(
+        self, 
+        subset: str = "cultural_content_generation", 
+        split: str = "TH_EN", 
+        language: str = None,
+    ):
+        from datasets import load_dataset
+        dataset = load_dataset("aisingapore/SEASafeguardBench", subset, split=split)
+
+        split_to_cultural_mapping = {
+            "IN_EN": "in_cultural_knowledge",
+            "MS_EN": "ms_cultural_knowledge",
+            "MY_EN": "my_cultural_knowledge",
+            "TH_EN": "th_cultural_knowledge",
+            "TA_EN": "sg_cultural_knowledge",
+            "TL_EN": "ph_cultural_knowledge",
+            "VI_EN": "vi_cultural_knowledge",
+        }
+
+        samples = {}
+        for data in dataset:
+            if subset == "general":
+                sample = Sample(
+                    input=data["prompt"],
+                    target=data["prompt_label"],
+                )
+                samples[sample.id] = sample
+            elif subset == "cultural_content_generation":
+                if language is None or language == "English":
+                    sample = Sample(
+                        input=data["en_prompt"],
+                        target=data["prompt_label"],
+                        allow_mutators=[split_to_cultural_mapping[split]],
+                    )
+                    samples[sample.id] = sample
+                if language is None or language == "Local":
+                    sample = Sample(
+                        input=data["local_prompt"],
+                        target=data["prompt_label"],
+                        allow_mutators=[split_to_cultural_mapping[split]],
+                    )
+                    samples[sample.id] = sample
+            else:
+                if language is None or language == "English":
+                    sample = Sample(
+                        input=data["en_prompt"],
+                        target=data["prompt_label"],
+                        allow_mutators=[split_to_cultural_mapping[split]],
+                    )
+                    samples[sample.id] = sample
+                if language is None or language == "Local":
+                    sample = Sample(
+                        input=data["local_prompt"],
+                        target=data["prompt_label"],
+                        allow_mutators=[split_to_cultural_mapping[split]],
+                    )
+                    samples[sample.id] = sample
+        
+        return samples
+
+    def fetch(self, batch_size: int = None, split: str = None) -> Iterator[List[Sample]]:
+        sample_ids = self.train_ids if split == "train" else self.test_ids if split == "test" else self.train_ids + self.test_ids
+        batch_size = min(batch_size, len(sample_ids)) if batch_size is not None else len(sample_ids)
+        for i in range(0, len(sample_ids), batch_size):
+            yield [self.samples[sample_id] for sample_id in sample_ids[i:i+batch_size]]
 
 
 class Mutator:
@@ -86,7 +208,7 @@ class Mutator:
         field_desc = [field.desc for field in model_context.system_prompt if field.name == self.field_name][0]
         error_cases = [f"Input: {input.prompt}\nWhat model think it is: {output.safety_assessment}\nWhat human native people think it is: {target.safety_assessment}\n" for input, target, output, mutator_names in zip(inputs, targets, outputs, allow_mutators) if self.field_name in mutator_names and output != target and output is not None]
         if len(error_cases) == 0:
-            return [model_context]
+            return []
 
         if self.max_samples is None:
             max_samples = len(error_cases)
@@ -113,16 +235,20 @@ class Trainer:
         mutators: List[Mutator], 
         metrics,
         beam_size: int = 5,
+        pretrained_model_contexts: List[ModelContext] = None,
     ):
         self.agent = agent
-        self.best_candidates = [(self.agent.model_context, None)]
+        self.best_candidates = [(self.agent.model_context, None)] if pretrained_model_contexts is None else [(model_context, None) for model_context in pretrained_model_contexts]
         self.mutators = mutators
         self.metrics = metrics
         self.beam_size = beam_size
 
-    def eval_step(self, samples, verbose: bool = False):
-        inputs = [input for input, _, _ in samples]
-        targets = [target for _, target, _ in samples]
+    def eval_step(self, samples: List[Sample], verbose: bool = False):
+        if len(samples) == 0:
+            return 0.0
+
+        inputs = [InputStructure(sample.input) for sample in samples]
+        targets = [OutputStructure(sample.target) for sample in samples]
         model_contexts = [model_context for model_context, _ in self.best_candidates]
 
         scores = []
@@ -131,13 +257,25 @@ class Trainer:
             scores.append(performance)
         return list(sorted(scores, reverse=True))[0]
 
-    def train_step(self, samples, verbose: bool = False):
-        inputs = [input for input, _, _ in samples]
-        targets = [target for _, target, _ in samples]
-        allow_mutators = [mutator_names for _, _, mutator_names in samples]
-
-        if len(inputs) == 0:
+    def train_step(self, samples: List[Sample], verbose: bool = False):
+        """
+        Metrics improvement plan:
+        (i) Wrong (In-sampled) -> Correct cases
+        (ii) Correct (In-sampled) -> Wrong cases
+        (iii) Wrong (Out-of-sampled) -> Correct cases
+        (iv) Correct (Out-of-sampled) -> Wrong cases
+        * Impact score = (i)+(ii)+(iii)+(iv)
+        = (1-a)(metric(i, ii)) + a(metric(iii, iv)) => large a -> more focus on Out-of-sampled -> more focus on generalization.
+        Method improvement plan:
+        1. Show both fail and sucess cases when mutator is called (random success cases).
+        2. 
+        """
+        if len(samples) == 0:
             return self.best_candidates[0][1]
+
+        inputs = [InputStructure(sample.input) for sample in samples]
+        targets = [OutputStructure(sample.target) for sample in samples]
+        allow_mutators = [sample.allow_mutators for sample in samples]
 
         scores = []
         init_scores = []
@@ -163,6 +301,9 @@ class Trainer:
                 # Mutate model context
                 mutated_model_contexts.extend(mutator.mutate(model_context, inputs, targets, outputs, allow_mutators))
 
+            if len(mutated_model_contexts) == 0:
+                continue
+
             # Evaluate the mutated model context
             for j, outputs in enumerate(self.agent.parallel_run(inputs, mutated_model_contexts, verbose=verbose)):
                 mutated_model_context = mutated_model_contexts[j]
@@ -184,135 +325,31 @@ class Trainer:
         batch_size: int = 32,
         eval_step: int = 10,
         epochs: int = 1,
+        start_training_step: int = 0,
         save_path: str = "./trained_model_context.json",
         verbose: bool = False,
     ):
-        train_score = None
-        eval_score = self.eval_step(list(dataset.fetch(dataset.get_test_size(), split="test"))[0]) if dataset.get_test_size() > 0 else 0.0
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
-        training_step = 0
-        total_step = ((len(dataset) // batch_size) + int(len(dataset) % batch_size > 0)) * epochs
-        with tqdm(total=total_step, desc=f"Train Step: {training_step}/{total_step}, Eval Score: {eval_score*100:.2f}") as pbar:
+        train_score = None
+        eval_score = self.eval_step(list(dataset.fetch(split="test"))[0]) if dataset.get_test_size() > 0 else 0.0
+
+        training_step = start_training_step
+        total_step = ((dataset.get_train_size() // batch_size) + int(dataset.get_train_size() % batch_size > 0)) * epochs
+        with tqdm(total=total_step, desc=f"Train Step: {training_step}/{total_step + start_training_step}, Eval Score: {eval_score*100:.2f}") as pbar:
             for epoch_id in range(epochs):
                 for samples in dataset.fetch(batch_size, split="train"):
                     train_score = self.train_step(samples, verbose=verbose)
 
                     training_step += 1
                     if training_step % eval_step == 0:
-                        eval_score = self.eval_step(list(dataset.fetch(dataset.get_test_size(), split="test"))[0]) if dataset.get_test_size() > 0 else 0.0
+                        eval_score = self.eval_step(list(dataset.fetch(split="test"))[0]) if dataset.get_test_size() > 0 else 0.0
 
                     pbar.update(1)
-                    pbar.set_description(f"Train Step: {training_step}/{total_step}, Eval Score: {eval_score*100:.2f}, Train Score: {train_score*100:.2f}")
+                    pbar.set_description(f"Train Step: {training_step}/{total_step + start_training_step}, Eval Score: {eval_score*100:.2f}, Train Score: {train_score*100:.2f}")
                 # Save top-k
                 for model_context, performance in self.best_candidates:
                     model_context.to_json(save_path.replace(".json", f"_{training_step}_{performance}.json"))
-
-
-class Metrics:
-    def __call__(self, outputs, targets):
-        targets = [int(label == "Harmful") for label in targets]
-        outputs = [int(label == "Harmful") for label in outputs]
-        precisions, recalls, _ = precision_recall_curve(targets, outputs)
-        auprc = auc(recalls, precisions)
-        return auprc
-
-
-class Dataset:
-    def __init__(
-            self, 
-            subsets: List[Tuple[str, str, str]],
-            test_split: float = 0.0,
-        ):
-        self.samples = []
-        for subset, split, language in subsets:
-            self.samples.extend(self.get_samples(subset, split, language, test_split=test_split))
-    
-    def get_train_size(self):
-        return sum([sample for sample in self.samples if sample["split"] == "train"])
-
-    def get_test_size(self):
-        return sum([sample for sample in self.samples if sample["split"] == "test"])
-
-    def __len__(self):
-        return len(self.samples)
-        
-    def get_samples(
-        self, 
-        subset: str = "cultural_content_generation", 
-        split: str = "TH_EN", 
-        language: str = None,
-        test_split: float = 0.0,
-    ):
-        from datasets import load_dataset
-        dataset = load_dataset("aisingapore/SEASafeguardBench", subset, split=split)
-
-        split_to_cultural_mapping = {
-            "IN_EN": "in_cultural_knowledge",
-            "MS_EN": "ms_cultural_knowledge",
-            "MY_EN": "my_cultural_knowledge",
-            "TH_EN": "th_cultural_knowledge",
-            "TA_EN": "sg_cultural_knowledge",
-            "TL_EN": "ph_cultural_knowledge",
-            "VI_EN": "vi_cultural_knowledge",
-        }
-
-        samples = []
-        for data in dataset:
-            if subset == "general":
-                samples.append({
-                    "prompt": data["prompt"],
-                    "prompt_label": data["prompt_label"],
-                    "response": data["response"],
-                    "response_label": data["response_label"],
-                    "cultural": None,
-                })
-            elif subset == "cultural_content_generation":
-                if language is None or language == "English":
-                    samples.append({
-                        "prompt": data["en_prompt"],
-                        "prompt_label": data["prompt_label"],
-                        "response": data["en_response"],
-                        "response_label": data["response_label"],
-                        "cultural": split_to_cultural_mapping[split],
-                    })
-                if language is None or language == "Local":
-                    samples.append({
-                        "prompt": data["local_prompt"],
-                        "prompt_label": data["prompt_label"],
-                        "response": data["local_response"],
-                        "response_label": data["response_label"],
-                        "cultural": split_to_cultural_mapping[split],
-                    })
-            else:
-                if language is None or language == "English":
-                    samples.append({
-                        "prompt": data["en_prompt"],
-                        "prompt_label": data["prompt_label"],
-                        "response": None,
-                        "response_label": None,
-                        "cultural": split_to_cultural_mapping[split],
-                    })
-                if language is None or language == "Local":
-                    samples.append({
-                        "prompt": data["local_prompt"],
-                        "prompt_label": data["prompt_label"],
-                        "response": None,
-                        "response_label": None,
-                        "cultural": split_to_cultural_mapping[split],
-                    })
-        
-        test_size = int(len(dataset) * test_split)
-        train_size = len(dataset) - test_size
-        random.shuffle(samples)
-        for i, sample in enumerate(samples):
-            split = "train" if i < train_size else "test"
-            sample["split"] = split
-
-        return samples
-
-    def fetch(self, split: str = None, batch_size: int = 32) -> Iterator[List[Tuple['InputStructure', 'OutputStructure']]]:
-        for i in range(0, len(self.samples), batch_size):
-            yield [(InputStructure(sample["prompt"]), OutputStructure(sample["prompt_label"]), ["safety_policy", sample["cultural"], "methodology"]) for sample in self.samples[i:i+batch_size] if split is not None and sample["split"] == split]
 
 
 if __name__ == "__main__":
@@ -325,7 +362,20 @@ if __name__ == "__main__":
 
     @dataclass
     class OutputStructure(JsonSchemaMixin):
+        # relevant_cultural: Literal["None", "Indonesia", "Malaysia", "Myanmar", "Thailand", "Singapore", "Philippines", "Vietnam"]
         safety_assessment: Literal["Safe", "Sensitive", "Harmful"]
+
+        # def __post__init__(self):
+        #     cultural_mapping = {
+        #         "in_cultural_knowledge": "Indonesia",
+        #         "ms_cultural_knowledge": "Malaysia",
+        #         "my_cultural_knowledge": "Myanmar",
+        #         "th_cultural_knowledge": "Thailand",
+        #         "sg_cultural_knowledge": "Singapore",
+        #         "ph_cultural_knowledge": "Philippines",
+        #         "vi_cultural_knowledge": "Vietnam",
+        #     }
+        #     self.relevant_cultural = cultural_mapping.get(self.relevant_cultural, "None")
 
         def __eq__(self, other):
             if not isinstance(other, OutputStructure):
@@ -359,7 +409,18 @@ if __name__ == "__main__":
                 Field(name="sg_cultural_knowledge", title="Singapore Cultural Knowledge", content="", desc="This field offers background knowledge on Singapore cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
                 Field(name="ph_cultural_knowledge", title="Philippines Cultural Knowledge", content="", desc="This field offers background knowledge on Philippines cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
                 Field(name="vi_cultural_knowledge", title="Vietnam Cultural Knowledge", content="", desc="This field offers background knowledge on Vietnam cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
-                Field(name="methodology", title="Thinking process", content="Think step by step before answering.", desc="This field guides the model how to apply a step-by-step reasoning process before responding."),
+                Field(
+                    name="methodology", title="Thinking process", 
+                    content=(
+                        "Steps to Determine Prompt Safety\n"
+                        "1. Review the input prompt: Carefully read the prompt to understand its intention, context, and what it is asking the model to do.\n"
+                        "2. Check for cultural dependency: Determine whether the prompt relies on cultural references, norms, or assumptions that require specific cultural knowledge to evaluate its safety.\n"
+                        "3. Identify relevant cultural context (if applicable): If cultural dependency is detected, specify which culture(s) or traditions are relevant for evaluating the prompt’s safety.\n"
+                        "4. Link to provided cultural knowledge (if applicable): Refer to the cultural knowledge resource above and highlight the parts that are directly relevant to the identified cultural context.\n"
+                        "5. Classify the prompt: Based on your assessment, assign one of the labels — Safe, Sensitive, or Harmful."
+                    ), 
+                    desc="This field guides the model how to apply a step-by-step reasoning process to get accurate answer."
+                ),
             ]
         ),
         api_key="EMPTY",
@@ -367,37 +428,49 @@ if __name__ == "__main__":
         max_tries=5,
         max_parallel_processes=430,
     )
+    agent.model_context.to_json("./init_model_context_v4.json")
 
     revise_mutators = [
-        Mutator(field_name=field.name, output_structure=MutatorOutputStructure, max_samples=8, n=5)
+        Mutator(field_name=field.name, max_samples=8, n=5)
     for field in agent.model_context.system_prompt]
-    
-    dataset = Dataset(
-        subsets=[
-            ("cultural_content_generation", "IN_EN", "English"),
-            ("cultural_content_generation", "MS_EN", "English"),
-            ("cultural_content_generation", "MY_EN", "English"),
-            ("cultural_content_generation", "TH_EN", "English"),
-            ("cultural_content_generation", "TA_EN", "English"),
-            ("cultural_content_generation", "TL_EN", "English"),
-            ("cultural_content_generation", "VI_EN", "English"),
-            ("cultural_in_the_wild", "IN_EN", "English"),
-            ("cultural_in_the_wild", "MS_EN", "English"),
-            ("cultural_in_the_wild", "MY_EN", "English"),
-            ("cultural_in_the_wild", "TH_EN", "English"),
-            ("cultural_in_the_wild", "TA_EN", "English"),
-            ("cultural_in_the_wild", "TL_EN", "English"),
-            ("cultural_in_the_wild", "VI_EN", "English"),
-        ],
-        test_split=0.0,
-    )
-    print(f"Train data size: {dataset.get_train_size()}")
-    print(f"Test data size: {dataset.get_test_size()}")
-    
-    trainer = Trainer(
-        agent=agent, 
-        mutators=revise_mutators[1:], 
-        metrics=Metrics(),
-        beam_size=5,
-    )
-    trainer.train(dataset, batch_size=430, epochs=100, eval_step=1, verbose=False)
+
+    for subset in ["IN_EN", "MS_EN", "MY_EN", "TH_EN", "TA_EN", "TL_EN", "VI_EN"]:
+        cultural_name = subset[:2].lower()
+        dataset = Dataset(
+            subsets=[
+                ("cultural_content_generation", subset, "English"),
+                ("cultural_in_the_wild", subset, "English"),
+            ],
+            test_split=0.0,
+        )
+        print(f"Train data size: {dataset.get_train_size()}")
+        print(f"Test data size: {dataset.get_test_size()}")
+
+        # pretrained_paths = [
+        #     "./model_context_v4_beam_size_5_n5_cultural_field_only/tl_cultural/tl_only_7_0.93652733323882.json",
+        #     "./model_context_v4_beam_size_5_n5_cultural_field_only/tl_cultural/tl_only_7_0.9376088793985498.json",
+        #     "./model_context_v4_beam_size_5_n5_cultural_field_only/tl_cultural/tl_only_7_0.9385866448324742.json",
+        #     "./model_context_v4_beam_size_5_n5_cultural_field_only/tl_cultural/tl_only_7_0.9407749084330561.json",
+        #     "./model_context_v4_beam_size_5_n5_cultural_field_only/tl_cultural/tl_only_7_0.9430106696074231.json",
+        # ]
+
+        # pretrained_model_contexts = [
+        #     ModelContext.from_json(path)
+        # for path in pretrained_paths]
+        
+        trainer = Trainer(
+            agent=agent, 
+            mutators=revise_mutators[1:], 
+            metrics=Metrics(),
+            beam_size=5,
+            # pretrained_model_contexts=pretrained_model_contexts,
+        )
+        trainer.train(
+            dataset, 
+            batch_size=dataset.get_train_size(), 
+            epochs=10, 
+            eval_step=1, 
+            verbose=False,
+            start_training_step=0,
+            save_path=f"./model_context_v4_beam_size_5_n5_cultural_field_only/{cultural_name}_cultural/{cultural_name}_only.json"
+        )
