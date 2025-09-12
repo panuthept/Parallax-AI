@@ -1,4 +1,5 @@
 import os
+import json
 import uuid
 import random
 import numpy as np
@@ -30,7 +31,7 @@ class Sample:
     relationship: Dict[uuid.UUID, float] = None
 
     def __post_init__(self):
-        self.id = uuid.uuid4()
+        self.id = uuid.uuid4().hex
 
 
 class Dataset:
@@ -403,6 +404,9 @@ class Trainer:
             for epoch_id in range(epochs):
                 for samples in dataset.fetch(batch_size, split="train"):
                     train_score = self.train_step(samples, verbose=verbose)
+                    os.makedirs("./data/caches", exist_ok=True)
+                    with open("./data/caches/samples.json", "w") as f:
+                        json.dump([sample.__dict__ for sample in samples], f, ensure_ascii=False, indent=2)
 
                     training_step += 1
                     if training_step % eval_step == 0:
