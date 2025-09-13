@@ -18,9 +18,10 @@ class Metrics:
         indices = [i for i, (target, output) in enumerate(zip(targets, outputs)) if output is not None]
         targets = [int(targets[i] == "Harmful") for i in indices]
         outputs = [int(outputs[i] == "Harmful") for i in indices]
-        precisions, recalls, _ = precision_recall_curve(targets, outputs)
-        auprc = auc(recalls, precisions)
-        return auprc
+        # precisions, recalls, _ = precision_recall_curve(targets, outputs)
+        # auprc = auc(recalls, precisions)
+        acc = sum([int(targets[i] == outputs[i]) for i in indices])/len(indices)
+        return acc
 
 
 @dataclass
@@ -101,16 +102,16 @@ class Dataset:
                     sample = Sample(
                         input=data["en_prompt"],
                         target=data["prompt_label"],
-                        allow_mutators=["methodology"],
-                        # allow_mutators=[split_to_cultural_mapping[split]],
+                        # allow_mutators=["methodology"],
+                        allow_mutators=[split_to_cultural_mapping[split]],
                     )
                     samples[sample.id] = sample
                 if language is None or language == "Local":
                     sample = Sample(
                         input=data["local_prompt"],
                         target=data["prompt_label"],
-                        allow_mutators=["methodology"],
-                        # allow_mutators=[split_to_cultural_mapping[split]],
+                        # allow_mutators=["methodology"],
+                        allow_mutators=[split_to_cultural_mapping[split]],
                     )
                     samples[sample.id] = sample
             else:
@@ -118,16 +119,16 @@ class Dataset:
                     sample = Sample(
                         input=data["en_prompt"],
                         target=data["prompt_label"],
-                        allow_mutators=["methodology"],
-                        # allow_mutators=[split_to_cultural_mapping[split]],
+                        # allow_mutators=["methodology"],
+                        allow_mutators=[split_to_cultural_mapping[split]],
                     )
                     samples[sample.id] = sample
                 if language is None or language == "Local":
                     sample = Sample(
                         input=data["local_prompt"],
                         target=data["prompt_label"],
-                        allow_mutators=["methodology"],
-                        # allow_mutators=[split_to_cultural_mapping[split]],
+                        # allow_mutators=["methodology"],
+                        allow_mutators=[split_to_cultural_mapping[split]],
                     )
                     samples[sample.id] = sample
         return samples
@@ -147,13 +148,15 @@ class Mutator:
         api_key: str = "EMPTY",
         base_url: str = "http://localhost:8000/v1",
         max_tries: int = 5,
-        max_samples: int = None,
+        max_error_samples: int = None,
+        max_success_samples: int = None,
         n: int = 5,
     ):
         @dataclass
         class MutatorInputStructure(JsonSchemaMixin):
             system_prompt: str
             error_cases: str
+            success_cases: str
             field_name: str
             field_content: str
             field_desc: str
@@ -165,7 +168,8 @@ class Mutator:
             revised_content: str
 
         self.n = n
-        self.max_samples = max_samples
+        self.max_error_samples = max_error_samples
+        self.max_success_samples = max_success_samples
         self.field_name = field_name
         self.input_structure=MutatorInputStructure
         self.output_structure=MutatorOutputStructure
@@ -186,23 +190,26 @@ class Mutator:
                     "{field_content}\n\n"
 
                     "Error Cases:\n"
-                    "{error_cases}"
+                    "{error_cases}\n\n"
+
+                    "Success Cases:\n"
+                    "{success_cases}\n\n"
                 ),
                 system_prompt=(
                     "Inputs\n"
                     "System Prompt: The initial prompt that defines the agent model’s behavior.\n"
                     "Target Field: The specific field within the System Prompt that needs to be revised.\n"
-                    "Error Cases: Instances where the agent model produced undesired outputs, annotated with gold labels.\n\n"
+                    "Error Cases: Instances where the agent model produced undesired outputs, annotated with gold labels.\n"
+                    "Success Cases: Instances where the agent model produced desired outputs, annotated with gold labels.\n\n"
 
                     "Instruction\n"
-                    "Revise the target field in the provided System Prompt to reduce errors and ensure alignment with gold labels.\n"
+                    "Revise the target field in the provided System Prompt to reduce errors and preserve success cases.\n"
                     "Do not edit any other fields in the System Prompt. Focus solely on optimizing the specified target field.\n\n"
 
                     "Steps to Improve the System Prompt\n"
                     "1. Review error cases: Examine the agent model’s error cases to understand where the current target field fails.\n"
-                    "2. Identify gaps: Pinpoint essential information missing from the target field that could help prevent errors.\n"
-                    "3. Spot conflicts: Detect any content in the target field that contradicts or misleads relative to the gold labels.\n"
-                    "4. Revise target field: Update the target field to fill gaps and resolve conflicts, ensuring clarity and alignment."
+                    "2. Identify gaps and conflicts: Pinpoint essential information missing from the target field that could help prevent errors and contradictions.\n"
+                    "3. Revise target field: Update the target field to fill gaps and resolve conflicts, ensuring clarity and alignment."
                 ),
             ),
             api_key=api_key,
@@ -210,13 +217,13 @@ class Mutator:
             max_tries=max_tries,
         )
 
-    def _mutate(self, model_context, error_cases):
+    def _mutate(self, model_context, error_cases, success_cases):
         system_prompt = model_context.render_system_prompt()
         field_content = [field.content for field in model_context.system_prompt if field.name == self.field_name][0]
         field_desc = [field.desc for field in model_context.system_prompt if field.name == self.field_name][0]
 
         new_model_contexts = []
-        mutated_outputs = self.mutator.run(inputs=[self.input_structure(system_prompt, error_cases[i], self.field_name, field_content, field_desc) for i in range(len(error_cases))])
+        mutated_outputs = self.mutator.run(inputs=[self.input_structure(system_prompt, error_cases[i], success_cases[i], self.field_name, field_content, field_desc) for i in range(len(error_cases))])
         for mutated_output in mutated_outputs:
             if mutated_output is None:
                 continue
@@ -238,15 +245,25 @@ class Mutator:
         new_model_contexts = []
         for model_context, outputs, _ in model_context_scores:
             # Get valid samples
-            candidate_error_samples = [(sample, output) for sample, output in zip(samples, outputs) if self.field_name in sample.allow_mutators and output != sample.target and output is not None]
+            candidate_error_samples = []
+            candidate_success_samples = []
+            for sample, output in zip(samples, outputs):
+                if self.field_name in sample.allow_mutators and output != sample.target and output is not None:
+                    candidate_error_samples.append((sample, output))
+                elif self.field_name in sample.allow_mutators and output == sample.target and output is not None:
+                    candidate_success_samples.append((sample, output))
             if len(candidate_error_samples) == 0:
                 continue
-            max_samples = min(self.max_samples, len(candidate_error_samples)) if self.max_samples is not None else len(candidate_error_samples)
+            max_error_samples = min(self.max_error_samples, len(candidate_error_samples)) if self.max_error_samples is not None else len(candidate_error_samples)
+            max_success_samples = min(self.max_success_samples, len(candidate_success_samples)) if self.max_success_samples is not None else len(candidate_success_samples)
             # Sample training samples
             error_ids = []
             error_cases = []
+            success_ids = []
+            success_cases = []
             for _ in range(self.n):
-                sampled_error_samples = random.sample(candidate_error_samples, k=max_samples)
+                # Get error cases
+                sampled_error_samples = random.sample(candidate_error_samples, k=max_error_samples)
                 sampled_error_cases = [(
                     "Input: {input}\n"
                     "What model think it is: {output}\n"
@@ -254,21 +271,33 @@ class Mutator:
                 ).format(input=sample.input, output=output, target=sample.target) for sample, output in sampled_error_samples]
                 error_cases.append(("\n" + "-" * 100 + "\n").join(sampled_error_cases))
                 error_ids.append([sample.id for sample, _ in sampled_error_samples])
+                # Get success cases
+                sampled_success_samples = random.sample(candidate_success_samples, k=max_success_samples)
+                sampled_success_cases = [(
+                    "Input: {input}\n"
+                    "What model think it is: {output}\n"
+                    "What human native people think it is: {target}"
+                ).format(input=sample.input, output=output, target=sample.target) for sample, output in sampled_success_samples]
+                success_cases.append(("\n" + "-" * 100 + "\n").join(sampled_success_cases))
+                success_ids.append([sample.id for sample, _ in sampled_success_samples])
             # Mutate model context based on the training samples
-            for i, new_model_context in enumerate(self._mutate(model_context, error_cases)):
+            for i, new_model_context in enumerate(self._mutate(model_context, error_cases, success_cases)):
                 iid_error_ids = set(error_ids[i])
+                iid_success_ids = set(success_ids[i])
                 ood_error_ids = set([sample.id for sample, _ in candidate_error_samples]) - set(error_ids[i])
-                ood_correct_ids = set([sample.id for sample in samples]) - set([sample.id for sample, _ in candidate_error_samples])
+                ood_success_ids = set([sample.id for sample, _ in candidate_success_samples]) - set(success_ids[i])
+                # ood_correct_ids = set([sample.id for sample in samples]) - set([sample.id for sample, _ in candidate_error_samples])
                 caches[new_model_context.id] = {
                     "iid_error_ids": iid_error_ids,
+                    "iid_success_ids": iid_success_ids,
                     "ood_error_ids": ood_error_ids,
-                    "ood_correct_ids": ood_correct_ids,
+                    "ood_success_ids": ood_success_ids,
                     "prev_outputs": outputs,
                 }
                 new_model_contexts.append(new_model_context)
 
         if len(new_model_contexts) == 0:
-            return model_context_scores
+            return None
 
         # Evaluate mutated model context
         mapping_samples = {sample.id: sample for sample in samples}
@@ -277,21 +306,27 @@ class Mutator:
         for i, outputs in enumerate(agent.parallel_run(inputs, new_model_contexts, verbose=verbose)):
             outputs = [output.safety_assessment if output is not None else None for output in outputs]
             performance = metrics(outputs, targets)
-            model_context_scores.append((new_model_contexts[i], outputs, performance))
             # Get statistics
             prev_outputs = caches[new_model_contexts[i].id]["prev_outputs"]
             iid_error_ids = caches[new_model_contexts[i].id]["iid_error_ids"]
+            iid_success_ids = caches[new_model_contexts[i].id]["iid_success_ids"]
             ood_error_ids = caches[new_model_contexts[i].id]["ood_error_ids"]
-            ood_correct_ids = caches[new_model_contexts[i].id]["ood_correct_ids"]
-            stats = {"iid_corrected": [], "ood_corrected": [], "ood_incorrected": []}
+            ood_success_ids = caches[new_model_contexts[i].id]["ood_success_ids"]
+            stats = {"iid_corrected": [], "iid_incorrected": [], "ood_corrected": [], "ood_incorrected": [], "performance": round(performance, 4)}
             for sample, new_output, prev_output in zip(samples, outputs, prev_outputs):
                 if sample.id in iid_error_ids and new_output == sample.target and prev_output != sample.target:
                     stats["iid_corrected"].append(sample.id)
+                elif sample.id in iid_success_ids and new_output != sample.target and prev_output == sample.target:
+                    stats["iid_incorrected"].append(sample.id)
                 elif sample.id in ood_error_ids and new_output == sample.target and prev_output != sample.target:
                     stats["ood_corrected"].append(sample.id)
-                elif sample.id in ood_correct_ids and new_output != sample.target and prev_output == sample.target:
+                elif sample.id in ood_success_ids and new_output != sample.target and prev_output == sample.target:
                     stats["ood_incorrected"].append(sample.id)
-            print({k: len(v) for k, v in stats.items()})
+            score = (len(stats["iid_corrected"]) + len(stats["ood_corrected"]))/(len(stats["iid_corrected"]) + len(stats["ood_corrected"]) + len(stats["iid_incorrected"]) + len(stats["ood_incorrected"]))
+            stats["score"] = round(score, 4)
+            if score < 0.7:
+                continue
+            print({k: len(v) if isinstance(v, list) else v for k, v in stats.items()})
             # Update Sample.relationship
             for iid_id in iid_error_ids:
                 if mapping_samples[iid_id].relationship is None:
@@ -306,6 +341,8 @@ class Mutator:
                         mapping_samples[ood_id].relationship = defaultdict(float)
                     mapping_samples[iid_id].relationship[ood_id] -= 1/len(iid_error_ids)
                     mapping_samples[ood_id].relationship[iid_id] -= 1/len(iid_error_ids)
+            # Update model context scores
+            model_context_scores.append((new_model_contexts[i], outputs, performance))
         return model_context_scores
 
 
@@ -370,16 +407,19 @@ class Trainer:
 
         for i, mutator in enumerate(self.mutators):
             # Mutate model context
-            model_context_output_scores = mutator.mutate(
+            new_model_context_output_scores = mutator.mutate(
                 model_context_output_scores,
                 samples=samples,
                 agent=self.agent,
                 metrics=self.metrics,
                 verbose=verbose,
             )
+            if new_model_context_output_scores is None:
+                continue
+            
             # Get top performers
-            model_context_output_scores = list(sorted(model_context_output_scores, key=lambda x: x[2], reverse=True))[:self.beam_size]
-            print(f"Mutated performance ({mutator.field_name}): {[score for _, _, score in model_context_output_scores]}")
+            model_context_output_scores = list(sorted(new_model_context_output_scores, key=lambda x: x[2], reverse=True))[:self.beam_size]
+            print(f"Mutated performance ({mutator.field_name}): {[performance for _, _, performance in model_context_output_scores]}")
         self.best_candidates = [(model_context, performance) for model_context, _, performance in model_context_output_scores]
         return self.best_candidates[0][1]
 
@@ -484,12 +524,14 @@ if __name__ == "__main__":
     )
 
     revise_mutators = [
-        Mutator(field_name=field.name, max_samples=8, n=5)
+        Mutator(field_name=field.name, max_error_samples=32, max_success_samples=32, n=10)
     for field in agent.model_context.system_prompt]
 
-    subsets = [("cultural_content_generation", subset, "English") for subset in ["IN_EN", "MS_EN", "MY_EN", "TH_EN", "TA_EN", "TL_EN", "VI_EN"]]
-    subsets.extend([("cultural_in_the_wild", subset, "English") for subset in ["IN_EN", "MS_EN", "MY_EN", "TH_EN", "TA_EN", "TL_EN", "VI_EN"]])
-    subsets.extend([("general", subset, "English") for subset in ["EN"]])
+    # subsets = [("cultural_content_generation", subset, "English") for subset in ["IN_EN", "MS_EN", "MY_EN", "TH_EN", "TA_EN", "TL_EN", "VI_EN"]]
+    # subsets.extend([("cultural_in_the_wild", subset, "English") for subset in ["IN_EN", "MS_EN", "MY_EN", "TH_EN", "TA_EN", "TL_EN", "VI_EN"]])
+    subsets = [("cultural_content_generation", subset, "English") for subset in ["IN_EN"]]
+    subsets.extend([("cultural_in_the_wild", subset, "English") for subset in ["IN_EN"]])
+    # subsets.extend([("general", subset, "English") for subset in ["EN"]])
 
     dataset = Dataset(
         subsets=subsets,
@@ -500,10 +542,10 @@ if __name__ == "__main__":
     
     trainer = Trainer(
         agent=agent, 
-        mutators=[revise_mutators[-1]], 
+        mutators=revise_mutators, 
         metrics=Metrics(),
         beam_size=5,
-        pretrained_model_contexts=[ModelContext.from_json("./data/agent-v4/combine.json")],
+        # pretrained_model_contexts=[ModelContext.from_json("./data/agent-v4/combine.json")],
     )
     trainer.train(
         dataset, 
@@ -512,5 +554,5 @@ if __name__ == "__main__":
         eval_step=1, 
         verbose=True,
         start_training_step=0,
-        save_path=f"./data/agent-v4/finishing.json"
+        save_path=f"./data/agent-v4.1/test.json"
     )
