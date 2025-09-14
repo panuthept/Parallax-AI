@@ -64,6 +64,12 @@ class ModelContext:
                 if field.name == name:
                     field.content = content
 
+        def get_field_content(self, name):
+            for field in self.system_prompt:
+                if field.name == name:
+                    return field.content
+            return None
+
         def render_system_prompt(self, output_structure = None) -> str:
             if self.system_prompt is None:
                 system_prompt = None
