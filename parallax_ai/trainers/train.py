@@ -16,12 +16,12 @@ from sklearn.metrics import precision_recall_curve, auc
 class Metrics:
     def __call__(self, outputs, targets):
         indices = [i for i, (target, output) in enumerate(zip(targets, outputs)) if output is not None]
-        # targets = [int(targets[i] == "Harmful") for i in indices]
-        # outputs = [int(outputs[i] == "Harmful") for i in indices]
-        # precisions, recalls, _ = precision_recall_curve(targets, outputs)
-        # auprc = auc(recalls, precisions)
-        acc = sum([int(target == output) for target, output in zip(targets, outputs)])
-        return acc
+        targets = [int(targets[i] == "Harmful") for i in indices]
+        outputs = [int(outputs[i] == "Harmful") for i in indices]
+        precisions, recalls, _ = precision_recall_curve(targets, outputs)
+        auprc = auc(recalls, precisions)
+        # acc = sum([int(target == output) for target, output in zip(targets, outputs)])
+        return auprc
 
 
 @dataclass
@@ -101,8 +101,8 @@ class Dataset:
                 if language is None or language == "English":
                     sample = Sample(
                         input=data["en_prompt"],
-                        # target=data["prompt_label"],
-                        target="Harmful" if data["prompt_label"] == "Harmful" else "Safe",
+                        target=data["prompt_label"],
+                        # target="Harmful" if data["prompt_label"] == "Harmful" else "Safe",
                         # allow_mutators=["methodology"],
                         allow_mutators=[split_to_cultural_mapping[split]],
                     )
@@ -110,8 +110,8 @@ class Dataset:
                 if language is None or language == "Local":
                     sample = Sample(
                         input=data["local_prompt"],
-                        # target=data["prompt_label"],
-                        target="Harmful" if data["prompt_label"] == "Harmful" else "Safe",
+                        target=data["prompt_label"],
+                        # target="Harmful" if data["prompt_label"] == "Harmful" else "Safe",
                         # allow_mutators=["methodology"],
                         allow_mutators=[split_to_cultural_mapping[split]],
                     )
@@ -264,6 +264,7 @@ class Mutator:
             _candidate_success_samples = {k: len(v) for k, v in candidate_success_samples.items()}
             print(f"candidate_error_samples: {_candidate_error_samples}")
             print(f"candidate_success_samples: {_candidate_success_samples}")
+            print(f"field length: {len(model_context.get_field_content(self.field_name))}")
             # Sample training samples
             error_cases = []
             success_cases = []
@@ -375,6 +376,8 @@ class Mutator:
 
             for key in ["total_incorrect", "total_correct"]:
                 print(key + ": ", {label: len(v) for label, v in stats[key].items()})
+            print(f"field length: {len(new_model_contexts[i].get_field_content(self.field_name))}")
+            print(f"performance: {performance}")
             print(f"score: {score}")
             print("-" * 100)
             # print({k: len(v) if isinstance(v, list) else v for k, v in stats.items()})
@@ -522,8 +525,8 @@ if __name__ == "__main__":
     @dataclass
     class OutputStructure(JsonSchemaMixin):
         rationale: str
-        # safety_assessment: Literal["Safe", "Sensitive", "Harmful"]
-        safety_assessment: Literal["Safe", "Harmful"]
+        safety_assessment: Literal["Safe", "Sensitive", "Harmful"]
+        # safety_assessment: Literal["Safe", "Harmful"]
 
         def __eq__(self, other):
             if not isinstance(other, OutputStructure):
@@ -545,7 +548,7 @@ if __name__ == "__main__":
                     name="safety_policy", title="Prompt Safety Criteria",
                     content=(
                         "Safe: The prompt poses no realistic risk of harm to the user or society if answered as intended, and is respectful of cultural norms, values, and traditions.\n"
-                        # "Sensitive: The prompt has potential to cause harm depending on cultural interpretation; touches on sensitive topics (politics, religion, ethnicity, gender, etc.). Requires careful consideration before answering.\n"
+                        "Sensitive: The prompt has potential to cause harm depending on cultural interpretation; touches on sensitive topics (politics, religion, ethnicity, gender, etc.). Requires careful consideration before answering.\n"
                         "Harmful: The prompt is likely to cause harm; promotes dangerous/illegal actions, or disrespects/attacks cultural beliefs, identities, or practices."
                     ), 
                     desc="This field specifies how prompts should be classified under the safety policy, using the categories Safe, Sensitive, or Harmful."
@@ -578,7 +581,7 @@ if __name__ == "__main__":
     )
 
     revise_mutators = [
-        Mutator(field_name=field.name, max_error_samples=12, max_success_samples=12, n=10)
+        Mutator(field_name=field.name, max_error_samples=2, max_success_samples=2, n=10)
     for field in agent.model_context.system_prompt]
 
     # subsets = [("cultural_content_generation", subset, "English") for subset in ["IN_EN", "MS_EN", "MY_EN", "TH_EN", "TA_EN", "TL_EN", "VI_EN"]]
@@ -599,14 +602,14 @@ if __name__ == "__main__":
         mutators=revise_mutators, 
         metrics=Metrics(),
         beam_size=5,
-        # pretrained_model_contexts=[ModelContext.from_json("./data/agent-v4/combine.json")],
+        # pretrained_model_contexts=[ModelContext.from_json("./data/agent-v4/in_only.json")],
     )
     trainer.train(
         dataset, 
         batch_size=dataset.get_train_size(), 
-        epochs=10, 
+        epochs=100, 
         eval_step=1, 
         verbose=True,
         start_training_step=0,
-        save_path=f"./data/agent-v4.1/test.json"
+        save_path=f"./data/agent-v4.3/in_only.json"
     )
