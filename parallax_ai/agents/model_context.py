@@ -75,6 +75,8 @@ class ModelContext:
                 system_prompt = None
 
             if self.system_prompt_template is None:
+                if self.system_prompt is None:
+                    return None
                 system_prompt = "\n\n".join(field.render() for field in self.system_prompt)
             else:
                 system_prompt = self.system_prompt_template.format(**{field.name: field.render() for field in self.system_prompt})
