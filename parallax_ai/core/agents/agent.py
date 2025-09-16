@@ -1,6 +1,6 @@
 import json
 from copy import deepcopy
-from parallax_ai import ParallaxClient
+from parallax_ai.core import ParallaxClient
 from typing import List, Tuple, Optional
 from .model_context import ModelContext, Field
 from dataclasses_jsonschema import JsonSchemaMixin

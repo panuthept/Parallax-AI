@@ -25,6 +25,7 @@ class SafeguardAgent:
         base_url: Optional[List[str]|str] = None,
         proportions: Optional[List[float]] = None,
         max_workers: Optional[int] = None,
+        max_tries: int = 5,
         n: int = 100,
     ):
         kwargs = {
@@ -33,6 +34,7 @@ class SafeguardAgent:
             "base_url": base_url,
             "proportions": proportions,
             "max_workers": max_workers,
+            "max_tries": max_tries,
             "n": n,
         }
 
@@ -91,6 +93,6 @@ class SafeguardAgent:
         return [output["safety_assessment"]["Harmful"] if output is not None else 0.5 for output in outputs]
 
     def response_classification(self, prompts: List[str], responses: List[str], verbose: bool = False) -> List[float]:
-        inputs = [ResponseGuardInputStructure(prompt=prompt, response=response) for prompt, response in zip(prompts, responses)]
+        inputs = [ResponseGuardInputStructure(prompt=prompt, response=response) if response is not None else None for prompt, response in zip(prompts, responses)]
         outputs = self.response_guard.run(inputs, verbose=verbose, desc="Response Classification")
-        return [output["safety_assessment"]["Harmful"] + output["safety_assessment"]["Sensitive"] if output is not None else 0.5 for output in outputs]
+        return [output["safety_assessment"]["Harmful"] + output["safety_assessment"]["Sensitive"] if output is not None else 0.5 if input is not None else None for output, input in zip(outputs, inputs)]
