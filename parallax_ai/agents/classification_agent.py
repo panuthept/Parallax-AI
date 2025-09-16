@@ -15,8 +15,6 @@ class ClassificationAgent(Agent):
         input_structure = None,
         output_structure = None,
         model_context: Optional[ModelContext] = None,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
         max_tries: int = 5,
         n: int = 100,
         **kwargs,
@@ -26,8 +24,6 @@ class ClassificationAgent(Agent):
             input_structure=input_structure,
             output_structure=output_structure,
             model_context=model_context,
-            api_key=api_key,
-            base_url=base_url,
             max_tries=max_tries,
             **kwargs,
         )
@@ -52,10 +48,9 @@ class ClassificationAgent(Agent):
             input_structure=agent.input_structure,
             output_structure=agent.output_structure,
             model_context=agent.model_context,
-            api_key=agent.api_key,
-            base_url=agent.base_url,
             max_tries=agent.max_tries,
             n=n,
+            **kwargs,
         )
 
     def _duplicate_inputs(self, inputs: List[str]) -> List[str]:
@@ -131,73 +126,73 @@ class ClassificationAgent(Agent):
             outputs.append(output_label)
         return outputs
     
-    def irun(
-        self, 
-        inputs, 
-        **kwargs,
-    ) -> Iterator[dict[str, float]]:
-        deplicated_inputs = self._duplicate_inputs(inputs)
+    # def irun(
+    #     self, 
+    #     inputs, 
+    #     **kwargs,
+    # ) -> Iterator[dict[str, float]]:
+    #     deplicated_inputs = self._duplicate_inputs(inputs)
 
-        cached_outputs = {i: [] for i in range(len(inputs))}
-        for index, output in enumerate(super().irun(deplicated_inputs)):
-            true_index = index // self.n
-            cached_outputs[true_index].append(output)
-            if len(cached_outputs[true_index]) == self.n:
-                output_label = None
-                for output in cached_outputs[true_index]:
-                    if output is None:
-                        continue
-                    for output_key in self.output_keys:
-                        keyword = output.to_dict().get(output_key)
-                        if keyword is not None:
-                            if output_label is None:
-                                output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
-                            if keyword not in output_label[output_key]:
-                                output_label[output_key][keyword] = 0
-                            output_label[output_key][keyword] += 1
-                if output_label is not None:
-                    for output_key in self.output_keys:
-                        total = sum(output_label[output_key].values())
-                        if total > 0:
-                            output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
-                        else:
-                            output_label[output_key] = None
-                yield output_label
-                del cached_outputs[true_index]
+    #     cached_outputs = {i: [] for i in range(len(inputs))}
+    #     for index, output in enumerate(super().irun(deplicated_inputs)):
+    #         true_index = index // self.n
+    #         cached_outputs[true_index].append(output)
+    #         if len(cached_outputs[true_index]) == self.n:
+    #             output_label = None
+    #             for output in cached_outputs[true_index]:
+    #                 if output is None:
+    #                     continue
+    #                 for output_key in self.output_keys:
+    #                     keyword = output.to_dict().get(output_key)
+    #                     if keyword is not None:
+    #                         if output_label is None:
+    #                             output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
+    #                         if keyword not in output_label[output_key]:
+    #                             output_label[output_key][keyword] = 0
+    #                         output_label[output_key][keyword] += 1
+    #             if output_label is not None:
+    #                 for output_key in self.output_keys:
+    #                     total = sum(output_label[output_key].values())
+    #                     if total > 0:
+    #                         output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
+    #                     else:
+    #                         output_label[output_key] = None
+    #             yield output_label
+    #             del cached_outputs[true_index]
 
-    def irun_unordered(
-        self, 
-        inputs, 
-        **kwargs,
-    ) -> Iterator[Tuple[int, dict[str, float]]]:
-        deplicated_inputs = self._duplicate_inputs(inputs)
+    # def irun_unordered(
+    #     self, 
+    #     inputs, 
+    #     **kwargs,
+    # ) -> Iterator[Tuple[int, dict[str, float]]]:
+    #     deplicated_inputs = self._duplicate_inputs(inputs)
 
-        cached_outputs = {i: [] for i in range(len(inputs))}
-        for index, output in super().irun_unordered(deplicated_inputs):
-            true_index = index // self.n
-            cached_outputs[true_index].append(output)
-            if len(cached_outputs[true_index]) == self.n:
-                output_label = None
-                for output in cached_outputs[true_index]:
-                    if output is None:
-                        continue
-                    for output_key in self.output_keys:
-                        keyword = output.to_dict().get(output_key)
-                        if keyword is not None:
-                            if output_label is None:
-                                output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
-                            if keyword not in output_label[output_key]:
-                                output_label[output_key][keyword] = 0
-                            output_label[output_key][keyword] += 1
-                if output_label is not None:
-                    for output_key in self.output_keys:
-                        total = sum(output_label[output_key].values())
-                        if total > 0:
-                            output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
-                        else:
-                            output_label[output_key] = None
-                yield (true_index, output_label)
-                del cached_outputs[true_index]
+    #     cached_outputs = {i: [] for i in range(len(inputs))}
+    #     for index, output in super().irun_unordered(deplicated_inputs):
+    #         true_index = index // self.n
+    #         cached_outputs[true_index].append(output)
+    #         if len(cached_outputs[true_index]) == self.n:
+    #             output_label = None
+    #             for output in cached_outputs[true_index]:
+    #                 if output is None:
+    #                     continue
+    #                 for output_key in self.output_keys:
+    #                     keyword = output.to_dict().get(output_key)
+    #                     if keyword is not None:
+    #                         if output_label is None:
+    #                             output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
+    #                         if keyword not in output_label[output_key]:
+    #                             output_label[output_key][keyword] = 0
+    #                         output_label[output_key][keyword] += 1
+    #             if output_label is not None:
+    #                 for output_key in self.output_keys:
+    #                     total = sum(output_label[output_key].values())
+    #                     if total > 0:
+    #                         output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
+    #                     else:
+    #                         output_label[output_key] = None
+    #             yield (true_index, output_label)
+    #             del cached_outputs[true_index]
 
 
 if __name__ == "__main__":
