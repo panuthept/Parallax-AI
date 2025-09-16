@@ -2,7 +2,7 @@ import json
 from copy import deepcopy
 from typing import List, Tuple, Optional, Iterator
 from dataclasses_jsonschema import JsonSchemaMixin
-from parallax_ai.clients import ParallaxOpenAIClient
+from parallax_ai.clients import ParallaxClient
 from parallax_ai.agents.model_context import ModelContext, Field
 
 
@@ -14,8 +14,6 @@ class Agent:
         output_structure = None,    # If output_structure is provided, outputs will be validated against output_structure and converted to instances of output_structure
         model_context: Optional[ModelContext] = None,   # This allows dynamic and trainable contexts to be used as system prompts
         system_prompt: Optional[str] = None,   # Deprecated, use model_context instead. If both are provided, model_context will be used.
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
         max_tries: int = 5,
         **kwargs,
     ):
@@ -32,7 +30,7 @@ class Agent:
         self.model_context = model_context
         self.input_structure = input_structure
         self.output_structure = output_structure
-        self.client = ParallaxOpenAIClient(api_key=api_key, base_url=base_url, **kwargs)
+        self.client = ParallaxClient(**kwargs)
 
     def __convert_to_conversational_inputs(self, inputs):
         processed_inputs = []

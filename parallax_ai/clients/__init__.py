@@ -1,1 +1,1 @@
-from .openai_client import ParallaxOpenAIClient
+from .parallax_client import ParallaxClient
