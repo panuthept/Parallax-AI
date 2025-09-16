@@ -99,10 +99,11 @@ class ParallaxClient:
         inputs,
         model: str,
         verbose: bool = False,
+        progress_bar_desc: Optional[str] = None,
         **kwargs,
     ):
         outputs = []
-        for i, output in tqdm(self._run(inputs=inputs, model=model, **kwargs), total=len(inputs), disable=not verbose):
+        for i, output in tqdm(self._run(inputs=inputs, model=model, **kwargs), total=len(inputs), disable=not verbose, desc=progress_bar_desc):
             outputs.append((i, output))
         outputs = sorted(outputs, key=lambda x: x[0])
         outputs = [output for _, output in outputs]

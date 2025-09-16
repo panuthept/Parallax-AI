@@ -145,6 +145,7 @@ class Agent:
         self, 
         inputs, 
         verbose: bool = False,
+        progress_bar_desc: Optional[str] = None,
         **kwargs,
     ) -> List[str]|List[JsonSchemaMixin]:
         inputs = self._inputs_processing(inputs)
@@ -153,7 +154,7 @@ class Agent:
         unfinished_inputs = inputs
         for _ in range(self.max_tries):
             unfinished_indices = []
-            outputs = self.client.run(inputs=unfinished_inputs, model=self.model, verbose=verbose, **kwargs)
+            outputs = self.client.run(inputs=unfinished_inputs, model=self.model, verbose=verbose, progress_bar_desc=progress_bar_desc, **kwargs)
             for i, output in enumerate(outputs):
                 if unfinished_inputs[i] is None:
                     finished_outputs[i] = None
@@ -167,83 +168,6 @@ class Agent:
                 break
             unfinished_inputs = [inputs[i] for i in unfinished_indices]
         return [finished_outputs[i] if i in finished_outputs else None for i in range(len(inputs))]
-
-    # def irun(
-    #     self, 
-    #     inputs, 
-    #     **kwargs,
-    # ) -> Iterator[str]|Iterator[JsonSchemaMixin]:
-    #     inputs = self._inputs_processing(inputs)
-
-    #     current_index = 0
-    #     finished_outputs = {}
-    #     unfinished_indices = None
-    #     unfinished_inputs = inputs
-    #     for _ in range(self.max_tries):
-    #         true_index_mapping = deepcopy(unfinished_indices) if unfinished_indices else []
-    #         unfinished_indices = []
-    #         for i, output in enumerate(self.client.irun(inputs=unfinished_inputs, model=self.model, **kwargs)):
-    #             if unfinished_inputs[i] is None:
-    #                 finished_outputs[i] = None
-    #                 # Fetch all outputs in finished_outputs that match the current_index
-    #                 while current_index in finished_outputs:
-    #                     yield output
-    #                     current_index += 1
-    #             else:
-    #                 # Convert to true index
-    #                 if len(true_index_mapping) > 0:
-    #                     i = true_index_mapping[i]
-    #                 # Process output
-    #                 output = self._output_processing(output)
-    #                 # Check output validity
-    #                 if output is not None:
-    #                     # Cache valid outputs
-    #                     finished_outputs[i] = output
-    #                     # Fetch all outputs in finished_outputs that match the current_index
-    #                     while current_index in finished_outputs:
-    #                         yield output
-    #                         current_index += 1
-    #                 else:
-    #                     unfinished_indices.append(i)
-    #         if len(unfinished_indices) == 0:
-    #             break
-    #         unfinished_inputs = [inputs[i] for i in unfinished_indices]
-    #     if current_index < len(inputs):
-    #         for i in range(current_index, len(inputs)):
-    #             yield finished_outputs[i] if i in finished_outputs else None
-
-    # def irun_unordered(
-    #     self, 
-    #     inputs, 
-    #     **kwargs,
-    # ) -> Iterator[Tuple[int, str]]|Iterator[Tuple[int, JsonSchemaMixin]]:
-    #     inputs = self._inputs_processing(inputs)
-
-    #     unfinished_indices = None
-    #     unfinished_inputs = inputs
-    #     for _ in range(self.max_tries):
-    #         true_index_mapping = deepcopy(unfinished_indices) if unfinished_indices else []
-    #         unfinished_indices = []
-    #         for i, output in self.client.irun_unordered(inputs=unfinished_inputs, model=self.model, **kwargs):
-    #             if unfinished_inputs[i] is None:
-    #                 yield (i, None)
-    #             else:
-    #                 # Convert to true index
-    #                 if len(true_index_mapping) > 0:
-    #                     i = true_index_mapping[i]
-    #                 # Process output
-    #                 output = self._output_processing(output)
-    #                 # Check output validity
-    #                 if output is not None:
-    #                     yield (i, output)
-    #                 else:
-    #                     unfinished_indices.append(i)
-    #         if len(unfinished_indices) == 0:
-    #             break
-    #         unfinished_inputs = [inputs[i] for i in unfinished_indices]
-    #     if len(unfinished_indices) > 0:
-    #         for i in unfinished_indices:
-    #             yield (i, None)
 
 
 if __name__ == "__main__":
@@ -290,43 +214,3 @@ if __name__ == "__main__":
             error_count += 1
     print(f"Error: {error_count}")
     print()
-    
-    # prev_time = None
-    # start_time = time()
-    # error_count = 0
-    # max_iteration_time = 0
-    # for i, output in enumerate(agent.irun(inputs)):
-    #     iteration_time = 0
-    #     if prev_time:
-    #         iteration_time = time() - prev_time
-    #         if iteration_time > max_iteration_time:
-    #             max_iteration_time = iteration_time
-    #     if i == 0:
-    #         first_output_time = time() - start_time
-    #     print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s ({iteration_time:.4f}s)\nInput: {inputs[i]}\nOutput: {output}")
-    #     if output is None:
-    #         error_count += 1
-    #     prev_time = time()
-    # print(f"Error: {error_count}")
-    # print(f"First Output Time: {first_output_time:4f}")
-    # print(f"Max Iteration Time: {max_iteration_time:4f}")
-    # print()
-
-    # prev_time = time()
-    # start_time = time()
-    # error_count = 0
-    # max_iteration_time = 0
-    # for i, output in agent.irun_unordered(inputs):
-    #     iteration_time = time() - prev_time
-    #     prev_time = time()
-    #     if iteration_time > max_iteration_time:
-    #         max_iteration_time = iteration_time
-    #     if i == 0:
-    #         first_output_time = time() - start_time
-    #     print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s ({iteration_time:.4f}s)\nInput: {inputs[i]}\nOutput: {output}")
-    #     if output is None:
-    #         error_count += 1
-    # print(f"Error: {error_count}")
-    # print(f"First Output Time: {first_output_time:4f}")
-    # print(f"Max Iteration Time: {max_iteration_time:4f}")
-    # print()
