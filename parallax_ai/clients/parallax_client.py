@@ -8,10 +8,12 @@ from typing import Optional, List
 
 def openai_completions(
     inputs,
+    api_key,
+    model,
     **kwargs,
 ):
-    assert isinstance(inputs, tuple) and len(inputs) == 5, "inputs should be a tuple of (index, input, model, api_key, base_url)."
-    index, input, model, api_key, base_url = inputs
+    assert isinstance(inputs, tuple) and len(inputs) == 3, "inputs should be a tuple of (index, input, base_url)."
+    index, input, base_url = inputs
 
     if input is None:
         return index, None
@@ -86,10 +88,10 @@ class ParallaxClient:
         **kwargs,
     ):
         inputs = self._preprocess_inputs(inputs)
-        partial_func = partial(openai_completions, **kwargs)
+        partial_func = partial(openai_completions, api_key=self.api_key, model=model, **kwargs)
         url_indices = np.random.choice(len(self.base_urls), len(inputs), p=self.proportions)
 
-        inputs = [(i, input, model, self.api_key, self.base_urls[url_index]) for i, (input, url_index) in enumerate(zip(inputs, url_indices))]
+        inputs = [(i, input, self.base_urls[url_index]) for i, (input, url_index) in enumerate(zip(inputs, url_indices))]
         with Pool(processes=self.max_parallel_processes) as pool:
             for index, output in pool.imap_unordered(partial_func, inputs):
                 yield (index, output)
