@@ -1,7 +1,8 @@
+from .agent import Agent
 from copy import deepcopy
+from .model_context import ModelContext
 from dataclasses_jsonschema import JsonSchemaMixin
 from typing import List, Tuple, Optional, Iterator
-from parallax_ai.agents.agent import Agent, ModelContext
 
 
 class ClassificationAgent(Agent):
@@ -99,11 +100,11 @@ class ClassificationAgent(Agent):
         self, 
         inputs, 
         verbose: bool = False,
-        progress_bar_desc: Optional[str] = None,
+        desc: Optional[str] = None,
         **kwargs,
     ) -> List[dict[str, float]]:
         deplicated_inputs = self._duplicate_inputs(inputs)
-        deplicated_outputs: List[JsonSchemaMixin] = super().run(deplicated_inputs, verbose=verbose, progress_bar_desc=progress_bar_desc, **kwargs)
+        deplicated_outputs: List[JsonSchemaMixin] = super().run(deplicated_inputs, verbose=verbose, desc=desc, **kwargs)
 
         outputs = []
         for i in range(len(inputs)):

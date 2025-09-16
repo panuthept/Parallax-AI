@@ -47,7 +47,7 @@ class ParallaxClient:
         api_key: str = "EMPTY",
         base_url: Optional[List[str]|str] = None,
         proportions: Optional[List[float]] = None,
-        max_parallel_processes: Optional[int] = None,
+        max_workers: Optional[int] = None,
     ):
         if base_url is None:
             base_url = "http://localhost:8000/v1"
@@ -58,7 +58,7 @@ class ParallaxClient:
         self.api_key = api_key
         self.base_urls = base_url
         self.proportions = proportions
-        self.max_parallel_processes = max_parallel_processes
+        self.max_workers = max_workers
 
     def _preprocess_inputs(self, inputs):
         # inputs: can be 'str', 'list[dict]', 'list[str]', or 'list[list[dict]]'
@@ -92,7 +92,7 @@ class ParallaxClient:
         url_indices = np.random.choice(len(self.base_urls), len(inputs), p=self.proportions)
 
         inputs = [(i, input, self.base_urls[url_index]) for i, (input, url_index) in enumerate(zip(inputs, url_indices))]
-        with Pool(processes=self.max_parallel_processes) as pool:
+        with Pool(processes=self.max_workers) as pool:
             for index, output in pool.imap_unordered(partial_func, inputs):
                 yield (index, output)
     
@@ -101,11 +101,11 @@ class ParallaxClient:
         inputs,
         model: str,
         verbose: bool = False,
-        progress_bar_desc: Optional[str] = None,
+        desc: Optional[str] = None,
         **kwargs,
     ):
         outputs = []
-        for i, output in tqdm(self._run(inputs=inputs, model=model, **kwargs), total=len(inputs), disable=not verbose, desc=progress_bar_desc):
+        for i, output in tqdm(self._run(inputs=inputs, model=model, **kwargs), total=len(inputs), disable=not verbose, desc=desc):
             outputs.append((i, output))
         outputs = sorted(outputs, key=lambda x: x[0])
         outputs = [output for _, output in outputs]

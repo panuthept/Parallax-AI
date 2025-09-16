@@ -1,9 +1,9 @@
 import json
 from copy import deepcopy
-from typing import List, Tuple, Optional, Iterator
+from parallax_ai import ParallaxClient
+from typing import List, Tuple, Optional
+from .model_context import ModelContext, Field
 from dataclasses_jsonschema import JsonSchemaMixin
-from parallax_ai.clients import ParallaxClient
-from parallax_ai.agents.model_context import ModelContext, Field
 
 
 class Agent:
@@ -145,7 +145,7 @@ class Agent:
         self, 
         inputs, 
         verbose: bool = False,
-        progress_bar_desc: Optional[str] = None,
+        desc: Optional[str] = None,
         **kwargs,
     ) -> List[str]|List[JsonSchemaMixin]:
         inputs = self._inputs_processing(inputs)
@@ -154,7 +154,7 @@ class Agent:
         unfinished_inputs = inputs
         for _ in range(self.max_tries):
             unfinished_indices = []
-            outputs = self.client.run(inputs=unfinished_inputs, model=self.model, verbose=verbose, progress_bar_desc=progress_bar_desc, **kwargs)
+            outputs = self.client.run(inputs=unfinished_inputs, model=self.model, verbose=verbose, desc=desc, **kwargs)
             for i, output in enumerate(outputs):
                 if unfinished_inputs[i] is None:
                     finished_outputs[i] = None
