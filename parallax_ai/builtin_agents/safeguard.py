@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, Optional, List
+from typing import Literal, Optional, List, Dict
 from dataclasses_jsonschema import JsonSchemaMixin
 from parallax_ai import ClassificationAgent, ModelContext, Field
 
@@ -26,7 +26,7 @@ class SafeguardAgent:
         proportions: Optional[List[float]] = None,
         max_workers: Optional[int] = None,
         max_tries: int = 5,
-        n: int = 100,
+        n: int = 10,
     ):
         kwargs = {
             "model": model,
@@ -87,12 +87,24 @@ class SafeguardAgent:
             **kwargs,
         )
 
+    @staticmethod
+    def _get_harmful_score(output: Dict[str, float]) -> float:
+        score_mapping = {
+            "Safe": 0,
+            "Sensitive": 0.5,
+            "Harmful": 1.0,
+        }
+        harmful_score = 0.0
+        for label, score in output.items():
+            harmful_score += score_mapping[label] * score
+        return harmful_score
+
     def prompt_classification(self, prompts: List[str], verbose: bool = False) -> List[float]:
         inputs = [PromptGuardInputStructure(prompt=prompt) for prompt in prompts]
         outputs = self.prompt_guard.run(inputs, verbose=verbose, desc="Prompt Classification")
-        return [output["safety_assessment"]["Harmful"] if output is not None else 0.5 for output in outputs]
+        return [self._get_harmful_score(output["safety_assessment"]) if output is not None else 0.5 for output in outputs]
 
     def response_classification(self, prompts: List[str], responses: List[str], verbose: bool = False) -> List[float]:
         inputs = [ResponseGuardInputStructure(prompt=prompt, response=response) if response is not None else None for prompt, response in zip(prompts, responses)]
         outputs = self.response_guard.run(inputs, verbose=verbose, desc="Response Classification")
-        return [output["safety_assessment"]["Harmful"] + output["safety_assessment"]["Sensitive"] if output is not None else 0.5 if input is not None else None for output, input in zip(outputs, inputs)]
+        return [self._get_harmful_score(output["safety_assessment"]) if output is not None else 0.5 if input is not None else None for output, input in zip(outputs, inputs)]
