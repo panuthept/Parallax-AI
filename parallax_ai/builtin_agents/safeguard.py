@@ -15,7 +15,7 @@ class ResponseGuardInputStructure(JsonSchemaMixin):
 
 @dataclass
 class GuardOutputStructure(JsonSchemaMixin):
-    safety_assessment: Literal["Safe", "Sensitive", "Harmful"]
+    safety_assessment: Literal["Safe", "Safe-Sensitive", "Sensitive", "Sensitive-Harmful", "Harmful"]
 
 class SafeguardAgent:
     def __init__(
@@ -91,7 +91,9 @@ class SafeguardAgent:
     def _get_harmful_score(output: Dict[str, float]) -> float:
         score_mapping = {
             "Safe": 0,
+            "Safe-Sensitive": 0.25,
             "Sensitive": 0.5,
+            "Sensitive-Harmful": 0.75,
             "Harmful": 1.0,
         }
         harmful_score = 0.0
