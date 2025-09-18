@@ -24,18 +24,18 @@ class SafeguardAgent:
         api_key: str = "EMPTY",
         base_url: Optional[List[str]|str] = None,
         proportions: Optional[List[float]] = None,
-        max_workers: Optional[int] = None,
         max_tries: int = 5,
         n: int = 10,
+        **kwargs,
     ):
         kwargs = {
             "model": model,
             "api_key": api_key,
             "base_url": base_url,
             "proportions": proportions,
-            "max_workers": max_workers,
             "max_tries": max_tries,
             "n": n,
+            **kwargs,
         }
 
         self.prompt_guard = ClassificationAgent(
