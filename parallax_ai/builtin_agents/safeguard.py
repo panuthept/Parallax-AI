@@ -89,6 +89,11 @@ class SafeguardAgent:
 
     @staticmethod
     def _get_harmful_score(output: Dict[str, float]) -> float:
+        """
+        Safe: 0 - 0.25
+        Sensitive: 0.25 - 0.75
+        Harmful: 0.75 - 1.0
+        """
         score_mapping = {
             "Safe": 0,
             "Safe-Sensitive": 0.25,

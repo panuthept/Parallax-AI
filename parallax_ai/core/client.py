@@ -80,7 +80,10 @@ class ParallaxClient:
                 ray.init(address=ray_remote_address)
             else:
                 ray.init(num_cpus=ray_local_workers) if ray_local_workers is not None else ray.init()
-            print(f"Ray detected CPUs: {ray.available_resources()['CPU']}")
+            if 'CPU' in ray.available_resources():
+                print(f"Ray detected CPUs: {ray.available_resources()['CPU']}")
+            else:
+                print("Ray detected no CPUs")
 
     def _preprocess_inputs(self, inputs):
         # inputs: can be 'str', 'list[dict]', 'list[str]', or 'list[list[dict]]'

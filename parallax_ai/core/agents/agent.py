@@ -1,7 +1,8 @@
 import json
 from copy import deepcopy
-from parallax_ai.core import ParallaxClient
+from typing_validation import validate
 from typing import List, Tuple, Optional
+from parallax_ai.core import ParallaxClient
 from .model_context import ModelContext, Field
 from dataclasses_jsonschema import JsonSchemaMixin
 
@@ -10,10 +11,12 @@ class Agent:
     def __init__(
         self, 
         model: str,
-        input_structure = None,     # If input_structure is provided, inputs must be instances of input_structure
-        output_structure = None,    # If output_structure is provided, outputs will be validated against output_structure and converted to instances of output_structure
-        model_context: Optional[ModelContext] = None,   # This allows dynamic and trainable contexts to be used as system prompts
-        system_prompt: Optional[str] = None,   # Deprecated, use model_context instead. If both are provided, model_context will be used.
+        name: Optional[str] = None,
+        input_structure: Optional[dict|type] = None,
+        output_structure: Optional[dict|type] = None,
+        input_template: Optional[str] = None,
+        model_context: Optional[ModelContext] = None,   # Deprecated
+        system_prompt: Optional[str] = None,
         max_tries: int = 5,
         **kwargs,
     ):
@@ -24,27 +27,46 @@ class Agent:
         if system_prompt is not None and model_context.system_prompt is None:
             # Create a ModelContext with the provided system_prompt
             model_context.system_prompt = [Field(name="system_prompt", content=system_prompt)]
+        if input_structure is not None:
+            assert isinstance(input_structure, dict) or isinstance(input_structure, type)
+        if output_structure is not None:
+            assert isinstance(output_structure, dict) or isinstance(output_structure, type)
 
         self.model = model
+        self.name = name
         self.max_tries = max_tries
         self.model_context = model_context
         self.input_structure = input_structure
         self.output_structure = output_structure
+        self.input_template = input_template
         self.client = ParallaxClient(**kwargs)
+
+    def __render_input(self, input):
+        if self.input_template is None:
+            return "\n\n".join([f"{key.replace("_", " ").capitalize()}:\n{value}" for key, value in input.items()])
+        else:
+            return self.input_template.format(**input)
 
     def __convert_to_conversational_inputs(self, inputs):
         processed_inputs = []
         for input in inputs:
             if input is None:
                 processed_inputs.append(None)
-            elif isinstance(input, str):
-                processed_inputs.append([{"role": "user", "content": input}])
-            elif isinstance(input, list) and isinstance(input[0], dict):
-                processed_inputs.append(input)
-            elif self.input_structure is not None and isinstance(input, self.input_structure):
-                processed_inputs.append([{"role": "user", "content": self.model_context.render_input(input)}])
             else:
-                raise ValueError(f"Unknown input type:\n{input}")
+                if self.input_structure is None:
+                    if isinstance(input, str):
+                        processed_inputs.append([{"role": "user", "content": input}])
+                    elif isinstance(input, list) and isinstance(input[0], dict):
+                        processed_inputs.append(input)
+                    else:
+                        raise ValueError(f"Unknown input type:\n{input}")
+                else:
+                    if isinstance(self.input_structure, type) and isinstance(input, self.input_structure):
+                        processed_inputs.append([{"role": "user", "content": self.model_context.render_input(input)}])
+                    elif isinstance(self.input_structure, dict) and isinstance(input, dict):
+                        processed_inputs.append([{"role": "user", "content": self.__render_input(input)}])
+                    else:
+                        raise ValueError(f"Unknown input structure type:\n{self.input_structure}")
         return processed_inputs
 
     def __add_system_prompt_to_inputs(self, inputs, model_context: ModelContext = None):
@@ -94,8 +116,19 @@ class Agent:
             output = output[0].strip()
             # Parse the JSON object
             output = json.loads(output)
-            # Validate the JSON object and convert to output_structure instance
-            return self.output_structure.from_dict(output)
+            # Validate the JSON object and convert to output_structure 
+            if isinstance(self.output_structure, type):
+                return self.output_structure.from_dict(output)
+            elif isinstance(self.output_structure, dict):
+                # Check if all keys are in the output
+                for key in self.output_structure:
+                    if key not in output:
+                        raise ValueError(f"Key {key} is missing in the output")
+                # Check if all values are valid
+                for key, value in self.output.items():
+                    validate(value, self.output_structure[key])
+                return output
+                
         except Exception:
             return None
 
@@ -113,7 +146,7 @@ class Agent:
         model_contexts: List[ModelContext],
         verbose: bool = False,
         **kwargs,
-    ) -> List[List[str]|List[JsonSchemaMixin]]:
+    ) -> List[List[str]|List[dict]|List[JsonSchemaMixin]]:
         n = len(inputs)
 
         processed_inputs = []
@@ -147,7 +180,7 @@ class Agent:
         verbose: bool = False,
         desc: Optional[str] = None,
         **kwargs,
-    ) -> List[str]|List[JsonSchemaMixin]:
+    ) -> List[str]|List[dict]|List[JsonSchemaMixin]:
         inputs = self._inputs_processing(inputs)
 
         finished_outputs = {}

@@ -103,8 +103,8 @@ class Dataset:
                         input=data["en_prompt"],
                         target=data["prompt_label"],
                         # target="Harmful" if data["prompt_label"] == "Harmful" else "Safe",
-                        # allow_mutators=["methodology"],
-                        allow_mutators=[split_to_cultural_mapping[split]],
+                        allow_mutators=["methodology"],
+                        # allow_mutators=[split_to_cultural_mapping[split]],
                     )
                     samples[sample.id] = sample
                 if language is None or language == "Local":
@@ -112,8 +112,8 @@ class Dataset:
                         input=data["local_prompt"],
                         target=data["prompt_label"],
                         # target="Harmful" if data["prompt_label"] == "Harmful" else "Safe",
-                        # allow_mutators=["methodology"],
-                        allow_mutators=[split_to_cultural_mapping[split]],
+                        allow_mutators=["methodology"],
+                        # allow_mutators=[split_to_cultural_mapping[split]],
                     )
                     samples[sample.id] = sample
             else:
@@ -121,16 +121,16 @@ class Dataset:
                     sample = Sample(
                         input=data["en_prompt"],
                         target=data["prompt_label"],
-                        # allow_mutators=["methodology"],
-                        allow_mutators=[split_to_cultural_mapping[split]],
+                        allow_mutators=["methodology"],
+                        # allow_mutators=[split_to_cultural_mapping[split]],
                     )
                     samples[sample.id] = sample
                 if language is None or language == "Local":
                     sample = Sample(
                         input=data["local_prompt"],
                         target=data["prompt_label"],
-                        # allow_mutators=["methodology"],
-                        allow_mutators=[split_to_cultural_mapping[split]],
+                        allow_mutators=["methodology"],
+                        # allow_mutators=[split_to_cultural_mapping[split]],
                     )
                     samples[sample.id] = sample
         return samples
@@ -255,12 +255,17 @@ class Mutator:
                     continue
                 if self.field_name in sample.allow_mutators:
                     if output.safety_assessment != sample.target:
-                        candidate_error_samples[sample.target].append((sample, output))
+                        if sample.target == "Harmful" and (output.safety_assessment in ["Safe", "Sensitive"]):
+                            candidate_error_samples[sample.target].append((sample, output))
+                        elif (sample.target in ["Safe", "Sensitive"]) and output.safety_assessment == "Harmful":
+                            candidate_error_samples[sample.target].append((sample, output))
+                        else:
+                            candidate_success_samples[sample.target].append((sample, output))
                     elif output.safety_assessment == sample.target:
                         candidate_success_samples[sample.target].append((sample, output))
             if sum([len(v) for v in candidate_error_samples.values()]) == 0:
                 continue
-            _candidate_error_samples = {k: len(v) for k, v in candidate_error_samples.items()}
+            _candidate_error_samples = {gold_label: len(candidate_error_samples[gold_label]) for gold_label in candidate_error_samples.keys()}
             _candidate_success_samples = {k: len(v) for k, v in candidate_success_samples.items()}
             print(f"candidate_error_samples: {_candidate_error_samples}")
             print(f"candidate_success_samples: {_candidate_success_samples}")
@@ -272,6 +277,7 @@ class Mutator:
             success_ids = {label: [] for label in candidate_success_samples}
             for _ in range(self.n):
                 # Get error cases
+                _error_cases = []
                 for label in candidate_error_samples:
                     k = min(self.max_error_samples, len(candidate_error_samples[label])) if self.max_error_samples is not None else len(candidate_error_samples[label])
                     sampled_error_samples = random.sample(candidate_error_samples[label], k=k)
@@ -281,9 +287,11 @@ class Mutator:
                         "What model think it is: {output}\n"
                         "Model's rationale: {rationale}"
                     ).format(input=sample.input, target=sample.target, output=output.safety_assessment, rationale=output.rationale) for sample, output in sampled_error_samples]
-                    error_cases.append(("\n" + "-" * 100 + "\n").join(sampled_error_cases))
+                    _error_cases.extend(("\n" + "-" * 100 + "\n").join(sampled_error_cases))
                     error_ids[label] = [sample.id for sample, _ in sampled_error_samples]
+                error_cases.append(_error_cases)
                 # Get success cases
+                _success_cases = []
                 for label in candidate_success_samples:
                     k = min(self.max_success_samples, len(candidate_success_samples[label])) if self.max_success_samples is not None else len(candidate_success_samples[label])
                     sampled_success_samples = random.sample(candidate_success_samples[label], k=k)
@@ -293,8 +301,9 @@ class Mutator:
                         "What model think it is: {output}\n"
                         "Model's rationale: {rationale}"
                     ).format(input=sample.input, target=sample.target, output=output.safety_assessment, rationale=output.rationale) for sample, output in sampled_success_samples]
-                    success_cases.append(("\n" + "-" * 100 + "\n").join(sampled_success_cases))
+                    _success_cases.extend(("\n" + "-" * 100 + "\n").join(sampled_success_cases))
                     success_ids[label] = [sample.id for sample, _ in sampled_success_samples]
+                success_cases.append(_success_cases)
             # Mutate model context based on the training samples
             for i, new_model_context in enumerate(self._mutate(model_context, error_cases, success_cases)):
                 iid_error_ids = {label: set(error_ids[label])for label in error_ids}
@@ -340,8 +349,8 @@ class Mutator:
                 "iid_incorrected": {"Safe": [], "Sensitive": [], "Harmful": []}, 
                 "ood_corrected": {"Safe": [], "Sensitive": [], "Harmful": []}, 
                 "ood_incorrected": {"Safe": [], "Sensitive": [], "Harmful": []}, 
-                "total_correct": {"Safe": [], "Sensitive": [], "Harmful": []}, 
-                "total_incorrect": {"Safe": [], "Sensitive": [], "Harmful": []}
+                "total_correct": {"Safe": 0, "Sensitive": 0, "Harmful": 0}, 
+                "total_incorrect": {"Safe": 0, "Sensitive": 0, "Harmful": 0},
             }
             for sample, new_output, prev_output in zip(samples, outputs, prev_outputs):
                 if new_output is None:
@@ -356,10 +365,25 @@ class Mutator:
                 elif sample.id in ood_success_ids[sample.target] and new_output.safety_assessment != sample.target and prev_output.safety_assessment == sample.target:
                     stats["ood_incorrected"][sample.target].append(sample.id)
 
-                if new_output.safety_assessment == sample.target:
-                    stats["total_correct"][sample.target].append(1)
+                # if output.safety_assessment != sample.target:
+                #     if sample.target == "Harmful" and (output.safety_assessment in ["Safe", "Sensitive"]):
+                #         candidate_error_samples[sample.target].append((sample, output))
+                #     elif (sample.target in ["Safe", "Sensitive"]) and output.safety_assessment == "Harmful":
+                #         candidate_error_samples[sample.target].append((sample, output))
+                #     else:
+                #         candidate_success_samples[sample.target].append((sample, output))
+                # elif output.safety_assessment == sample.target:
+                #     candidate_success_samples[sample.target].append((sample, output))
+
+                if new_output.safety_assessment != sample.target:
+                    if sample.target == "Harmful" and (new_output.safety_assessment in ["Safe", "Sensitive"]):
+                        stats["total_incorrect"][sample.target] += 1
+                    elif (sample.target in ["Safe", "Sensitive"]) and new_output.safety_assessment == "Harmful":
+                        stats["total_incorrect"][sample.target] += 1
+                    else:
+                        stats["total_correct"][sample.target] += 1
                 else:
-                    stats["total_incorrect"][sample.target].append(1)
+                    stats["total_correct"][sample.target] += 1
             # score = (len(stats["iid_corrected"]) + len(stats["ood_corrected"]))/(len(stats["iid_corrected"]) + len(stats["ood_corrected"]) + len(stats["iid_incorrected"]) + len(stats["ood_incorrected"]))
             # stats["score"] = round(score, 4)
             corrected = 0
@@ -371,11 +395,11 @@ class Mutator:
             
             # stats["performance"] = sum(stats["total_correct"])/sum(stats["total_correct"] + stats["total_incorrect"])
             
-            if score < 0.6:
+            if score < 0.5:
                 continue
 
             for key in ["total_incorrect", "total_correct"]:
-                print(key + ": ", {label: len(v) for label, v in stats[key].items()})
+                print(key + ": ", {stats[key]})
             print(f"field length: {len(new_model_contexts[i].get_field_content(self.field_name))}")
             print(f"performance: {performance}")
             print(f"score: {score}")
@@ -509,9 +533,9 @@ class Trainer:
 
                     pbar.update(1)
                     pbar.set_description(f"Train Step: {training_step}/{total_step + start_training_step}, Eval Score: {eval_score:.2f}, Train Score: {train_score:.2f}")
-                # Save top-k
-                for model_context, performance in self.best_candidates:
-                    model_context.to_json(save_path.replace(".json", f"_{training_step}_{performance}.json"))
+                    # Save top-k
+                    for model_context, performance in self.best_candidates:
+                        model_context.to_json(save_path.replace(".json", f"_{training_step}_{performance}.json"))
 
 
 if __name__ == "__main__":
@@ -553,22 +577,22 @@ if __name__ == "__main__":
                     ), 
                     desc="This field specifies how prompts should be classified under the safety policy, using the categories Safe, Sensitive, or Harmful."
                 ),
-                Field(name="in_cultural_knowledge", title="Indonesia Cultural Knowledge", content="", desc="This field offers background knowledge on Indonesian cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
-                Field(name="ms_cultural_knowledge", title="Malaysia Cultural Knowledge", content="", desc="This field offers background knowledge on Malaysia cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
-                Field(name="my_cultural_knowledge", title="Myanmar Cultural Knowledge", content="", desc="This field offers background knowledge on Myanmar cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
-                Field(name="th_cultural_knowledge", title="Thailand Cultural Knowledge", content="", desc="This field offers background knowledge on Thailand cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
-                Field(name="sg_cultural_knowledge", title="Singapore Cultural Knowledge", content="", desc="This field offers background knowledge on Singapore cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
-                Field(name="ph_cultural_knowledge", title="Philippines Cultural Knowledge", content="", desc="This field offers background knowledge on Philippines cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
-                Field(name="vi_cultural_knowledge", title="Vietnam Cultural Knowledge", content="", desc="This field offers background knowledge on Vietnam cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
+                # Field(name="in_cultural_knowledge", title="Indonesia Cultural Knowledge", content="", desc="This field offers background knowledge on Indonesian cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
+                # Field(name="ms_cultural_knowledge", title="Malaysia Cultural Knowledge", content="", desc="This field offers background knowledge on Malaysia cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
+                # Field(name="my_cultural_knowledge", title="Myanmar Cultural Knowledge", content="", desc="This field offers background knowledge on Myanmar cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
+                # Field(name="th_cultural_knowledge", title="Thailand Cultural Knowledge", content="", desc="This field offers background knowledge on Thailand cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
+                # Field(name="sg_cultural_knowledge", title="Singapore Cultural Knowledge", content="", desc="This field offers background knowledge on Singapore cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
+                # Field(name="ph_cultural_knowledge", title="Philippines Cultural Knowledge", content="", desc="This field offers background knowledge on Philippines cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
+                # Field(name="vi_cultural_knowledge", title="Vietnam Cultural Knowledge", content="", desc="This field offers background knowledge on Vietnam cultural norms, values, and taboos to support prompt classification. This field should be bullet points."),
                 Field(
                     name="methodology", title="Thinking process", 
                     content=(
-                        "Steps to Determine Prompt Safety\n"
-                        "1. Review the input prompt: Carefully read the prompt to understand its intention, context, and what it is asking the model to do.\n"
-                        "2. Check for cultural dependency: Determine whether the prompt relies on cultural references, norms, or assumptions that require specific cultural knowledge to evaluate its safety.\n"
-                        "3. Identify relevant cultural context (if applicable): If cultural dependency is detected, specify which culture(s) or traditions are relevant for evaluating the prompt’s safety.\n"
-                        "4. Link to provided cultural knowledge (if applicable): Refer to the cultural knowledge resource above and highlight the parts that are directly relevant to the identified cultural context.\n"
-                        "5. Classify the prompt: Based on your assessment, assign one of the labels — Safe, Sensitive, or Harmful."
+                        "Think step-by-step before answering."
+                        # "1. Review the input prompt: Carefully read the prompt to understand its intention, context, and what it is asking the model to do.\n"
+                        # "2. Check for cultural dependency: Determine whether the prompt relies on cultural references, norms, or assumptions that require specific cultural knowledge to evaluate its safety.\n"
+                        # "3. Identify relevant cultural context (if applicable): If cultural dependency is detected, specify which culture(s) or traditions are relevant for evaluating the prompt’s safety.\n"
+                        # "4. Link to provided cultural knowledge (if applicable): Refer to the cultural knowledge resource above and highlight the parts that are directly relevant to the identified cultural context.\n"
+                        # "5. Classify the prompt: Based on your assessment, assign one of the labels — Safe, Sensitive, or Harmful."
                     ), 
                     desc="This field guides the model how to apply a step-by-step reasoning process to get accurate answer."
                 ),
@@ -577,18 +601,18 @@ if __name__ == "__main__":
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
         max_tries=5,
-        max_parallel_processes=430,
+        # max_parallel_processes=430,
     )
 
     revise_mutators = [
-        Mutator(field_name=field.name, max_error_samples=2, max_success_samples=2, n=10)
+        Mutator(field_name=field.name, max_error_samples=4, max_success_samples=4, n=5)
     for field in agent.model_context.system_prompt]
 
-    # subsets = [("cultural_content_generation", subset, "English") for subset in ["IN_EN", "MS_EN", "MY_EN", "TH_EN", "TA_EN", "TL_EN", "VI_EN"]]
-    # subsets.extend([("cultural_in_the_wild", subset, "English") for subset in ["IN_EN", "MS_EN", "MY_EN", "TH_EN", "TA_EN", "TL_EN", "VI_EN"]])
-    subsets = [("cultural_content_generation", subset, "English") for subset in ["IN_EN"]]
-    subsets.extend([("cultural_in_the_wild", subset, "English") for subset in ["IN_EN"]])
-    # subsets.extend([("general", subset, "English") for subset in ["EN"]])
+    subsets = [("cultural_content_generation", subset, None) for subset in ["IN_EN", "MS_EN", "MY_EN", "TH_EN", "TA_EN", "TL_EN", "VI_EN"]]
+    subsets.extend([("cultural_in_the_wild", subset, None) for subset in ["IN_EN", "MS_EN", "MY_EN", "TH_EN", "TA_EN", "TL_EN", "VI_EN"]])
+    # subsets = [("cultural_content_generation", subset, "English") for subset in ["IN_EN"]]
+    # subsets.extend([("cultural_in_the_wild", subset, "English") for subset in ["IN_EN"]])
+    subsets.extend([("general", subset, None) for subset in ["EN"]])
 
     dataset = Dataset(
         subsets=subsets,
@@ -606,10 +630,10 @@ if __name__ == "__main__":
     )
     trainer.train(
         dataset, 
-        batch_size=dataset.get_train_size(), 
-        epochs=100, 
+        batch_size=1024, 
+        epochs=10, 
         eval_step=1, 
         verbose=True,
         start_training_step=0,
-        save_path=f"./data/agent-v4.3/in_only.json"
+        save_path=f"./data/agent-v5/test.json"
     )
