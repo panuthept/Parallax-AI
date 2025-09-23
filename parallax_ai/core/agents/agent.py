@@ -1,7 +1,7 @@
 import json
 from copy import deepcopy
 from typing_validation import validate
-from typing import List, Tuple, Optional
+from typing import List, Optional, Callable
 from parallax_ai.core import ParallaxClient
 from .model_context import ModelContext, Field
 from dataclasses_jsonschema import JsonSchemaMixin
@@ -15,6 +15,8 @@ class Agent:
         input_structure: Optional[dict|type] = None,
         output_structure: Optional[dict|type] = None,
         input_template: Optional[str] = None,
+        input_transformation: Optional[Callable] = None,
+        output_transformation: Optional[Callable] = None,
         model_context: Optional[ModelContext] = None,   # Deprecated
         system_prompt: Optional[str] = None,
         max_tries: int = 5,
@@ -39,6 +41,8 @@ class Agent:
         self.input_structure = input_structure
         self.output_structure = output_structure
         self.input_template = input_template
+        self.input_transformation = input_transformation
+        self.output_transformation = output_transformation
         self.client = ParallaxClient(**kwargs)
 
     def __render_input(self, input):
@@ -147,6 +151,7 @@ class Agent:
         verbose: bool = False,
         **kwargs,
     ) -> List[List[str]|List[dict]|List[JsonSchemaMixin]]:
+        inputs = self.input_transformation(inputs) if self.input_transformation is not None else inputs
         n = len(inputs)
 
         processed_inputs = []
@@ -172,6 +177,7 @@ class Agent:
             unfinished_inputs = [processed_inputs[i] for i in unfinished_indices]
         finished_outputs = [finished_outputs[i] if i in finished_outputs else None for i in range(len(processed_inputs))]
         outputs = [finished_outputs[i:i+n] for i in range(0, len(processed_inputs), n)]
+        outputs = self.output_transformation(outputs) if self.output_transformation is not None else outputs
         return outputs
 
     def run(
@@ -181,6 +187,7 @@ class Agent:
         desc: Optional[str] = None,
         **kwargs,
     ) -> List[str]|List[dict]|List[JsonSchemaMixin]:
+        inputs = self.input_transformation(inputs) if self.input_transformation is not None else inputs
         inputs = self._inputs_processing(inputs)
 
         finished_outputs = {}
@@ -200,7 +207,10 @@ class Agent:
             if len(unfinished_indices) == 0:
                 break
             unfinished_inputs = [inputs[i] for i in unfinished_indices]
-        return [finished_outputs[i] if i in finished_outputs else None for i in range(len(inputs))]
+
+        outputs = [finished_outputs[i] if i in finished_outputs else None for i in range(len(inputs))]
+        outputs = self.output_transformation(outputs) if self.output_transformation is not None else outputs
+        return outputs
 
 
 if __name__ == "__main__":

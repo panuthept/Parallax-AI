@@ -2,4 +2,4 @@
 
 __version__ = "0.3.7"
 
-from .core import ParallaxClient, Agent, ModelContext, Field, ClassificationAgent
+from .core import ParallaxClient, Agent, ModelContext, Field, ClassificationAgent, MultiAgent
