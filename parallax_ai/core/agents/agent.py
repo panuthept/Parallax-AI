@@ -46,6 +46,19 @@ class Agent:
         self.client = ParallaxClient(**kwargs)
 
     def __render_input(self, input):
+        # Extract only the keys that are in the input_structure
+        assert self.input_structure is not None
+        input = {key: value for key, value in input.items() if key in self.input_structure}
+        # If not all keys are in the input, raise error
+        for key in self.input_structure:
+            assert key in input, f"key '{key}' missing from the inputs of the agent named: {self.name}"
+        # Check type of each value
+        for key, value in input.items():
+            try:
+                validate(value, self.input_structure[key])
+            except TypeError:
+                raise ValueError(f"Type of key '{key}' is not valid: expecting {self.input_structure[key]} but got {type(value)} from the agent named: {self.name}")
+
         if self.input_template is None:
             return "\n\n".join([f"{key.replace("_", " ").capitalize()}:\n{value}" for key, value in input.items()])
         else:
@@ -61,7 +74,10 @@ class Agent:
                     if isinstance(input, str):
                         processed_inputs.append([{"role": "user", "content": input}])
                     elif isinstance(input, list) and isinstance(input[0], dict):
-                        processed_inputs.append(input)
+                        if "role" in input[0] and "content" in input[0]:
+                            processed_inputs.append(input)
+                        else:
+                            processed_inputs.append([{"role": "user", "content": json.dumps(input, indent=4, ensure_ascii=False)}])
                     else:
                         raise ValueError(f"Unknown input type:\n{input}")
                 else:
@@ -85,8 +101,11 @@ class Agent:
                 processed_inputs.append(input)
             else:
                 assert isinstance(input, list) and isinstance(input[0], dict)
-                if input[0]["role"] == "system":
-                    print("System prompt already exists, use the existing one. Note that the output_structure will not be added to the system prompt.")
+                if "role" in input[0] and "content" in input[0]:
+                    if input[0]["role"] == "system":
+                        print("System prompt already exists, use the existing one. Note that the output_structure will not be added to the system prompt.")
+                    else:
+                        input.insert(0, {"role": "system", "content": system_prompt})
                 else:
                     input.insert(0, {"role": "system", "content": system_prompt})
                 processed_inputs.append(input)
@@ -94,8 +113,12 @@ class Agent:
 
     def _inputs_processing(self, inputs, model_context: ModelContext = None):
         # Ensure that inputs is a list
-        if inputs is None or isinstance(inputs, str) or (isinstance(inputs, list) and isinstance(inputs[0], dict)) or (self.input_structure is not None and isinstance(inputs, self.input_structure)):
-            inputs = [inputs]
+        if self.input_structure is not None and isinstance(self.input_structure, dict):
+            if isinstance(inputs, dict):
+                inputs = [inputs]
+        else:
+            if inputs is None or isinstance(inputs, str) or (isinstance(inputs, list) and isinstance(inputs[0], dict)):
+                inputs = [inputs]
         # Convert all inputs to conversational format
         inputs = self.__convert_to_conversational_inputs(inputs)
         # Add system prompt (if any) to the inputs
@@ -118,6 +141,8 @@ class Agent:
             if len(output) != 2:
                 return None
             output = output[0].strip()
+            # Fix \n problem in JSON
+            output = "".join([line.strip() for line in output.split("\n")])
             # Parse the JSON object
             output = json.loads(output)
             # Validate the JSON object and convert to output_structure 
@@ -129,7 +154,7 @@ class Agent:
                     if key not in output:
                         raise ValueError(f"Key {key} is missing in the output")
                 # Check if all values are valid
-                for key, value in self.output.items():
+                for key, value in output.items():
                     validate(value, self.output_structure[key])
                 return output
                 

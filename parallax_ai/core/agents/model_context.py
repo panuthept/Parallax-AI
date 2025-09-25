@@ -4,6 +4,17 @@ from typing import List
 from dataclasses import dataclass
 
 
+def create_class_from_dict(dict_data):
+    string = "from dataclasses import dataclass\nfrom dataclasses_jsonschema import JsonSchemaMixin\nfrom typing import *\n\n@dataclass\nclass DataStructure(JsonSchemaMixin):\n"
+    for key, value in dict_data.items():
+        string += f"    {key}: {str(value).replace("typing.", "").replace("<class '", "").replace("'>", "")}\n"
+    # Execute the string as code
+    namespace = {}
+    exec(string, namespace)
+    DataStructure = namespace["DataStructure"]
+    return DataStructure
+    
+
 @dataclass
 class Field:
     name: str
@@ -82,15 +93,31 @@ class ModelContext:
                 system_prompt = self.system_prompt_template.format(**{field.name: field.render() for field in self.system_prompt})
 
             if output_structure is not None:
-                output_schema = output_structure.json_schema() if output_structure is not None else None
-                output_schema.pop("$schema", None)
-                output_schema.pop("description", None)
-
+                schema = json.dumps({k: str(v).replace("typing.", "").replace("<class '", "").replace("'>", "") for k, v in output_structure.items()})
+                items = []
+                for item in schema[1:-1].split("\", \""):
+                    if not item.startswith('"'):
+                        item = '"' + item
+                    if not item.endswith('"'):
+                        item = item + '"'
+                    key, value = item.split(": ")
+                    value = value[1:-1]
+                    item = f"{key}: {value}"
+                    items.append(item)
+                schema = "{" + ", ".join(items) + "}"
+                # DataStructure = create_class_from_dict(output_structure)
+                # schema = DataStructure.json_schema()
+                # schema.pop("$schema", None)
+                # schema.pop("description", None)
                 system_prompt = system_prompt + "\n\n" if system_prompt is not None else ""
+                # system_prompt += (
+                #     "The output must be JSON that matches the following schema:\n"
+                #     "{output_structure}"
+                # ).format(output_structure=json.dumps(schema, indent=2))
                 system_prompt += (
                     "The output must be JSON that matches the following schema:\n"
                     "{output_structure}"
-                ).format(output_structure=json.dumps(output_schema, indent=2))
+                ).format(output_structure=schema)
             return system_prompt
             
         def render_input(self, input_instance) -> str:

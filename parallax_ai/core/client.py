@@ -3,7 +3,6 @@ import numpy as np
 from tqdm import tqdm
 from openai import OpenAI
 from functools import partial
-from multiprocessing import Pool
 from typing import Optional, List
 
 
@@ -60,7 +59,7 @@ class ParallaxClient:
         api_key: str = "EMPTY",
         base_url: Optional[List[str]|str] = None,
         proportions: Optional[List[float]] = None,
-        chunk_size: Optional[int] = 2,
+        chunk_size: Optional[int] = 1,
         ray_remote_address: Optional[str] = None,
         ray_local_workers: Optional[int] = None,
     ):
@@ -149,11 +148,11 @@ class ParallaxClient:
 
 if __name__ == "__main__":
     client = ParallaxClient(
-        base_url="http://localhost:8000/v1",
+        base_url="http://localhost:8888/v1",
     )
-    inputs = ["Sing me a song."] * 10000
-    client.run(
+    inputs = ["Sing me a song."] * 1000
+    outputs = client.run(
         inputs=inputs,
-        model="google/gemma-3-27b-it",
+        model="gemma3:1b-it-qat",
         verbose=True
     )

@@ -13,8 +13,10 @@ authors = [
     {name = "Panuthep Tasawong", email = "falcon_270394@hotmail.co.th"},
 ]
 dependencies = [
+    "ray",
     "openai",
     "dataclasses-jsonschema",
+    "typing-validation",
 ]
 
 [project.optional-dependencies]
