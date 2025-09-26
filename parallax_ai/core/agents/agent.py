@@ -261,35 +261,18 @@ if __name__ == "__main__":
     from time import time
     from random import randint
     from typing import Literal
-    from dataclasses import dataclass
-
-    @dataclass
-    class InputStructure(JsonSchemaMixin):
-        topic: str
-    print(InputStructure.json_schema())
-    
-    @dataclass
-    class OutputStructure(JsonSchemaMixin):
-        name: str
-        age: int
-        gender: Literal["Male", "Female"]
-    print(OutputStructure.json_schema())
 
     agent = Agent(
         model="google/gemma-3-27b-it",
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",
-        input_structure=InputStructure,
-        output_structure=OutputStructure,
-        model_context=ModelContext(
-            system_prompt=[
-                Field(name="task_definition", content="Given a topic, generate a list of people related to the topic.", title="Task Definition", trainable=False),
-                Field(name="method", content="Think step by step before answering.", title="Methodology", trainable=True),
-            ],
+        output_structure={"name": str, "age": int, "gender": Literal["Male", "Female"]},
+        system_prompt=(
+            "Given a topic, generate a list of people related to the topic.\n"
+            "Think step by step before answering."
         ),
         max_tries=5,
     )
-    print(agent.get_output_schema())
 
     inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
     
