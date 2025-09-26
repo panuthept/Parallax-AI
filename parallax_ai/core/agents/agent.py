@@ -1,9 +1,9 @@
 import json
 from copy import deepcopy
-from typing import List, Optional, Any
 from .model_context import ModelContext
 from parallax_ai.core import ParallaxClient
 from parallax_ai.utilities import type_validation
+from typing import Literal, List, Optional, Any, get_origin
 
 
 class InputProcessor:
@@ -82,8 +82,7 @@ class InputProcessor:
                 if isinstance(self.input_structure, dict):
                     input = [{"role": "user", "content": self.__render_input(input)}]
                 else:
-                    if not isinstance(input, str):
-                        input = str(input)
+                    assert isinstance(input, str), "Input must be string."
                     input = [{"role": "user", "content": input}]
             processed_inputs.append(input)
         return processed_inputs
@@ -111,6 +110,56 @@ class InputProcessor:
         inputs = self.__convert_to_conversational_inputs(inputs)
         # Add system prompt (if any) to the inputs
         return self.__add_system_prompt_to_inputs(inputs)
+    
+
+class OutputProcessor:
+    def __init__(self,output_structure: Optional[dict|type] = None):
+        self.output_structure = output_structure
+
+    def __get_text_output(self, output) -> str:
+        return output.choices[0].message.content
+    
+    def __parse_and_validate_output(self, output: str) -> str|dict:
+        if output is None:
+            return None
+        
+        if self.output_structure is None:
+            return output
+        
+        try:
+            if isinstance(self.output_structure, dict):
+                # Remove prefix and suffix texts
+                output = output.split("```json")
+                if len(output) != 2:
+                    return None
+                output = output[1].split("```")
+                if len(output) != 2:
+                    return None
+                output = output[0].strip()
+                # Fix \n problem in JSON
+                output = "".join([line.strip() for line in output.split("\n")])
+                # Parse the JSON object
+                output = json.loads(output)
+                # Check if all keys are in the output
+                for key in self.output_structure:
+                    if key not in output:
+                        raise ValueError(f"Key {key} is missing in the output")
+                # Check if all values are valid
+                for key, value in output.items():
+                    type_validation(value, self.output_structure[key], raise_error=True)
+            else:
+                type_validation(output, self.output_structure, raise_error=True)
+            return output
+        except Exception:
+            return None
+
+    def __call__(self, output) -> str:
+        if output is None:
+            return None
+        # Convert output object to text
+        output = self.__get_text_output(output)
+        # Parser and validate JSON output (if any)
+        return self.__parse_and_validate_output(output)
         
 
 class Agent:
@@ -126,68 +175,28 @@ class Agent:
         **kwargs,
     ):  
         if input_structure is not None:
-            assert isinstance(input_structure, dict) or isinstance(input_structure, type)
+            assert isinstance(input_structure, dict) or get_origin(input_structure) == Literal, "input_structure only support dictionary of Literal."
         if output_structure is not None:
-            assert isinstance(output_structure, dict) or isinstance(output_structure, type)
+            assert isinstance(output_structure, dict) or get_origin(input_structure) == Literal, "output_structure only support dictionary of Literal."
 
         self.model = model
         self.name = name
         self.max_tries = max_tries
+        self.input_structure = input_structure
+        self.output_structure = output_structure
+        self.input_template = input_template
+        self.system_prompt = system_prompt
+
         self.input_processor = InputProcessor(
             input_structure=input_structure,
             output_structure=output_structure,
             input_template=input_template,
             system_prompt=system_prompt,
         )
-        self.input_structure = input_structure
-        self.output_structure = output_structure
-        self.input_template = input_template
-        self.system_prompt = system_prompt
+        self.output_processor = OutputProcessor(
+            output_structure=output_structure,
+        )
         self.client = ParallaxClient(**kwargs)
-    
-    def __get_text_output(self, output) -> str:
-        return output.choices[0].message.content
-    
-    def __parse_and_validate_output(self, output: str) -> str|dict:
-        if output is None:
-            return None
-        if self.output_structure is None:
-            return output
-        try:
-            # Remove prefix and suffix texts
-            output = output.split("```json")
-            if len(output) != 2:
-                return None
-            output = output[1].split("```")
-            if len(output) != 2:
-                return None
-            output = output[0].strip()
-            # Fix \n problem in JSON
-            output = "".join([line.strip() for line in output.split("\n")])
-            # Parse the JSON object
-            output = json.loads(output)
-            # Validate the JSON object and convert to output_structure 
-            if isinstance(self.output_structure, type):
-                return self.output_structure.from_dict(output)
-            elif isinstance(self.output_structure, dict):
-                # Check if all keys are in the output
-                for key in self.output_structure:
-                    if key not in output:
-                        raise ValueError(f"Key {key} is missing in the output")
-                # Check if all values are valid
-                for key, value in output.items():
-                    type_validation(value, self.output_structure[key], raise_error=True)
-                return output
-        except Exception:
-            return None
-
-    def _output_processing(self, output) -> str:
-        if output is None:
-            return None
-        # Convert output object to text
-        output = self.__get_text_output(output)
-        # Parser and validate JSON output (if any)
-        return self.__parse_and_validate_output(output)
 
     def run(
         self, 
@@ -207,7 +216,7 @@ class Agent:
                 if unfinished_inputs[i] is None:
                     finished_outputs[i] = None
                 else:
-                    output = self._output_processing(output)
+                    output = self.output_processor(output)
                     if output is not None:
                         finished_outputs[i] = output
                     else:
