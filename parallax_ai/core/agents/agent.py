@@ -1,11 +1,9 @@
 import json
 from copy import deepcopy
-# from typing_validation import validate
-from typing import List, Optional, Callable
+from typing import List, Optional, Any
+from .model_context import ModelContext
 from parallax_ai.core import ParallaxClient
 from parallax_ai.utilities import type_validation
-from .model_context import ModelContext, Field
-from dataclasses_jsonschema import JsonSchemaMixin
 
 
 class InputProcessor:
@@ -115,7 +113,6 @@ class InputProcessor:
         return self.__add_system_prompt_to_inputs(inputs)
         
 
-
 class Agent:
     def __init__(
         self, 
@@ -192,47 +189,13 @@ class Agent:
         # Parser and validate JSON output (if any)
         return self.__parse_and_validate_output(output)
 
-    # def parallel_run(
-    #     self, 
-    #     inputs, 
-    #     model_contexts: List[ModelContext],
-    #     verbose: bool = False,
-    #     **kwargs,
-    # ) -> List[List[str]|List[dict]|List[JsonSchemaMixin]]:
-    #     n = len(inputs)
-
-    #     processed_inputs = []
-    #     for model_context in model_contexts:
-    #         processed_inputs.extend(self.input_processor(inputs, model_context=model_context))
-
-    #     finished_outputs = {}
-    #     unfinished_inputs = processed_inputs
-    #     for _ in range(self.max_tries):
-    #         unfinished_indices = []
-    #         outputs = self.client.run(inputs=unfinished_inputs, model=self.model, verbose=verbose, **kwargs)
-    #         for i, output in enumerate(outputs):
-    #             if unfinished_inputs[i] is None:
-    #                 finished_outputs[i] = None
-    #             else:
-    #                 output = self._output_processing(output)
-    #                 if output is not None:
-    #                     finished_outputs[i] = output
-    #                 else:
-    #                     unfinished_indices.append(i)
-    #         if len(unfinished_indices) == 0:
-    #             break
-    #         unfinished_inputs = [processed_inputs[i] for i in unfinished_indices]
-    #     finished_outputs = [finished_outputs[i] if i in finished_outputs else None for i in range(len(processed_inputs))]
-    #     outputs = [finished_outputs[i:i+n] for i in range(0, len(processed_inputs), n)]
-    #     return outputs
-
     def run(
         self, 
         inputs, 
         verbose: bool = False,
         desc: Optional[str] = None,
         **kwargs,
-    ) -> List[str]|List[dict]|List[JsonSchemaMixin]:
+    ) -> List[Any]:
         inputs = self.input_processor(inputs)
 
         finished_outputs = {}
