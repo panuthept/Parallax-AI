@@ -1,57 +1,16 @@
 import os
 import yaml
 import json
-from typing import *
-from copy import deepcopy
-from typing_validation import validate
+from collections import defaultdict
 from parallax_ai.core.agents.agent import Agent
-
-
-class DataPool:
-    def __init__(self):
-        self.data: Dict[str, Any] = {}
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]):
-        return cls(data=data)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return deepcopy(self.data)
-
-    def update(self, data: Dict[str, Any]):
-        self.data.update(data)
-
-    def __getitem__(self, key):
-        return self.data[key]
-
-    def get(self, key: str, default: Any = None) -> Any:
-        return self.data.get(key, default)
-
-    def search(self, structure: Dict[str, type]) -> Any:
-        matched_data = {}
-        for key, value in structure.items():
-            if key in self.data:
-                try:
-                    validate(self.data[key], value)
-                except TypeError:
-                    continue
-                matched_data[key] = self.data[key]
-        
-        # Check if all matched data have the same length
-        if len(set(map(len, matched_data.values()))) != 1:
-            raise ValueError("All matched data must have the same length")
-        
-        # Convert matched data to list of dict
-        outputs = [{k: v[i] for k, v in matched_data.items()} for i in range(len(matched_data[key]))]
-        return outputs
-
+from typing import Literal, List, Dict, Iterable, Callable, Optional, Any
 
 class MultiAgent:
     def __init__(
         self,
         agents: Dict[str, Agent],
         pipeline: List[str|Iterable[str]] = None,
-        pool_data: Optional[Dict[str, Dict[str, str]]] = None,
+        output_to_register: Optional[Dict[str, Dict[str, str]]] = None,
         input_transformation: Optional[Dict[str, Callable]] = None,
         output_transformation: Optional[Dict[str, Callable]] = None,
         logging_path: str = "./multiagent/logs.json",
@@ -59,7 +18,7 @@ class MultiAgent:
         self.datapool = {}
         self.agents = agents
         self.pipeline = pipeline
-        self.pool_data = pool_data if pool_data is not None else {}
+        self.output_to_register = output_to_register if output_to_register is not None else {}
         self.input_transformation = input_transformation if input_transformation is not None else {}
         self.output_transformation = output_transformation if output_transformation is not None else {}
         self.logging_path = logging_path
@@ -115,19 +74,17 @@ class MultiAgent:
         # Input transformation
         if agent_name in self.input_transformation:
             inputs = self.input_transformation[agent_name](inputs, self.datapool)
-        # Register inputs to datapool
-        self.register_or_append_data(agent_name + "_inputs", inputs)
 
+        # Run Agent
         outputs = self.agents[agent_name].run(inputs)
 
         # Output transformation
         if agent_name in self.output_transformation:
             outputs = self.output_transformation[agent_name](outputs, self.datapool)
-        # Register outputs to datapool
-        self.register_or_append_data(agent_name + "_outputs", outputs)
-        # Update pool data
-        if agent_name in self.pool_data:
-            for key_name, save_name in self.pool_data[agent_name].items():
+        
+        # Register outputs to datapool (If any)
+        if agent_name in self.output_to_register:
+            for key_name, save_name in self.output_to_register[agent_name].items():
                 data = []
                 for output in outputs:
                     if output is None:
@@ -146,8 +103,8 @@ class MultiAgent:
         inputs: List[Any],
         logging: bool = False,
         debug: bool = False,
-    ) -> List[Any]:
-        aggregated_outputs = []
+    ) -> Dict[str, List[Any]]:
+        aggregated_outputs = defaultdict(list)
         for agent_name in pipeline:
             if isinstance(agent_name, list):
                 outputs = self._recursive_run(agent_name, inputs, logging, debug)
@@ -155,7 +112,8 @@ class MultiAgent:
                 outputs = self._concurrent_run(agent_name, inputs, logging, debug)
             else:
                 outputs = self._run(agent_name, inputs, logging, debug)
-            aggregated_outputs.append(outputs)
+            # Aggregate outputs
+            aggregated_outputs[agent_name].extend(outputs)
         return aggregated_outputs
 
     def _recursive_run(
@@ -228,12 +186,13 @@ if __name__ == "__main__":
                 output_structure={"song_name": str, "singer_name": str, "singer_gender": Literal["male", "female"], "singer_nationality": str, "year": int},
             )
         },
-        pool_data={
+        pipeline=[("singer", "singer", "singer"), "guesser"],
+        output_to_register={
             "singer": {"song_name": "true_song_name"},
             "guesser": {"song_name": "pred_song_name"}
         },
         input_transformation={
-            "guesser": lambda inputs, datapool: [{"song_lyrics": input["song_lyrics"], "hint": datapool["hint"]} for input in inputs] # This must be batched processing
+            "guesser": lambda inputs, datapool: [{"song_lyrics": input["song_lyrics"], "hint": datapool["hint"]} for input in inputs["singer"]] # This must be batched processing
         },
         output_transformation={
             "guesser": lambda outputs, datapool: [{"song_name": output["song_name"], "singer_name": output["singer_name"]} for output in outputs]    # This must be batched processing
@@ -241,7 +200,6 @@ if __name__ == "__main__":
     )
     outputs = multi_agent.run(
         inputs={"country": "South Korea", "year": 2020},
-        pipeline=["singer", "guesser"],
         auxiliary_data={"hint": "The song is about a singer"},
         debug=True,
     )
