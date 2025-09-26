@@ -8,43 +8,18 @@ from .model_context import ModelContext, Field
 from dataclasses_jsonschema import JsonSchemaMixin
 
 
-class Agent:
+class InputProcessor:
     def __init__(
-        self, 
-        model: str,
-        name: Optional[str] = None,
+        self,
         input_structure: Optional[dict|type] = None,
         output_structure: Optional[dict|type] = None,
         input_template: Optional[str] = None,
-        input_transformation: Optional[Callable] = None,
-        output_transformation: Optional[Callable] = None,
-        model_context: Optional[ModelContext] = None,   # Deprecated
         system_prompt: Optional[str] = None,
-        max_tries: int = 5,
-        **kwargs,
     ):
-        if system_prompt is not None and model_context is not None and model_context.system_prompt is not None:
-            print("Warning: Both system_prompt and model_context.system_prompt are provided. system_prompt will be ignored.")
-        if model_context is None:
-            model_context = ModelContext()
-        if system_prompt is not None and model_context.system_prompt is None:
-            # Create a ModelContext with the provided system_prompt
-            model_context.system_prompt = [Field(name="system_prompt", content=system_prompt)]
-        if input_structure is not None:
-            assert isinstance(input_structure, dict) or isinstance(input_structure, type)
-        if output_structure is not None:
-            assert isinstance(output_structure, dict) or isinstance(output_structure, type)
-
-        self.model = model
-        self.name = name
-        self.max_tries = max_tries
-        self.model_context = model_context
         self.input_structure = input_structure
         self.output_structure = output_structure
         self.input_template = input_template
-        self.input_transformation = input_transformation
-        self.output_transformation = output_transformation
-        self.client = ParallaxClient(**kwargs)
+        self.model_context = ModelContext(system_prompt=system_prompt)
 
     def __render_input(self, input):
         # Extract only the keys that are in the input_structure
@@ -115,10 +90,8 @@ class Agent:
             processed_inputs.append(input)
         return processed_inputs
 
-    def __add_system_prompt_to_inputs(self, inputs, model_context: ModelContext = None):
-        if model_context is None:
-            model_context = self.model_context
-        system_prompt = model_context.render_system_prompt(self.output_structure)
+    def __add_system_prompt_to_inputs(self, inputs):
+        system_prompt = self.model_context.render_system_prompt(self.output_structure)
 
         processed_inputs = []
         for input in inputs:
@@ -133,13 +106,47 @@ class Agent:
                 processed_inputs.append(input)
         return processed_inputs
 
-    def _inputs_processing(self, inputs, model_context: ModelContext = None):
+    def __call__(self, inputs):
         # Ensure inputs type and convert inputs to list of needed
         inputs = self.__ensure_inputs_format(inputs)
         # Convert all inputs to conversational format
         inputs = self.__convert_to_conversational_inputs(inputs)
         # Add system prompt (if any) to the inputs
-        return self.__add_system_prompt_to_inputs(inputs, model_context=model_context)
+        return self.__add_system_prompt_to_inputs(inputs)
+        
+
+
+class Agent:
+    def __init__(
+        self, 
+        model: str,
+        name: Optional[str] = None,
+        input_structure: Optional[dict|type] = None,
+        output_structure: Optional[dict|type] = None,
+        input_template: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        max_tries: int = 5,
+        **kwargs,
+    ):  
+        if input_structure is not None:
+            assert isinstance(input_structure, dict) or isinstance(input_structure, type)
+        if output_structure is not None:
+            assert isinstance(output_structure, dict) or isinstance(output_structure, type)
+
+        self.model = model
+        self.name = name
+        self.max_tries = max_tries
+        self.input_processor = InputProcessor(
+            input_structure=input_structure,
+            output_structure=output_structure,
+            input_template=input_template,
+            system_prompt=system_prompt,
+        )
+        self.input_structure = input_structure
+        self.output_structure = output_structure
+        self.input_template = input_template
+        self.system_prompt = system_prompt
+        self.client = ParallaxClient(**kwargs)
     
     def __get_text_output(self, output) -> str:
         return output.choices[0].message.content
@@ -192,12 +199,11 @@ class Agent:
         verbose: bool = False,
         **kwargs,
     ) -> List[List[str]|List[dict]|List[JsonSchemaMixin]]:
-        inputs = self.input_transformation(inputs) if self.input_transformation is not None else inputs
         n = len(inputs)
 
         processed_inputs = []
         for model_context in model_contexts:
-            processed_inputs.extend(self._inputs_processing(inputs, model_context=model_context))
+            processed_inputs.extend(self.input_processor(inputs, model_context=model_context))
 
         finished_outputs = {}
         unfinished_inputs = processed_inputs
@@ -218,7 +224,6 @@ class Agent:
             unfinished_inputs = [processed_inputs[i] for i in unfinished_indices]
         finished_outputs = [finished_outputs[i] if i in finished_outputs else None for i in range(len(processed_inputs))]
         outputs = [finished_outputs[i:i+n] for i in range(0, len(processed_inputs), n)]
-        outputs = self.output_transformation(outputs) if self.output_transformation is not None else outputs
         return outputs
 
     def run(
@@ -228,8 +233,7 @@ class Agent:
         desc: Optional[str] = None,
         **kwargs,
     ) -> List[str]|List[dict]|List[JsonSchemaMixin]:
-        inputs = self.input_transformation(inputs) if self.input_transformation is not None else inputs
-        inputs = self._inputs_processing(inputs)
+        inputs = self.input_processor(inputs)
 
         finished_outputs = {}
         unfinished_inputs = inputs
@@ -250,7 +254,6 @@ class Agent:
             unfinished_inputs = [inputs[i] for i in unfinished_indices]
 
         outputs = [finished_outputs[i] if i in finished_outputs else None for i in range(len(inputs))]
-        outputs = self.output_transformation(outputs) if self.output_transformation is not None else outputs
         return outputs
 
 
