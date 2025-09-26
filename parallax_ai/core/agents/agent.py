@@ -1,8 +1,9 @@
 import json
 from copy import deepcopy
-from typing_validation import validate
+# from typing_validation import validate
 from typing import List, Optional, Callable
 from parallax_ai.core import ParallaxClient
+from parallax_ai.utilities import type_validation
 from .model_context import ModelContext, Field
 from dataclasses_jsonschema import JsonSchemaMixin
 
@@ -54,39 +55,64 @@ class Agent:
             assert key in input, f"key '{key}' missing from the inputs of the agent named: {self.name}"
         # Check type of each value
         for key, value in input.items():
-            try:
-                validate(value, self.input_structure[key])
-            except TypeError:
+            if not type_validation(value, self.input_structure[key]):
                 raise ValueError(f"Type of key '{key}' is not valid: expecting {self.input_structure[key]} but got {type(value)} from the agent named: {self.name}")
 
         if self.input_template is None:
             return "\n\n".join([f"{key.replace("_", " ").capitalize()}:\n{value}" for key, value in input.items()])
         else:
             return self.input_template.format(**input)
+        
+    def __ensure_inputs_format(self, inputs):
+        if self.input_structure is not None: 
+            # input_structure can be either dict or type
+            if isinstance(inputs, list):
+                if isinstance(self.input_structure, dict):
+                    assert isinstance(inputs[0], dict), "Invalid inputs"
+                else:
+                    assert type_validation(inputs[0], self.input_structure), "Invalid inputs"
+            else:
+                if isinstance(self.input_structure, dict):
+                    assert isinstance(inputs, dict), "Invalid inputs"
+                    inputs = [inputs]
+                else:
+                    assert type_validation(inputs, self.input_structure), "Invalid inputs"
+                    inputs = [inputs]
+        else:
+            if isinstance(inputs, list):
+                # Can be [None], [str], [{'role': str, 'content': str}], [[{'role': str, 'content': str}]]
+                if isinstance(inputs[0], list):
+                    # Must be [[{'role': str, 'content': str}]]
+                    assert isinstance(inputs[0][0], dict) and "role" in inputs[0][0] and "content" in inputs[0][0], "Invalid inputs"
+                else:
+                    # Can be [None], [str], [{'role': str, 'content': str}]
+                    if isinstance(inputs[0], dict):
+                        # Must be [{'role': str, 'content': str}]
+                        assert "role" in inputs[0] and "content" in inputs[0], "Invalid inputs"
+                        inputs = [inputs]
+                    else:
+                        # Must be [None], [str]
+                        assert isinstance(inputs, str) or inputs is None, "Invalid inputs"
+            else:
+                # Must be None, str
+                assert isinstance(inputs, str) or inputs is None, "Invalid inputs"
+                inputs = [inputs]
+        return inputs
 
     def __convert_to_conversational_inputs(self, inputs):
         processed_inputs = []
         for input in inputs:
-            if input is None:
-                processed_inputs.append(None)
+            if self.input_structure is None:
+                if isinstance(input, str):
+                    input = [{"role": "user", "content": input}]
             else:
-                if self.input_structure is None:
-                    if isinstance(input, str):
-                        processed_inputs.append([{"role": "user", "content": input}])
-                    elif isinstance(input, list) and isinstance(input[0], dict):
-                        if "role" in input[0] and "content" in input[0]:
-                            processed_inputs.append(input)
-                        else:
-                            processed_inputs.append([{"role": "user", "content": json.dumps(input, indent=4, ensure_ascii=False)}])
-                    else:
-                        raise ValueError(f"Unknown input type:\n{input}")
+                if isinstance(self.input_structure, dict):
+                    input = [{"role": "user", "content": self.__render_input(input)}]
                 else:
-                    if isinstance(self.input_structure, type) and isinstance(input, self.input_structure):
-                        processed_inputs.append([{"role": "user", "content": self.model_context.render_input(input)}])
-                    elif isinstance(self.input_structure, dict) and isinstance(input, dict):
-                        processed_inputs.append([{"role": "user", "content": self.__render_input(input)}])
-                    else:
-                        raise ValueError(f"Unknown input structure type:\n{self.input_structure}")
+                    if not isinstance(input, str):
+                        input = str(input)
+                    input = [{"role": "user", "content": input}]
+            processed_inputs.append(input)
         return processed_inputs
 
     def __add_system_prompt_to_inputs(self, inputs, model_context: ModelContext = None):
@@ -100,25 +126,16 @@ class Agent:
             if input is None or system_prompt is None:
                 processed_inputs.append(input)
             else:
-                assert isinstance(input, list) and isinstance(input[0], dict)
-                if "role" in input[0] and "content" in input[0]:
-                    if input[0]["role"] == "system":
-                        print("System prompt already exists, use the existing one. Note that the output_structure will not be added to the system prompt.")
-                    else:
-                        input.insert(0, {"role": "system", "content": system_prompt})
+                if input[0]["role"] == "system":
+                    print("System prompt already exists, use the existing one. Note that the output_structure will not be added to the system prompt.")
                 else:
                     input.insert(0, {"role": "system", "content": system_prompt})
                 processed_inputs.append(input)
         return processed_inputs
 
     def _inputs_processing(self, inputs, model_context: ModelContext = None):
-        # Ensure that inputs is a list
-        if self.input_structure is not None and isinstance(self.input_structure, dict):
-            if isinstance(inputs, dict):
-                inputs = [inputs]
-        else:
-            if inputs is None or isinstance(inputs, str) or (isinstance(inputs, list) and isinstance(inputs[0], dict)):
-                inputs = [inputs]
+        # Ensure inputs type and convert inputs to list of needed
+        inputs = self.__ensure_inputs_format(inputs)
         # Convert all inputs to conversational format
         inputs = self.__convert_to_conversational_inputs(inputs)
         # Add system prompt (if any) to the inputs
@@ -127,7 +144,7 @@ class Agent:
     def __get_text_output(self, output) -> str:
         return output.choices[0].message.content
     
-    def __parse_and_validate_output(self, output: str) -> str|JsonSchemaMixin:
+    def __parse_and_validate_output(self, output: str) -> str|dict:
         if output is None:
             return None
         if self.output_structure is None:
@@ -155,9 +172,8 @@ class Agent:
                         raise ValueError(f"Key {key} is missing in the output")
                 # Check if all values are valid
                 for key, value in output.items():
-                    validate(value, self.output_structure[key])
+                    type_validation(value, self.output_structure[key], raise_error=True)
                 return output
-                
         except Exception:
             return None
 
