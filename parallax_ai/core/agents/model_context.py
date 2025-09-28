@@ -96,14 +96,14 @@ class ModelContext:
                 schema = "{" + ", ".join(items) + "}"
                 system_prompt = system_prompt + "\n\n" if system_prompt is not None else ""
                 system_prompt += (
-                    "The output must be JSON that matches the following schema:\n"
+                    "The final output must be JSON that matches the following schema:\n"
                     "{output_structure}"
                 ).format(output_structure=schema)
             elif get_origin(output_structure) == Literal:
                 keywords = "\n".join(list(get_args(output_structure)))
                 system_prompt = system_prompt + "\n\n" if system_prompt is not None else ""
                 system_prompt += (
-                    "The output must be a one of the following keyword:\n"
+                    "The final output must be a one of the following keyword:\n"
                     "{keywords}"
                 ).format(keywords=keywords)
             return system_prompt
