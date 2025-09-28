@@ -3,7 +3,8 @@ import yaml
 import json
 from collections import defaultdict
 from parallax_ai.core.agents.agent import Agent
-from typing import Literal, List, Dict, Iterable, Callable, Optional, Any
+from parallax_ai.utilities import generate_session_id
+from typing import Literal, Tuple, List, Dict, Iterable, Callable, Optional, Any
 
 class MultiAgent:
     def __init__(
@@ -67,16 +68,16 @@ class MultiAgent:
     def _run(
         self, 
         agent_name: str, 
-        inputs: List[Any], 
+        inputs: List[Tuple[str, Any]], 
         logging: bool = False, 
         debug: bool = False
-    ) -> List[Any]:
+    ) -> List[Tuple[str, Any]]:
         # Input transformation
         if agent_name in self.input_transformation:
             inputs = self.input_transformation[agent_name](inputs, self.datapool)
-
+        
         # Run Agent
-        outputs = self.agents[agent_name].run(inputs)
+        outputs: List[Tuple[str, Any]] = self.agents[agent_name].run(inputs)
 
         # Output transformation
         if agent_name in self.output_transformation:
@@ -86,7 +87,7 @@ class MultiAgent:
         if agent_name in self.output_to_register:
             for key_name, save_name in self.output_to_register[agent_name].items():
                 data = []
-                for output in outputs:
+                for session_id, output in outputs:
                     if output is None:
                         continue
                     assert key_name in output, f"Key '{key_name}' not found in the outputs of the agent named: {agent_name}"
@@ -100,18 +101,24 @@ class MultiAgent:
     def _concurrent_run(
         self,
         pipeline: List[str|Iterable[str]],
-        inputs: List[Any],
+        inputs: List[Tuple[str, Any]],
         logging: bool = False,
         debug: bool = False,
-    ) -> Dict[str, List[Any]]:
+    ) -> Dict[str, List[Tuple[str, Any]]]:
         aggregated_outputs = defaultdict(list)
         for agent_name in pipeline:
             if isinstance(agent_name, list):
-                outputs = self._recursive_run(agent_name, inputs, logging, debug)
+                outputs = self._recursive_run(
+                    agent_name, inputs, logging=logging, debug=debug
+                )
             elif isinstance(agent_name, tuple):
-                outputs = self._concurrent_run(agent_name, inputs, logging, debug)
+                outputs = self._concurrent_run(
+                    agent_name, inputs, logging=logging, debug=debug
+                )
             else:
-                outputs = self._run(agent_name, inputs, logging, debug)
+                outputs = self._run(
+                    agent_name, inputs, logging=logging, debug=debug
+                )
             # Aggregate outputs
             aggregated_outputs[agent_name].extend(outputs)
         return aggregated_outputs
@@ -119,17 +126,23 @@ class MultiAgent:
     def _recursive_run(
         self,
         pipeline: List[str|Iterable[str]],
-        inputs: List[Any],
+        inputs: List[Tuple[str, Any]],
         logging: bool = False,
         debug: bool = False,
-    ) -> List[Any]:
+    ) -> List[Tuple[str, Any]]:
         for agent_name in pipeline:
             if isinstance(agent_name, list):
-                outputs = self._recursive_run(agent_name, inputs, logging, debug)
+                outputs = self._recursive_run(
+                    agent_name, inputs, logging=logging, debug=debug
+                )
             elif isinstance(agent_name, tuple):
-                outputs = self._concurrent_run(agent_name, inputs, logging, debug)
+                outputs = self._concurrent_run(
+                    agent_name, inputs, logging=logging, debug=debug
+                    )
             else:
-                outputs = self._run(agent_name, inputs, logging, debug)
+                outputs = self._run(
+                    agent_name, inputs, logging=logging, debug=debug
+                )
             inputs = outputs
         return outputs
 
@@ -147,16 +160,17 @@ class MultiAgent:
 
     def run(
         self,
-        inputs: Any,
+        inputs: Any|List[Any]|Tuple[str, Any]|List[Tuple[str, Any]],
         pipeline: List[str|Iterable[str]] = None,
         auxiliary_data: Optional[Dict[str, Any]] = None,
         logging: bool = False,
         debug: bool = False,
-    ) -> List[Any]:
+    ) -> List[Tuple[str, Any]]:
         if pipeline is None:
             pipeline = self.pipeline
         if not isinstance(inputs, list):
             inputs = [inputs]
+        inputs = [(generate_session_id(), input) if isinstance(input, tuple) else input for input in inputs]
         # Register auxiliary data to DataPool
         if auxiliary_data is not None:
             for key, value in auxiliary_data.items():
@@ -164,7 +178,9 @@ class MultiAgent:
         # Check if all agent names are valid
         self._recursive_name_check(pipeline)
         # Run the pipeline
-        outputs = self._recursive_run(pipeline, inputs, logging, debug)
+        outputs = self._recursive_run(
+            pipeline, inputs, logging=logging, debug=debug
+        )
         return outputs
 
 
@@ -192,17 +208,17 @@ if __name__ == "__main__":
             "guesser": {"song_name": "pred_song_name"}
         },
         input_transformation={
-            "guesser": lambda inputs, datapool: [{"song_lyrics": input["song_lyrics"], "hint": datapool["hint"]} for input in inputs["singer"]] # This must be batched processing
+            "guesser": lambda inputs, datapool: [(session_id, {"song_lyrics": input["song_lyrics"], "hint": datapool["hint"]}) for session_id, input in inputs["singer"]] # This must be batched processing
         },
         output_transformation={
-            "guesser": lambda outputs, datapool: [{"song_name": output["song_name"], "singer_name": output["singer_name"]} for output in outputs]    # This must be batched processing
+            "guesser": lambda outputs, datapool: [(session_id, {"song_name": output["song_name"], "singer_name": output["singer_name"]}) for session_id, output in outputs]    # This must be batched processing
         }
     )
-    outputs = multi_agent.run(
+    # Single-turn interaction
+    outputs: List[Tuple[str, Any]] = multi_agent.run(
         inputs={"country": "South Korea", "year": 2020},
         auxiliary_data={"hint": "The song is about a singer"},
         debug=True,
     )
     print(outputs)
     print(multi_agent.datapool)
-    
