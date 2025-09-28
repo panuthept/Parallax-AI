@@ -302,22 +302,16 @@ class Agent:
     def run(
         self, 
         inputs: List[Any]|Any,
+        multi_turn: bool = False,
         verbose: bool = False,
         desc: Optional[str] = None,
         **kwargs,
     ) -> List[Any]:
-        _, outputs = self._run(inputs, verbose=verbose, desc=desc, *kwargs)
-        return outputs
-    
-    def conversation(
-        self, 
-        inputs: List[Any]|Any,
-        verbose: bool = False,
-        desc: Optional[str] = None,
-        **kwargs,
-    ) -> List[Tuple[str, Any]]:
         session_ids, outputs = self._run(inputs, verbose=verbose, desc=desc, *kwargs)
-        return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
+        if multi_turn:
+            return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
+        else:
+            return outputs
 
 
 if __name__ == "__main__":
@@ -337,7 +331,7 @@ if __name__ == "__main__":
         max_tries=5,
     )
 
-    # Single interaction
+    # Single-turn interaction
     inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
     
     start_time = time()
@@ -349,13 +343,13 @@ if __name__ == "__main__":
     print(f"Error: {error_count}")
     print()
 
-    # Conversation
+    # Multi-turn interaction
     inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
 
     start_time = time()
     error_count = 0
     next_inputs = []
-    for i, (session_id, output) in enumerate(agent.conversation(inputs)):
+    for i, (session_id, output) in enumerate(agent.run(inputs, multi_turn=True)):
         print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
         if output is None:
             error_count += 1
@@ -363,7 +357,7 @@ if __name__ == "__main__":
     print(f"Error: {error_count}")
     print()
 
-    for i, (session_id, output) in enumerate(agent.conversation(next_inputs)):
+    for i, (session_id, output) in enumerate(agent.run(next_inputs, multi_turn=True)):
         print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
         if output is None:
             error_count += 1
