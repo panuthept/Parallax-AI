@@ -1,9 +1,62 @@
 import json
+import uuid
 from copy import deepcopy
 from .model_context import ModelContext
 from parallax_ai.core import ParallaxClient
 from parallax_ai.utilities import type_validation
-from typing import Literal, List, Optional, Any, get_origin
+from typing import Literal, Tuple, List, Dict, Optional, Any, get_origin
+
+
+class ConversationMemory:
+    def __init__(
+        self, 
+        min_sessions: int = 100000,
+        max_sessions: int = 1000000,
+    ):
+        self.min_sessions = min_sessions
+        self.max_sessions = max_sessions
+
+        self.sessions: Dict[str, List] = {}
+        self.running_number = 0
+        self.session_running_number = {}
+
+    def ensure_max_sessions(self):
+        if len(self.sessions) > self.max_sessions:
+            # Sort session_ids by their running_number
+            sorted_sessions = sorted(self.session_running_number.items(), key=lambda x:x[1], reverse=True)
+            # Remove exceed sessions
+            for session_id, _ in sorted_sessions[self.min_sessions:]:
+                del self.sessions[session_id]
+                del self.session_running_number[session_id]
+
+    def fetch_or_init_conversations(self, inputs, system_prompt: Optional[str] = None) -> Tuple[List[str], List[List[dict]]]:
+        session_ids = []
+        conversations = []
+        for input in inputs:
+            # Get session_id
+            if isinstance(input, tuple):
+                session_id, input = input
+            else:
+                session_id = str(uuid.uuid4())
+            session_ids.append(session_id)
+            # Init and fetch conversations
+            if session_id not in self.sessions:
+                self.sessions[session_id] = [] if system_prompt is None else [{"role": "system", "content": system_prompt}]
+            conversation = self.sessions[session_id]
+            conversations.append(conversation)
+            # Update session_running_number
+            if session_id not in self.session_running_number:
+                self.session_running_number[session_id] = 0
+            self.session_running_number = self.running_number
+            self.running_number += 1
+        # Clear sessions
+        self.ensure_max_sessions()
+        return session_ids, conversations
+    
+    def update(self, session_id, output):
+        assert session_id in self.sessions, f"Not found session id: {session_id}. Please ensure that min_sessions is not too small (must be larger than batch size)."
+        self.sessions[session_id].append({"role": "assistant", "content": output.choices[0].message.content})
+            
 
 
 class InputProcessor:
@@ -12,12 +65,10 @@ class InputProcessor:
         input_structure: Optional[dict|type] = None,
         output_structure: Optional[dict|type] = None,
         input_template: Optional[str] = None,
-        system_prompt: Optional[str] = None,
     ):
         self.input_structure = input_structure
         self.output_structure = output_structure
         self.input_template = input_template
-        self.model_context = ModelContext(system_prompt=system_prompt)
 
     def __render_input(self, input):
         # Extract only the keys that are in the input_structure
@@ -72,48 +123,49 @@ class InputProcessor:
                 inputs = [inputs]
         return inputs
 
-    def __convert_to_conversational_inputs(self, inputs):
-        processed_inputs = []
-        for input in inputs:
-            if self.input_structure is None:
-                if isinstance(input, str):
-                    input = [{"role": "user", "content": input}]
+    def __convert_to_conversational_inputs(self, inputs, conversations):
+        new_conversations = []
+        for input, prev_conversation in zip(inputs, conversations):
+            if input is None:
+                new_conversations.append(input)
+                continue
+            # Convert input to conversational
+            if isinstance(self.input_structure, dict):
+                input = {"role": "user", "content": self.__render_input(input)}
             else:
-                if isinstance(self.input_structure, dict):
-                    input = [{"role": "user", "content": self.__render_input(input)}]
-                else:
-                    assert isinstance(input, str), "Input must be string."
-                    input = [{"role": "user", "content": input}]
-            processed_inputs.append(input)
-        return processed_inputs
+                assert isinstance(input, str), "Input must be string."
+                input = {"role": "user", "content": input}
+            prev_conversation.append(input)
+            new_conversations.append(prev_conversation)
+        return new_conversations
 
-    def __add_system_prompt_to_inputs(self, inputs):
-        system_prompt = self.model_context.render_system_prompt(self.output_structure)
+    # def __add_system_prompt_to_inputs(self, inputs):
+    #     system_prompt = self.model_context.render_system_prompt(self.output_structure)
 
-        processed_inputs = []
-        for input in inputs:
-            input = deepcopy(input)
-            if input is None or system_prompt is None:
-                processed_inputs.append(input)
-            else:
-                if input[0]["role"] == "system":
-                    print("System prompt already exists, use the existing one. Note that the output_structure will not be added to the system prompt.")
-                else:
-                    input.insert(0, {"role": "system", "content": system_prompt})
-                processed_inputs.append(input)
-        return processed_inputs
+    #     processed_inputs = []
+    #     for input in inputs:
+    #         input = deepcopy(input)
+    #         if input is None or system_prompt is None:
+    #             processed_inputs.append(input)
+    #         else:
+    #             if input[0]["role"] != "system":
+    #                 print("System prompt already exists, use the existing one. Note that the output_structure will not be added to the system prompt.")
+    #             else:
+    #                 input.insert(0, {"role": "system", "content": system_prompt})
+    #             processed_inputs.append(input)
+    #     return processed_inputs
 
-    def __call__(self, inputs):
+    def __call__(self, inputs, conversations):
         # Ensure inputs type and convert inputs to list of needed
         inputs = self.__ensure_inputs_format(inputs)
         # Convert all inputs to conversational format
-        inputs = self.__convert_to_conversational_inputs(inputs)
-        # Add system prompt (if any) to the inputs
-        return self.__add_system_prompt_to_inputs(inputs)
+        return self.__convert_to_conversational_inputs(inputs, conversations)
+        # # Add system prompt (if any) to the inputs
+        # return self.__add_system_prompt_to_inputs(inputs)
     
 
 class OutputProcessor:
-    def __init__(self,output_structure: Optional[dict|type] = None):
+    def __init__(self, output_structure: Optional[dict|type] = None):
         self.output_structure = output_structure
 
     def __get_text_output(self, output) -> str:
@@ -171,6 +223,8 @@ class Agent:
         output_structure: Optional[dict|type] = None,
         input_template: Optional[str] = None,
         system_prompt: Optional[str] = None,
+        min_sessions: int = 100000,
+        max_sessions: int = 1000000,
         max_tries: int = 5,
         **kwargs,
     ):  
@@ -187,6 +241,13 @@ class Agent:
         self.input_template = input_template
         self.system_prompt = system_prompt
 
+        self.model_context = ModelContext(
+            system_prompt=system_prompt
+        )
+        self.conversation_memory = ConversationMemory(
+            min_sessions=min_sessions,
+            max_sessions=max_sessions,
+        )
         self.input_processor = InputProcessor(
             input_structure=input_structure,
             output_structure=output_structure,
@@ -198,14 +259,20 @@ class Agent:
         )
         self.client = ParallaxClient(**kwargs)
 
-    def run(
+    def get_system_prompt(self):
+        return self.model_context.render_system_prompt(self.output_structure)
+
+    def _run(
         self, 
-        inputs, 
+        inputs,
         verbose: bool = False,
         desc: Optional[str] = None,
         **kwargs,
-    ) -> List[Any]:
-        inputs = self.input_processor(inputs)
+    ) -> Tuple[List[str], List[Any]]:
+        session_ids, conversations = self.conversation_memory.fetch_or_init_conversations(
+            inputs, system_prompt=self.get_system_prompt()
+        )
+        inputs = self.input_processor(inputs, conversations)
 
         finished_outputs = {}
         unfinished_inputs = inputs
@@ -216,9 +283,10 @@ class Agent:
                 if unfinished_inputs[i] is None:
                     finished_outputs[i] = None
                 else:
-                    output = self.output_processor(output)
-                    if output is not None:
-                        finished_outputs[i] = output
+                    processed_output = self.output_processor(output)
+                    if processed_output is not None:
+                        finished_outputs[i] = processed_output
+                        self.conversation_memory.update(session_id, output)
                     else:
                         unfinished_indices.append(i)
             if len(unfinished_indices) == 0:
@@ -226,7 +294,27 @@ class Agent:
             unfinished_inputs = [inputs[i] for i in unfinished_indices]
 
         outputs = [finished_outputs[i] if i in finished_outputs else None for i in range(len(inputs))]
+        return session_ids, outputs
+    
+    def run(
+        self, 
+        inputs: List[Any]|Any,
+        verbose: bool = False,
+        desc: Optional[str] = None,
+        **kwargs,
+    ) -> List[Any]:
+        _, outputs = self._run(inputs, verbose=verbose, desc=desc, *kwargs)
         return outputs
+    
+    def conversation(
+        self, 
+        inputs: List[Any]|Any,
+        verbose: bool = False,
+        desc: Optional[str] = None,
+        **kwargs,
+    ) -> List[Tuple[str, Any]]:
+        session_ids, outputs = self._run(inputs, verbose=verbose, desc=desc, *kwargs)
+        return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
 
 
 if __name__ == "__main__":
@@ -246,11 +334,33 @@ if __name__ == "__main__":
         max_tries=5,
     )
 
+    # Single interaction
     inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
     
     start_time = time()
     error_count = 0
     for i, output in enumerate(agent.run(inputs)):
+        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
+        if output is None:
+            error_count += 1
+    print(f"Error: {error_count}")
+    print()
+
+    # Conversation
+    inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
+
+    start_time = time()
+    error_count = 0
+    next_inputs = []
+    for i, (session_id, output) in enumerate(agent.conversation(inputs)):
+        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
+        if output is None:
+            error_count += 1
+        next_inputs.append((session_id, output))
+    print(f"Error: {error_count}")
+    print()
+
+    for i, (session_id, output) in enumerate(agent.conversation(next_inputs)):
         print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
         if output is None:
             error_count += 1
