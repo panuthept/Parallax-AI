@@ -1,9 +1,8 @@
 import json
-import uuid
 from copy import deepcopy
 from .model_context import ModelContext
 from parallax_ai.core import ParallaxClient
-from parallax_ai.utilities import type_validation
+from parallax_ai.utilities import type_validation, generate_session_id
 from typing import Literal, Tuple, List, Dict, Optional, Any, get_origin
 
 
@@ -39,7 +38,7 @@ class ConversationMemory:
             if isinstance(input, tuple):
                 session_id, input = input
             else:
-                session_id = str(uuid.uuid4())
+                session_id = generate_session_id()
             session_ids.append(session_id)
             # Init and fetch conversations
             if session_id not in self.sessions:
@@ -277,7 +276,7 @@ class Agent:
 
     def _run(
         self, 
-        inputs,
+        inputs: List[Tuple[str, Any]],
         verbose: bool = False,
         desc: Optional[str] = None,
         **kwargs,
@@ -311,17 +310,15 @@ class Agent:
     
     def run(
         self, 
-        inputs: List[Any]|Any,
-        multi_turn: bool = False,
+        inputs: List[Tuple[str, Any]]|Tuple[str, Any],
         verbose: bool = False,
         desc: Optional[str] = None,
         **kwargs,
-    ) -> List[Any]:
+    ) -> List[Tuple[str, Any]]:
+        if not isinstance(inputs, list):
+            inputs = [inputs]
         session_ids, outputs = self._run(inputs, verbose=verbose, desc=desc, *kwargs)
-        if multi_turn:
-            return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
-        else:
-            return outputs
+        return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
 
 
 if __name__ == "__main__":
@@ -341,25 +338,13 @@ if __name__ == "__main__":
         max_tries=5,
     )
 
-    # Single-turn interaction
-    inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
-    
-    start_time = time()
-    error_count = 0
-    for i, output in enumerate(agent.run(inputs)):
-        print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
-        if output is None:
-            error_count += 1
-    print(f"Error: {error_count}")
-    print()
-
     # Multi-turn interaction
     inputs = [f"Generate a list of {randint(3, 20)} Thai singers" for _ in range(1000)]
 
     start_time = time()
     error_count = 0
     next_inputs = []
-    for i, (session_id, output) in enumerate(agent.run(inputs, multi_turn=True)):
+    for i, (session_id, output) in enumerate(agent.run(inputs)):
         print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
         if output is None:
             error_count += 1
@@ -367,7 +352,7 @@ if __name__ == "__main__":
     print(f"Error: {error_count}")
     print()
 
-    for i, (session_id, output) in enumerate(agent.run(next_inputs, multi_turn=True)):
+    for i, (session_id, output) in enumerate(agent.run(next_inputs)):
         print(f"[{i + 1}] elapsed time: {time() - start_time:.4f}s\nInput: {inputs[i]}\nOutput: {output}")
         if output is None:
             error_count += 1
