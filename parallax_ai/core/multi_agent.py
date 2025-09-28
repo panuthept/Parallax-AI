@@ -11,6 +11,7 @@ class MultiAgent:
         self,
         agents: Dict[str, Agent],
         pipeline: List[str|Iterable[str]] = None,
+        auxiliary_functions: Optional[Dict[str, Callable]] = None,
         output_to_register: Optional[Dict[str, Dict[str, str]]] = None,
         input_transformation: Optional[Dict[str, Callable]] = None,
         output_transformation: Optional[Dict[str, Callable]] = None,
@@ -19,6 +20,7 @@ class MultiAgent:
         self.datapool = {}
         self.agents = agents
         self.pipeline = pipeline
+        self.auxiliary_functions = auxiliary_functions if auxiliary_functions is not None else {}
         self.output_to_register = output_to_register if output_to_register is not None else {}
         self.input_transformation = input_transformation if input_transformation is not None else {}
         self.output_transformation = output_transformation if output_transformation is not None else {}
@@ -76,8 +78,11 @@ class MultiAgent:
         if agent_name in self.input_transformation:
             inputs = self.input_transformation[agent_name](inputs, self.datapool)
         
-        # Run Agent
-        outputs: List[Tuple[str, Any]] = self.agents[agent_name].run(inputs)
+        # Run Agent or Function
+        if agent_name in self.agents:
+            outputs: List[Tuple[str, Any]] = self.agents[agent_name].run(inputs)
+        else:
+            outputs = self.auxiliary_functions(inputs)
 
         # Output transformation
         if agent_name in self.output_transformation:
@@ -156,7 +161,7 @@ class MultiAgent:
             elif isinstance(agent_name, tuple):
                 self._recursive_name_check(agent_name)
             else:
-                assert agent_name in self.agents, f"Agent {agent_name} not found"
+                assert agent_name in self.agents or agent_name in self.auxiliary_functions, f"Component {agent_name} not found."
 
     def run(
         self,
