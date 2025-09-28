@@ -69,37 +69,37 @@ class MultiAgent:
 
     def _run(
         self, 
-        agent_name: str, 
+        component_name: str, 
         inputs: List[Tuple[str, Any]], 
         logging: bool = False, 
         debug: bool = False
     ) -> List[Tuple[str, Any]]:
         # Input transformation
-        if agent_name in self.input_transformation:
-            inputs = self.input_transformation[agent_name](inputs, self.datapool)
+        if component_name in self.input_transformation:
+            inputs = self.input_transformation[component_name](inputs, self.datapool)
         
         # Run Agent or Function
-        if agent_name in self.agents:
-            outputs: List[Tuple[str, Any]] = self.agents[agent_name].run(inputs)
+        if component_name in self.agents:
+            outputs: List[Tuple[str, Any]] = self.agents[component_name].run(inputs)
         else:
             outputs = self.auxiliary_functions(inputs)
 
         # Output transformation
-        if agent_name in self.output_transformation:
-            outputs = self.output_transformation[agent_name](outputs, self.datapool)
+        if component_name in self.output_transformation:
+            outputs = self.output_transformation[component_name](outputs, self.datapool)
         
         # Register outputs to datapool (If any)
-        if agent_name in self.output_to_register:
-            for key_name, save_name in self.output_to_register[agent_name].items():
+        if component_name in self.output_to_register:
+            for key_name, save_name in self.output_to_register[component_name].items():
                 data = []
                 for session_id, output in outputs:
                     if output is None:
                         continue
-                    assert key_name in output, f"Key '{key_name}' not found in the outputs of the agent named: {agent_name}"
+                    assert key_name in output, f"Key '{key_name}' not found in the outputs of the agent named: {component_name}"
                     data.append(output[key_name])
                 self.register_or_append_data(save_name, data)
 
-        if debug: print(f"Agent {agent_name} outputs:\n{outputs}")
+        if debug: print(f"Agent {component_name} outputs:\n{outputs}")
         if logging: self.logging_datapool()
         return outputs
 
@@ -111,21 +111,21 @@ class MultiAgent:
         debug: bool = False,
     ) -> Dict[str, List[Tuple[str, Any]]]:
         aggregated_outputs = defaultdict(list)
-        for agent_name in pipeline:
-            if isinstance(agent_name, list):
+        for component_name in pipeline:
+            if isinstance(component_name, list):
                 outputs = self._recursive_run(
-                    agent_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug
                 )
-            elif isinstance(agent_name, tuple):
+            elif isinstance(component_name, tuple):
                 outputs = self._concurrent_run(
-                    agent_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug
                 )
             else:
                 outputs = self._run(
-                    agent_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug
                 )
             # Aggregate outputs
-            aggregated_outputs[agent_name].extend(outputs)
+            aggregated_outputs[component_name].extend(outputs)
         return aggregated_outputs
 
     def _recursive_run(
@@ -135,18 +135,18 @@ class MultiAgent:
         logging: bool = False,
         debug: bool = False,
     ) -> List[Tuple[str, Any]]:
-        for agent_name in pipeline:
-            if isinstance(agent_name, list):
+        for component_name in pipeline:
+            if isinstance(component_name, list):
                 outputs = self._recursive_run(
-                    agent_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug
                 )
-            elif isinstance(agent_name, tuple):
+            elif isinstance(component_name, tuple):
                 outputs = self._concurrent_run(
-                    agent_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug
                     )
             else:
                 outputs = self._run(
-                    agent_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug
                 )
             inputs = outputs
         return outputs
@@ -155,13 +155,13 @@ class MultiAgent:
         self,
         pipeline: List[str|Iterable[str]],
     ) -> None:
-        for agent_name in pipeline:
-            if isinstance(agent_name, list):
-                self._recursive_name_check(agent_name)
-            elif isinstance(agent_name, tuple):
-                self._recursive_name_check(agent_name)
+        for component_name in pipeline:
+            if isinstance(component_name, list):
+                self._recursive_name_check(component_name)
+            elif isinstance(component_name, tuple):
+                self._recursive_name_check(component_name)
             else:
-                assert agent_name in self.agents or agent_name in self.auxiliary_functions, f"Component {agent_name} not found."
+                assert component_name in self.agents or component_name in self.auxiliary_functions, f"Component {component_name} not found."
 
     def run(
         self,
