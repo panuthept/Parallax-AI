@@ -12,9 +12,11 @@ class ConversationMemory:
         self, 
         min_sessions: int = 100000,
         max_sessions: int = 1000000,
+        max_branch: int = 1000000,
     ):
         self.min_sessions = min_sessions
         self.max_sessions = max_sessions
+        self.max_branch = max_branch
 
         self.sessions: Dict[str, List] = {}
         self.running_number = 0
@@ -53,11 +55,19 @@ class ConversationMemory:
         self.ensure_max_sessions()
         return session_ids, conversations
     
+    def create_branch(self, session_id: str):
+        for i in range(self.max_branch):
+            new_session_id = f"{session_id}/{i}"
+            if new_session_id not in self.sessions:
+                self.sessions[new_session_id] = deepcopy(self.sessions[session_id])
+                return new_session_id
+        raise ValueError("Fail to create new branch session due to exceeding max_branch limit.")
+    
     def update(self, session_id, output):
         assert session_id in self.sessions, f"Not found session id: {session_id}. Please ensure that min_sessions is not too small (must be larger than batch size)."
         if self.sessions[session_id][-1]["role"] == "assistant":
-            print("Found existing 'assistant' role in the conversation, skip the current one.")
-            return
+            # Create branch session_id
+            session_id = self.create_branch(session_id)
         self.sessions[session_id].append({"role": "assistant", "content": output.choices[0].message.content})
             
 
@@ -289,7 +299,7 @@ class Agent:
                     processed_output = self.output_processor(output)
                     if processed_output is not None:
                         finished_outputs[i] = processed_output
-                        self.conversation_memory.update(session_id, output)
+                        session_ids[i] = self.conversation_memory.update(session_ids[i], output)
                     else:
                         unfinished_indices.append(i)
             if len(unfinished_indices) == 0:
