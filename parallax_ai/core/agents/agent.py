@@ -55,6 +55,7 @@ class ConversationMemory:
     
     def update(self, session_id, output):
         assert session_id in self.sessions, f"Not found session id: {session_id}. Please ensure that min_sessions is not too small (must be larger than batch size)."
+        assert self.sessions[session_id][-1]["role"] != "assistant"
         self.sessions[session_id].append({"role": "assistant", "content": output.choices[0].message.content})
             
 
