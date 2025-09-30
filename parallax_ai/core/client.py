@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 from openai import OpenAI
 from functools import partial
-from typing import Optional, List
+from typing import Optional, Union, List
 
 
 def openai_completions(
@@ -57,7 +57,7 @@ class ParallaxClient:
     def __init__(
         self, 
         api_key: str = "EMPTY",
-        base_url: Optional[List[str]|str] = None,
+        base_url: Optional[Union[List[str],str]] = None,
         proportions: Optional[List[float]] = None,
         chunk_size: Optional[int] = 1,
         ray_remote_address: Optional[str] = None,

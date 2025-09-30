@@ -4,13 +4,13 @@ import json
 from collections import defaultdict
 from parallax_ai.core.agents.agent import Agent
 from parallax_ai.utilities import generate_session_id
-from typing import Literal, Tuple, List, Dict, Iterable, Callable, Optional, Any
+from typing import Literal, Union, Tuple, List, Dict, Iterable, Callable, Optional, Any
 
 class MultiAgent:
     def __init__(
         self,
         agents: Dict[str, Agent],
-        pipeline: List[str|Iterable[str]] = None,
+        pipeline: List[Union[str, Iterable[str]]] = None,
         auxiliary_functions: Optional[Dict[str, Callable]] = None,
         output_to_register: Optional[Dict[str, Dict[str, str]]] = None,
         input_transformation: Optional[Dict[str, Callable]] = None,
@@ -105,7 +105,7 @@ class MultiAgent:
 
     def _concurrent_run(
         self,
-        pipeline: List[str|Iterable[str]],
+        pipeline: List[Union[str, Iterable[str]]],
         inputs: List[Tuple[str, Any]],
         logging: bool = False,
         debug: bool = False,
@@ -130,7 +130,7 @@ class MultiAgent:
 
     def _recursive_run(
         self,
-        pipeline: List[str|Iterable[str]],
+        pipeline: List[Union[str, Iterable[str]]],
         inputs: List[Tuple[str, Any]],
         logging: bool = False,
         debug: bool = False,
@@ -153,7 +153,7 @@ class MultiAgent:
 
     def _recursive_name_check(
         self,
-        pipeline: List[str|Iterable[str]],
+        pipeline: List[Union[str, Iterable[str]]],
     ) -> None:
         for component_name in pipeline:
             if isinstance(component_name, list):
@@ -165,9 +165,9 @@ class MultiAgent:
 
     def run(
         self,
-        inputs: Any|List[Any]|Tuple[str, Any]|List[Tuple[str, Any]],
-        pipeline: List[str|Iterable[str]] = None,
-        auxiliary_data: Optional[Dict[str, Any]] = None,
+        inputs: Union[Any, List[Any], Tuple[str, Any], List[Tuple[str, Any]]],
+        pipeline: List[Union[str, Iterable[str]]] = None,
+        data_pool: Optional[Dict[str, Any]] = None,
         logging: bool = False,
         debug: bool = False,
     ) -> List[Tuple[str, Any]]:
@@ -177,8 +177,8 @@ class MultiAgent:
             inputs = [inputs]
         inputs = [(generate_session_id(), input) if isinstance(input, tuple) else input for input in inputs]
         # Register auxiliary data to DataPool
-        if auxiliary_data is not None:
-            for key, value in auxiliary_data.items():
+        if data_pool is not None:
+            for key, value in data_pool.items():
                 self.register_data(key, value)
         # Check if all agent names are valid
         self._recursive_name_check(pipeline)
@@ -222,7 +222,7 @@ if __name__ == "__main__":
     # Single-turn interaction
     outputs: List[Tuple[str, Any]] = multi_agent.run(
         inputs={"country": "South Korea", "year": 2020},
-        auxiliary_data={"hint": "The song is about a singer"},
+        data_pool={"hint": "The song is about a singer"},
         debug=True,
     )
     print(outputs)

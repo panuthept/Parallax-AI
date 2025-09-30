@@ -3,7 +3,7 @@ from copy import deepcopy
 from .model_context import ModelContext
 from parallax_ai.core import ParallaxClient
 from parallax_ai.utilities import type_validation, generate_session_id
-from typing import Literal, Tuple, List, Dict, Optional, Any, get_origin
+from typing import Optional, Union, Literal, Tuple, List, Dict, Any, get_origin
 
 
 class ConversationMemory:
@@ -74,8 +74,8 @@ class ConversationMemory:
 class InputProcessor:
     def __init__(
         self,
-        input_structure: Optional[dict|type] = None,
-        output_structure: Optional[dict|type] = None,
+        input_structure: Optional[Union[Dict, type]] = None,
+        output_structure: Optional[Union[Dict, type]] = None,
         input_template: Optional[str] = None,
     ):
         self.input_structure = input_structure
@@ -95,7 +95,7 @@ class InputProcessor:
                 raise ValueError(f"Type of key '{key}' is not valid: expecting {self.input_structure[key]} but got {type(value)} from the agent named: {self.name}")
 
         if self.input_template is None:
-            return "\n\n".join([f"{key.replace("_", " ").capitalize()}:\n{value}" for key, value in input.items()])
+            return "\n\n".join([f'{key.replace("_", " ").capitalize()}:\n{value}' for key, value in input.items()])
         else:
             return self.input_template.format(**input)
         
@@ -177,13 +177,13 @@ class InputProcessor:
     
 
 class OutputProcessor:
-    def __init__(self, output_structure: Optional[dict|type] = None):
+    def __init__(self, output_structure: Optional[Union[Dict, type]] = None):
         self.output_structure = output_structure
 
     def __get_text_output(self, output) -> str:
         return output.choices[0].message.content
     
-    def __parse_and_validate_output(self, output: str) -> str|dict:
+    def __parse_and_validate_output(self, output: str) -> Union[Dict, str]:
         if output is None:
             return None
         
@@ -231,8 +231,8 @@ class Agent:
         self, 
         model: str,
         name: Optional[str] = None,
-        input_structure: Optional[dict|type] = None,
-        output_structure: Optional[dict|type] = None,
+        input_structure: Optional[Union[Dict, type]] = None,
+        output_structure: Optional[Union[Dict, type]] = None,
         input_template: Optional[str] = None,
         system_prompt: Optional[str] = None,
         min_sessions: int = 100000,
@@ -241,9 +241,9 @@ class Agent:
         **kwargs,
     ):  
         if input_structure is not None:
-            assert isinstance(input_structure, dict) or get_origin(input_structure) == Literal, "input_structure only support dictionary of Literal. Got {input_structure}."
+            assert isinstance(input_structure, dict) or (hasattr(input_structure, '__origin__') and get_origin(input_structure) == Literal), f"input_structure only support dictionary or Literal type. Got {input_structure}."
         if output_structure is not None:
-            assert isinstance(output_structure, dict) or get_origin(output_structure) == Literal, "output_structure only support dictionary of Literal. Got {output_structure}."
+            assert isinstance(output_structure, dict) or (hasattr(output_structure, '__origin__') and get_origin(output_structure) == Literal), f"output_structure only support dictionary or Literal type. Got {output_structure}."
 
         self.model = model
         self.name = name
@@ -309,7 +309,7 @@ class Agent:
     
     def run(
         self, 
-        inputs: List[Tuple[str, Any]]|Tuple[str, Any],
+        inputs: List[Union[Tuple[str, Any], Tuple[str, Any]]],
         verbose: bool = False,
         desc: Optional[str] = None,
         **kwargs,

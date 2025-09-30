@@ -2,7 +2,7 @@ from .agent import Agent
 from copy import deepcopy
 from .model_context import ModelContext
 from dataclasses_jsonschema import JsonSchemaMixin
-from typing import List, Tuple, Optional, Iterator, get_args
+from typing import Union, List, Tuple, Optional, Iterator, get_args
 
 
 class ClassificationAgent(Agent):
@@ -12,7 +12,7 @@ class ClassificationAgent(Agent):
     def __init__(
         self, 
         model: str,
-        output_keys: List[str]|str,
+        output_keys: Union[List[str], str],
         input_structure = None,
         output_structure = None,
         system_prompt: Optional[str] = None,
@@ -39,7 +39,7 @@ class ClassificationAgent(Agent):
     def from_agent(
         cls, 
         agent: Agent, 
-        output_keys: List[str]|str,
+        output_keys: Union[List[str], str],
         n: int = 100,
         **kwargs,
     ):
