@@ -48,7 +48,7 @@ class ConversationMemory:
             # Update session_running_number
             if session_id not in self.session_running_number:
                 self.session_running_number[session_id] = 0
-            self.session_running_number = self.running_number
+            self.session_running_number[session_id] = self.running_number
             self.running_number += 1
         # Clear sessions
         self.ensure_max_sessions()
@@ -128,7 +128,7 @@ class InputProcessor:
                         inputs = [inputs]
                     else:
                         # Must be [None], [str]
-                        assert isinstance(inputs, str) or inputs is None, "Invalid inputs"
+                        assert isinstance(inputs[0], str) or inputs[0] is None, "Invalid inputs"
             else:
                 # Must be None, str
                 assert isinstance(inputs, str) or inputs is None, "Invalid inputs"
@@ -145,7 +145,7 @@ class InputProcessor:
             if isinstance(self.input_structure, dict):
                 input = {"role": "user", "content": self.__render_input(input)}
             else:
-                assert isinstance(input, str), "Input must be string."
+                assert isinstance(input, str), f"Input must be string. Got {input}"
                 input = {"role": "user", "content": input}
             prev_conversation.append(input)
             new_conversations.append(prev_conversation)
@@ -241,9 +241,9 @@ class Agent:
         **kwargs,
     ):  
         if input_structure is not None:
-            assert isinstance(input_structure, dict) or get_origin(input_structure) == Literal, "input_structure only support dictionary of Literal."
+            assert isinstance(input_structure, dict) or get_origin(input_structure) == Literal, "input_structure only support dictionary of Literal. Got {input_structure}."
         if output_structure is not None:
-            assert isinstance(output_structure, dict) or get_origin(output_structure) == Literal, "output_structure only support dictionary of Literal."
+            assert isinstance(output_structure, dict) or get_origin(output_structure) == Literal, "output_structure only support dictionary of Literal. Got {output_structure}."
 
         self.model = model
         self.name = name
