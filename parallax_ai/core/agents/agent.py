@@ -264,7 +264,6 @@ class Agent:
             input_structure=input_structure,
             output_structure=output_structure,
             input_template=input_template,
-            system_prompt=system_prompt,
         )
         self.output_processor = OutputProcessor(
             output_structure=output_structure,
