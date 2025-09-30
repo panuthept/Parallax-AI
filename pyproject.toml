@@ -14,6 +14,7 @@ authors = [
 ]
 dependencies = [
     "ray",
+    "numpy",
     "openai",
     "dataclasses-jsonschema",
     "typing-validation",
