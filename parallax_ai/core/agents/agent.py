@@ -243,7 +243,7 @@ class Agent:
         if input_structure is not None:
             assert isinstance(input_structure, dict) or get_origin(input_structure) == Literal, "input_structure only support dictionary of Literal."
         if output_structure is not None:
-            assert isinstance(output_structure, dict) or get_origin(input_structure) == Literal, "output_structure only support dictionary of Literal."
+            assert isinstance(output_structure, dict) or get_origin(output_structure) == Literal, "output_structure only support dictionary of Literal."
 
         self.model = model
         self.name = name

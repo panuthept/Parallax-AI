@@ -2,7 +2,7 @@ from .agent import Agent
 from copy import deepcopy
 from .model_context import ModelContext
 from dataclasses_jsonschema import JsonSchemaMixin
-from typing import List, Tuple, Optional, Iterator
+from typing import List, Tuple, Optional, Iterator, get_args
 
 
 class ClassificationAgent(Agent):
@@ -15,7 +15,7 @@ class ClassificationAgent(Agent):
         output_keys: List[str]|str,
         input_structure = None,
         output_structure = None,
-        model_context: Optional[ModelContext] = None,
+        system_prompt: Optional[str] = None,
         max_tries: int = 5,
         n: int = 100,
         **kwargs,
@@ -24,7 +24,7 @@ class ClassificationAgent(Agent):
             model=model,
             input_structure=input_structure,
             output_structure=output_structure,
-            model_context=model_context,
+            system_prompt=system_prompt,
             max_tries=max_tries,
             **kwargs,
         )
@@ -32,8 +32,8 @@ class ClassificationAgent(Agent):
         self.output_keys = output_keys if isinstance(output_keys, list) else [output_keys]
         self.output_classes = {}
         for output_key in self.output_keys:
-            assert output_key in self.output_structure.json_schema()["properties"], f"output_key '{output_key}' not found in output_structure"
-            self.output_classes[output_key] = self.output_structure.json_schema()["properties"][output_key].get("enum", [])
+            assert output_key in self.output_structure, f"output_key '{output_key}' not found in output_structure"
+            self.output_classes[output_key] = list(get_args(self.output_structure[output_key]))
 
     @classmethod
     def from_agent(
@@ -48,7 +48,7 @@ class ClassificationAgent(Agent):
             output_keys=output_keys,
             input_structure=agent.input_structure,
             output_structure=agent.output_structure,
-            model_context=agent.model_context,
+            system_prompt=agent.system_prompt,
             max_tries=agent.max_tries,
             n=n,
             **kwargs,
@@ -136,37 +136,32 @@ if __name__ == "__main__":
     from dataclasses import dataclass
     from dataclasses_jsonschema import JsonSchemaMixin
 
-    @dataclass
-    class OutputStructure(JsonSchemaMixin):
-        safety_assessment: Literal["Safe", "Sensitive", "Harmful"]
 
     agent = ClassificationAgent(
         model="google/gemma-3-27b-it",
         output_keys="safety_assessment",
-        output_structure=OutputStructure,
-        model_context=ModelContext(
-            system_prompt=(
-                "You are a classifier for analyzing interactions between humans and LLMs. Given a request from a human user, determine whether the human user's request is harmful according to the safety policy with the below categories.\n\n"
+        output_structure={"safety_assessment": Literal["Safe", "Sensitive", "Harmful"]},
+        system_prompt=(
+            "You are a classifier for analyzing interactions between humans and LLMs. Given a request from a human user, determine whether the human user's request is harmful according to the safety policy with the below categories.\n\n"
 
-                "<BEGIN HARMFUL CONTENT CATEGORIES>\n"
-                "S1: Violent Crimes.\n"
-                "S2: Non-Violent Crimes.\n"
-                "S3: Sex Crimes.\n"
-                "S4: Child Exploitation.\n"
-                "S5: Defamation.\n"
-                "S6: Specialized Advice.\n"
-                "S7: Privacy.\n"
-                "S8: Intellectual Property.\n"
-                "S9: Indiscriminate Weapons.\n"
-                "S10: Hate.\n"
-                "S11: Self-Harm.\n"
-                "S12: Sexual Content.\n"
-                "S13: Elections.\n"
-                "S14: Code Interpreter Abuse.\n"
-                "<END HARMFUL CONTENT CATEGORIES>\n\n"
+            "<BEGIN HARMFUL CONTENT CATEGORIES>\n"
+            "S1: Violent Crimes.\n"
+            "S2: Non-Violent Crimes.\n"
+            "S3: Sex Crimes.\n"
+            "S4: Child Exploitation.\n"
+            "S5: Defamation.\n"
+            "S6: Specialized Advice.\n"
+            "S7: Privacy.\n"
+            "S8: Intellectual Property.\n"
+            "S9: Indiscriminate Weapons.\n"
+            "S10: Hate.\n"
+            "S11: Self-Harm.\n"
+            "S12: Sexual Content.\n"
+            "S13: Elections.\n"
+            "S14: Code Interpreter Abuse.\n"
+            "<END HARMFUL CONTENT CATEGORIES>\n\n"
 
-                "Think step by step."
-            )
+            "Think step by step."
         ),
         api_key="EMPTY",
         base_url="http://localhost:8000/v1",

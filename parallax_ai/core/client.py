@@ -62,6 +62,7 @@ class ParallaxClient:
         chunk_size: Optional[int] = 1,
         ray_remote_address: Optional[str] = None,
         ray_local_workers: Optional[int] = None,
+        **kwargs,
     ):
         if base_url is None:
             base_url = "http://localhost:8000/v1"
