@@ -77,9 +77,9 @@ class ParallaxClient:
 
         if not ray.is_initialized():
             if ray_remote_address is not None:
-                ray.init(address=ray_remote_address)
+                ray.init(address=ray_remote_address, **kwargs)
             else:
-                ray.init(num_cpus=ray_local_workers) if ray_local_workers is not None else ray.init()
+                ray.init(num_cpus=ray_local_workers, **kwargs) if ray_local_workers is not None else ray.init()
             if 'CPU' in ray.available_resources():
                 print(f"Ray detected CPUs: {ray.available_resources()['CPU']}")
             else:
