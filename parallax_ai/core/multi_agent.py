@@ -167,7 +167,7 @@ class MultiAgent:
         self,
         inputs: Union[Any, List[Any], Tuple[str, Any], List[Tuple[str, Any]]],
         pipeline: List[Union[str, Iterable[str]]] = None,
-        data_pool: Optional[Dict[str, Any]] = None,
+        datapool: Optional[Dict[str, Any]] = None,
         logging: bool = False,
         debug: bool = False,
     ) -> List[Tuple[str, Any]]:
@@ -177,8 +177,8 @@ class MultiAgent:
             inputs = [inputs]
         inputs = [(generate_session_id(), input) if isinstance(input, tuple) else input for input in inputs]
         # Register auxiliary data to DataPool
-        if data_pool is not None:
-            for key, value in data_pool.items():
+        if datapool is not None:
+            for key, value in datapool.items():
                 self.register_data(key, value)
         # Check if all agent names are valid
         self._recursive_name_check(pipeline)
