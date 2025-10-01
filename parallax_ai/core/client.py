@@ -132,7 +132,7 @@ class ParallaxClient:
         inputs = [(i, input) for i, input in enumerate(inputs)]
         batch_inputs = [inputs[i:i + self.chunk_size] for i in range(0, len(inputs), self.chunk_size)]
 
-        model_addresses = self.model_remote_address["any"] + self.model_remote_address.get(model, [])
+        model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
         address_indices = np.random.choice(len(model_addresses), len(batch_inputs), p=self.proportions)
         running_tasks = [
             remote_openai_completions.remote(
