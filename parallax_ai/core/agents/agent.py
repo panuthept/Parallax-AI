@@ -238,6 +238,7 @@ class Agent:
         min_sessions: int = 100000,
         max_sessions: int = 1000000,
         max_tries: int = 5,
+        client: Optional[ParallaxClient] = None,
         **kwargs,
     ):  
         if input_structure is not None:
@@ -268,7 +269,7 @@ class Agent:
         self.output_processor = OutputProcessor(
             output_structure=output_structure,
         )
-        self.client = ParallaxClient(**kwargs)
+        self.client = ParallaxClient(**kwargs) if client is None else client
 
     def get_system_prompt(self):
         return self.model_context.render_system_prompt(self.output_structure)
