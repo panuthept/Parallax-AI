@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 from openai import OpenAI
 from functools import partial
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Dict
 
 
 def openai_completions(
