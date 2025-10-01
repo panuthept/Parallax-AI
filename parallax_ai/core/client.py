@@ -3,6 +3,7 @@ import numpy as np
 from tqdm import tqdm
 from openai import OpenAI
 from functools import partial
+from multiprocessing import Pool
 from typing import Optional, Union, List, Dict
 
 
@@ -61,6 +62,7 @@ class ParallaxClient:
         model_remote_address: Optional[Dict[str, List[dict]]] = None,
         ray_remote_address: Optional[str] = None,
         ray_local_workers: Optional[int] = None,
+        local_workers: Optional[int] = None,
         proportions: Optional[List[float]] = None,
         chunk_size: Optional[int] = 1,
         **kwargs,
@@ -85,15 +87,20 @@ class ParallaxClient:
         self.proportions = proportions
         self.chunk_size = chunk_size
 
-        if not ray.is_initialized():
-            if ray_remote_address is not None:
-                ray.init(address=ray_remote_address, **kwargs)
-            else:
-                ray.init(num_cpus=ray_local_workers, **kwargs) if ray_local_workers is not None else ray.init()
-            if 'CPU' in ray.available_resources():
-                print(f"Ray detected CPUs: {ray.available_resources()['CPU']}")
-            else:
-                print("Ray detected no CPUs")
+        self.pool = None
+        if ray_remote_address is not None or ray_local_workers is not None:
+            if not ray.is_initialized():
+                if ray_remote_address is not None:
+                    server_info = ray.init(address=f"ray://{ray_remote_address}", **kwargs)
+                else:
+                    server_info = ray.init(num_cpus=ray_local_workers, **kwargs) if ray_local_workers is not None else ray.init()
+                print(f"Ray initialized:\n{server_info}")
+                if 'CPU' in ray.available_resources():
+                    print(f"Ray detected CPUs: {ray.available_resources()['CPU']}")
+                else:
+                    print("Ray detected no CPUs")
+        elif local_workers is not None and local_workers > 1:
+            self.pool = Pool(local_workers)
 
     def _preprocess_inputs(self, inputs):
         # inputs: can be 'str', 'list[dict]', 'list[str]', or 'list[list[dict]]'
@@ -125,29 +132,44 @@ class ParallaxClient:
         inputs = self._preprocess_inputs(inputs)
         partial_func = partial(batched_openai_completions, model=model, **kwargs)
 
-        @ray.remote
-        def remote_openai_completions(batch_inputs, api_key, base_url):
-            return partial_func(batch_inputs=batch_inputs, api_key=api_key, base_url=base_url)
+        if self.pool is not None:
+            @ray.remote
+            def remote_openai_completions(batch_inputs, api_key, base_url):
+                return partial_func(batch_inputs=batch_inputs, api_key=api_key, base_url=base_url)
 
-        inputs = [(i, input) for i, input in enumerate(inputs)]
-        batch_inputs = [inputs[i:i + self.chunk_size] for i in range(0, len(inputs), self.chunk_size)]
+            inputs = [(i, input) for i, input in enumerate(inputs)]
+            batch_inputs = [inputs[i:i + self.chunk_size] for i in range(0, len(inputs), self.chunk_size)]
 
-        model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
-        address_indices = np.random.choice(len(model_addresses), len(batch_inputs), p=self.proportions)
-        running_tasks = [
-            remote_openai_completions.remote(
-                batch_inputs[i], 
-                api_key=model_addresses[address_indices[i]]["api_key"],
-                base_url=model_addresses[address_indices[i]]["base_url"],
-            ) 
-            for i in range(len(batch_inputs))
-        ]
-        
-        while running_tasks:
-            done_tasks, running_tasks = ray.wait(running_tasks, num_returns=1)
-            for task in done_tasks:
-                for index, output in ray.get(task):
-                    yield (index, output)
+            model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
+            address_indices = np.random.choice(len(model_addresses), len(batch_inputs), p=self.proportions)
+            running_tasks = [
+                remote_openai_completions.remote(
+                    batch_inputs[i],
+                    api_key=model_addresses[address_indices[i]]["api_key"],
+                    base_url=model_addresses[address_indices[i]]["base_url"],
+                )
+                for i in range(len(batch_inputs))
+            ]
+            
+            while running_tasks:
+                done_tasks, running_tasks = ray.wait(running_tasks, num_returns=1)
+                for task in done_tasks:
+                    for index, output in ray.get(task):
+                        yield (index, output)
+        else:
+            def remote_openai_completions(inputs):
+                batch_inputs, api_key, base_url = inputs
+                return partial_func(batch_inputs=batch_inputs, api_key=api_key, base_url=base_url)
+
+            inputs = [(i, input) for i, input in enumerate(inputs)]
+            batch_inputs = [inputs[i:i + self.chunk_size] for i in range(0, len(inputs), self.chunk_size)]
+
+            model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
+            address_indices = np.random.choice(len(model_addresses), len(batch_inputs), p=self.proportions)
+
+            inputs = [(batch_input, model_addresses[i]["api_key"], model_addresses[i]["base_url"]) for batch_input, i in zip(batch_inputs, address_indices)]
+            for index, output in pool.imap_unordered(partial_completions, inputs):
+                yield (index, output)
     
     def run(
         self,
