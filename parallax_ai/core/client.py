@@ -54,6 +54,15 @@ def batched_openai_completions(
     return [openai_completions(inputs, api_key, base_url, model, **kwargs) for inputs in batch_inputs]
 
 
+def wrapped_openai_completions(
+    inputs,
+    model,
+    **kwargs,
+):
+    index, input, api_key, base_url = inputs
+    return openai_completions((index, input), api_key, base_url, model, **kwargs)
+
+
 class ParallaxClient:
     def __init__(
         self, 
@@ -130,9 +139,10 @@ class ParallaxClient:
         **kwargs,
     ):
         inputs = self._preprocess_inputs(inputs)
-        partial_func = partial(batched_openai_completions, model=model, **kwargs)
 
-        if self.pool is not None:
+        if self.pool is None:
+            partial_func = partial(batched_openai_completions, model=model, **kwargs)
+
             @ray.remote
             def remote_openai_completions(batch_inputs, api_key, base_url):
                 return partial_func(batch_inputs=batch_inputs, api_key=api_key, base_url=base_url)
@@ -157,18 +167,13 @@ class ParallaxClient:
                     for index, output in ray.get(task):
                         yield (index, output)
         else:
-            def remote_openai_completions(inputs):
-                batch_inputs, api_key, base_url = inputs
-                return partial_func(batch_inputs=batch_inputs, api_key=api_key, base_url=base_url)
-
-            inputs = [(i, input) for i, input in enumerate(inputs)]
-            batch_inputs = [inputs[i:i + self.chunk_size] for i in range(0, len(inputs), self.chunk_size)]
+            partial_func = partial(wrapped_openai_completions, model=model, **kwargs)
 
             model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
-            address_indices = np.random.choice(len(model_addresses), len(batch_inputs), p=self.proportions)
+            address_indices = np.random.choice(len(model_addresses), len(inputs), p=self.proportions)
 
-            inputs = [(batch_input, model_addresses[i]["api_key"], model_addresses[i]["base_url"]) for batch_input, i in zip(batch_inputs, address_indices)]
-            for index, output in pool.imap_unordered(partial_completions, inputs):
+            inputs = [(i, input, model_addresses[i]["api_key"], model_addresses[i]["base_url"]) for i, input in enumerate(inputs)]
+            for index, output in self.pool.imap_unordered(partial_func, inputs):
                 yield (index, output)
     
     def run(
