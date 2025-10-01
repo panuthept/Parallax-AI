@@ -58,10 +58,11 @@ class ParallaxClient:
         self, 
         api_key: str = "EMPTY",
         base_url: Optional[Union[List[str],str]] = None,
-        proportions: Optional[List[float]] = None,
-        chunk_size: Optional[int] = 1,
+        model_remote_address: Optional[Dict[str, List[dict]]] = None,
         ray_remote_address: Optional[str] = None,
         ray_local_workers: Optional[int] = None,
+        proportions: Optional[List[float]] = None,
+        chunk_size: Optional[int] = 1,
         **kwargs,
     ):
         if base_url is None:
@@ -70,8 +71,17 @@ class ParallaxClient:
             assert isinstance(base_url, str), f"base_url should be a list of strings or a string, but got {type(base_url): {base_url}}"
             base_url = [base_url]
 
-        self.api_key = api_key
-        self.base_urls = base_url
+        if model_remote_address is not None:
+            assert isinstance(model_remote_address, dict), f"model_remote_address should be a dict, but got {type(model_remote_address): {model_remote_address}}"
+            for k, vs in model_remote_address.items():
+                if not isinstance(vs, list):
+                    model_remote_address[k] = [vs]
+                for v in model_remote_address[k]:
+                    assert isinstance(v, dict) and "api_key" in v and "base_url" in v, f"Each value in model_remote_address should be a dict with 'api_key' and 'base_url', but got {v}"
+        else:
+            model_remote_address = {"any": [{"api_key": api_key, "base_url": url} for url in base_url]}
+
+        self.model_remote_address = model_remote_address
         self.proportions = proportions
         self.chunk_size = chunk_size
 
@@ -113,16 +123,25 @@ class ParallaxClient:
         **kwargs,
     ):
         inputs = self._preprocess_inputs(inputs)
-        partial_func = partial(batched_openai_completions, api_key=self.api_key, model=model, **kwargs)
+        partial_func = partial(batched_openai_completions, model=model, **kwargs)
 
         @ray.remote
-        def remote_openai_completions(batch_inputs, base_url):
-            return partial_func(batch_inputs=batch_inputs, base_url=base_url)
+        def remote_openai_completions(batch_inputs, api_key, base_url):
+            return partial_func(batch_inputs=batch_inputs, api_key=api_key, base_url=base_url)
 
         inputs = [(i, input) for i, input in enumerate(inputs)]
         batch_inputs = [inputs[i:i + self.chunk_size] for i in range(0, len(inputs), self.chunk_size)]
-        url_indices = np.random.choice(len(self.base_urls), len(batch_inputs), p=self.proportions)
-        running_tasks = [remote_openai_completions.remote(batch_inputs[i], self.base_urls[url_indices[i]]) for i in range(len(batch_inputs))]
+
+        model_addresses = self.model_remote_address["any"] + self.model_remote_address.get(model, [])
+        address_indices = np.random.choice(len(model_addresses), len(batch_inputs), p=self.proportions)
+        running_tasks = [
+            remote_openai_completions.remote(
+                batch_inputs[i], 
+                api_key=model_addresses[address_indices[i]]["api_key"],
+                base_url=model_addresses[address_indices[i]]["base_url"],
+            ) 
+            for i in range(len(batch_inputs))
+        ]
         
         while running_tasks:
             done_tasks, running_tasks = ray.wait(running_tasks, num_returns=1)
@@ -144,7 +163,6 @@ class ParallaxClient:
         outputs = sorted(outputs, key=lambda x: x[0])
         outputs = [output for _, output in outputs]
         return outputs
-        
 
 
 if __name__ == "__main__":
