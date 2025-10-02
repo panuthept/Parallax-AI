@@ -108,9 +108,11 @@ class ParallaxClient:
                     print(f"Ray detected CPUs: {ray.available_resources()['CPU']}")
                 else:
                     print("Ray detected no CPUs")
-        else:
+        elif local_workers is not None and local_workers > 1:
             self.pool = Pool(processes=local_workers)
             print("Multiprocessing Pool initialized.")
+        else:
+            print("No parallelization method is used.")
 
     def _preprocess_inputs(self, inputs):
         # inputs: can be 'str', 'list[dict]', 'list[str]', or 'list[list[dict]]'
@@ -142,7 +144,7 @@ class ParallaxClient:
     ):
         inputs = self._preprocess_inputs(inputs)
 
-        if self.pool is None:
+        if ray.is_initialized():
             partial_func = partial(batched_openai_completions, model=model, **kwargs)
 
             @ray.remote
@@ -168,16 +170,22 @@ class ParallaxClient:
                 for task in done_tasks:
                     for index, output in ray.get(task):
                         yield (index, output)
-        else:
+        elif self.pool is not None:
             partial_func = partial(wrapped_openai_completions, model=model, **kwargs)
 
             model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
             address_indices = np.random.choice(len(model_addresses), len(inputs), p=self.proportions)
             if debug: print(f"Input Length: {len(inputs)}\nmodel_addresses: {model_addresses}\naddress_indices: {address_indices}\n")
-            inputs = [(i, input, model_addresses[i]["api_key"], model_addresses[i]["base_url"]) for i, input in zip(address_indices, inputs)]
+            inputs = [(i, inputs[i], model_addresses[address_indices[i]]["api_key"], model_addresses[address_indices[i]]["base_url"]) for i in range(len(inputs))]
             for index, output in self.pool.imap_unordered(partial_func, inputs):
                 yield (index, output)
-    
+        else:
+            model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
+            address_indices = np.random.choice(len(model_addresses), len(inputs), p=self.proportions)
+            for i in range(len(inputs)):
+                api_key = model_addresses[address_indices[i]]["api_key"]
+                base_url = model_addresses[address_indices[i]]["base_url"]
+                yield openai_completions((i, inputs[i]), api_key, base_url, model, **kwargs)
     def run(
         self,
         inputs,
