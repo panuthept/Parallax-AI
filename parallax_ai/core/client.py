@@ -97,22 +97,21 @@ class ParallaxClient:
         self.chunk_size = chunk_size
 
         self.pool = None
-        if ray_remote_address is not None or ray_local_workers is not None:
-            if not ray.is_initialized():
-                if ray_remote_address is not None:
-                    server_info = ray.init(address=f"ray://{ray_remote_address}", **kwargs)
-                else:
-                    server_info = ray.init(num_cpus=ray_local_workers, **kwargs) if ray_local_workers is not None else ray.init()
-                print(f"Ray initialized:\n{server_info}")
-                if 'CPU' in ray.available_resources():
-                    print(f"Ray detected CPUs: {ray.available_resources()['CPU']}")
-                else:
-                    print("Ray detected no CPUs")
-        elif local_workers is not None and local_workers > 1:
+        if local_workers is not None and local_workers > 1:
             self.pool = Pool(processes=local_workers)
             print("Multiprocessing Pool initialized.")
         else:
-            print("No parallelization method is used.")
+            if not ray.is_initialized():
+                try:
+                    if ray_remote_address is not None:
+                        server_info = ray.init(address=f"ray://{ray_remote_address}:10001", **kwargs)
+                    elif ray_local_workers is not None:
+                        server_info = ray.init(num_cpus=ray_local_workers, **kwargs) 
+                    else: 
+                        server_info = ray.init()
+                    print(f"Ray initialized:\n{server_info}")
+                except:
+                    print("Fail to initialize Ray, no parallelization method is used.")
 
     def _preprocess_inputs(self, inputs):
         # inputs: can be 'str', 'list[dict]', 'list[str]', or 'list[list[dict]]'
