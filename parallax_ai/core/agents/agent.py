@@ -78,11 +78,9 @@ class InputProcessor:
     def __init__(
         self,
         input_structure: Optional[Union[Dict, type]] = None,
-        output_structure: Optional[Union[Dict, type]] = None,
         input_template: Optional[str] = None,
     ):
         self.input_structure = input_structure
-        self.output_structure = output_structure
         self.input_template = input_template
 
     def __render_input(self, input):
@@ -178,7 +176,7 @@ class OutputProcessor:
             return output
         
         try:
-            if isinstance(self.output_structure, dict):
+            if (isinstance(self.output_structure, list) and isinstance(self.output_structure[0], dict)) or isinstance(self.output_structure, dict):
                 # Remove prefix and suffix texts
                 output = output.split("```json")
                 if len(output) != 2:
@@ -191,13 +189,29 @@ class OutputProcessor:
                 output = "".join([line.strip() for line in output.split("\n")])
                 # Parse the JSON object
                 output = json.loads(output)
-                # Check if all keys are in the output
-                for key in self.output_structure:
-                    if key not in output:
-                        raise ValueError(f"Key {key} is missing in the output")
-                # Check if all values are valid
-                for key, value in output.items():
-                    type_validation(value, self.output_structure[key], raise_error=True)
+                if isinstance(self.output_structure, list):
+                    assert isinstance(output, list)
+                    outputs = output
+                    valid_outputs = []
+                    # Check if all keys are in the output
+                    for key in self.output_structure[0]:
+                        for output in outputs:
+                            if key in output:
+                                # Check if all values are valid
+                                type_validation(output[key], self.output_structure[0][key], raise_error=True)
+                                valid_outputs.append(output)
+                    if len(valid_outputs) == 0:
+                        raise ValueError("No valid output found")
+                    output = valid_outputs
+                else:
+                    assert isinstance(output, dict)
+                    # Check if all keys are in the output
+                    for key in self.output_structure:
+                        if key not in output:
+                            raise ValueError(f"Key {key} is missing in the output")
+                    # Check if all values are valid
+                    for key, value in output.items():
+                        type_validation(value, self.output_structure[key], raise_error=True)
             else:
                 type_validation(output, self.output_structure, raise_error=True)
             return output
@@ -222,7 +236,7 @@ class Agent:
         model: str,
         name: Optional[str] = None,
         input_structure: Optional[Union[Dict, type]] = None,
-        output_structure: Optional[Union[Dict, type]] = None,
+        output_structure: Optional[Union[List[Dict], Dict, type]] = None,
         input_template: Optional[str] = None,
         system_prompt: Optional[str] = None,
         min_sessions: int = 100000,
@@ -232,9 +246,9 @@ class Agent:
         **kwargs,
     ):  
         if input_structure is not None:
-            assert isinstance(input_structure, dict) or (hasattr(input_structure, '__origin__') and get_origin(input_structure) == Literal), f"input_structure only support dictionary or Literal type. Got {input_structure}."
+            assert isinstance(input_structure, dict) or ((hasattr(input_structure, '__origin__') and get_origin(input_structure) == Literal)), f"input_structure only support dictionary or Literal type. Got {input_structure}."
         if output_structure is not None:
-            assert isinstance(output_structure, dict) or (hasattr(output_structure, '__origin__') and get_origin(output_structure) == Literal), f"output_structure only support dictionary or Literal type. Got {output_structure}."
+            assert (isinstance(output_structure, list) and isinstance(output_structure[0], dict)) or isinstance(output_structure, dict) or ((hasattr(output_structure, '__origin__') and get_origin(output_structure) == Literal)), f"output_structure only support list of dictionary,  dictionary or Literal type. Got {output_structure}."
 
         self.model = model
         self.name = name
@@ -253,7 +267,6 @@ class Agent:
         )
         self.input_processor = InputProcessor(
             input_structure=input_structure,
-            output_structure=output_structure,
             input_template=input_template,
         )
         self.output_processor = OutputProcessor(

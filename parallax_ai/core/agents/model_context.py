@@ -81,7 +81,11 @@ class ModelContext:
             else:
                 system_prompt = self.system_prompt_template.format(**{field.name: field.render() for field in self.system_prompt})
 
-            if isinstance(output_structure, dict):
+            if (isinstance(output_structure, list) and isinstance(output_structure[0], dict)) or isinstance(output_structure, dict):
+                is_list = isinstance(output_structure, list)
+                if is_list:
+                    output_structure = output_structure[0]
+
                 schema = json.dumps({k: str(v).replace("typing.", "").replace("<class '", "").replace("'>", "") for k, v in output_structure.items()})
                 items = []
                 for item in schema[1:-1].split("\", \""):
@@ -95,12 +99,20 @@ class ModelContext:
                     items.append(item)
                 schema = "{" + ", ".join(items) + "}"
                 system_prompt = system_prompt + "\n\n" if system_prompt is not None else ""
-                system_prompt += (
-                    "The final output must be a single JSON that exactly matches the following schema:\n"
-                    "```json\n"
-                    "{output_structure}\n"
-                    "```"
-                ).format(output_structure=schema)
+                if is_list:
+                    system_prompt += (
+                        "The final output must be a JSON array of objects that exactly match the following schema:\n"
+                        "```json\n"
+                        "[{output_structure}]\n"
+                        "```"
+                    ).format(output_structure=schema)
+                else:
+                    system_prompt += (
+                        "The final output must be a single JSON that exactly matches the following schema:\n"
+                        "```json\n"
+                        "{output_structure}\n"
+                        "```"
+                    ).format(output_structure=schema)
             elif get_origin(output_structure) == Literal:
                 keywords = "\n".join(list(get_args(output_structure)))
                 system_prompt = system_prompt + "\n\n" if system_prompt is not None else ""
