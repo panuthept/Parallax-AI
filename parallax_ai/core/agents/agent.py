@@ -104,10 +104,13 @@ class InputProcessor:
         if self.input_structure is not None: 
             # input_structure can be either dict or type
             if isinstance(inputs, list):
-                if isinstance(self.input_structure, dict):
-                    assert isinstance(inputs[0], dict), "Invalid inputs"
-                else:
-                    assert type_validation(inputs[0], self.input_structure), "Invalid inputs"
+                for inp in inputs:
+                    if inp is None:
+                        continue
+                    if isinstance(self.input_structure, dict):
+                        assert isinstance(inp, dict), "Invalid inputs"
+                    else:
+                        assert type_validation(inp, self.input_structure), "Invalid inputs"
             else:
                 if isinstance(self.input_structure, dict):
                     assert isinstance(inputs, dict), "Invalid inputs"
@@ -117,19 +120,10 @@ class InputProcessor:
                     inputs = [inputs]
         else:
             if isinstance(inputs, list):
-                # Can be [None], [str], [{'role': str, 'content': str}], [[{'role': str, 'content': str}]]
-                if isinstance(inputs[0], list):
-                    # Must be [[{'role': str, 'content': str}]]
-                    assert isinstance(inputs[0][0], dict) and "role" in inputs[0][0] and "content" in inputs[0][0], "Invalid inputs"
-                else:
-                    # Can be [None], [str], [{'role': str, 'content': str}]
-                    if isinstance(inputs[0], dict):
-                        # Must be [{'role': str, 'content': str}]
-                        assert "role" in inputs[0] and "content" in inputs[0], "Invalid inputs"
-                        inputs = [inputs]
-                    else:
-                        # Must be [None], [str]
-                        assert isinstance(inputs[0], str) or inputs[0] is None, "Invalid inputs"
+                # Must be [None], [str]
+                for inp in inputs:
+                    # Must be None, str
+                    assert isinstance(inp, str) or inp is None, "Invalid inputs"
             else:
                 # Must be None, str
                 assert isinstance(inputs, str) or inputs is None, "Invalid inputs"
@@ -326,8 +320,12 @@ class Agent:
     ) -> List[Tuple[str, Any]]:
         if not isinstance(inputs, list):
             inputs = [inputs]
-        session_ids, outputs = self._run(inputs, verbose=verbose, desc=desc, debug=debug, *kwargs)
-        return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
+
+        if len(inputs) > 0:
+            session_ids, outputs = self._run(inputs, verbose=verbose, desc=desc, debug=debug, *kwargs)
+            return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
+        else:
+            return []
 
 
 if __name__ == "__main__":
