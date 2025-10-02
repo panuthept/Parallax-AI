@@ -74,19 +74,23 @@ class MultiAgent:
         logging: bool = False, 
         debug: bool = False
     ) -> List[Tuple[str, Any]]:
+        if debug: print(f"Running agent/function: {component_name} with inputs:\n{inputs}")
         # Input transformation
         if component_name in self.input_transformation:
             inputs = self.input_transformation[component_name](inputs, self.datapool)
-        
+            if debug: print(f"Transformed inputs:\n{inputs}")
+            
         # Run Agent or Function
         if component_name in self.agents:
-            outputs: List[Tuple[str, Any]] = self.agents[component_name].run(inputs)
+            outputs: List[Tuple[str, Any]] = self.agents[component_name].run(inputs, debug=debug)
         else:
             outputs = self.auxiliary_functions(inputs)
+        if debug: print(f"Raw outputs:\n{outputs}")
 
         # Output transformation
         if component_name in self.output_transformation:
             outputs = self.output_transformation[component_name](outputs, self.datapool)
+            if debug: print(f"Transformed outputs:\n{outputs}")
         
         # Register outputs to datapool (If any)
         if component_name in self.output_to_register:
@@ -175,7 +179,7 @@ class MultiAgent:
             pipeline = self.pipeline
         if not isinstance(inputs, list):
             inputs = [inputs]
-        inputs = [(generate_session_id(), input) if isinstance(input, tuple) else input for input in inputs]
+        inputs = [(generate_session_id(), input) if not isinstance(input, tuple) else input for input in inputs]
         # Register auxiliary data to DataPool
         if datapool is not None:
             for key, value in datapool.items():
