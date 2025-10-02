@@ -30,8 +30,9 @@ class ConversationMemory:
                 del self.sessions[session_id]
                 del self.session_running_number[session_id]
 
-    def fetch_or_init_conversations(self, inputs, system_prompt: Optional[str] = None) -> Tuple[List[str], List[List[dict]]]:
+    def fetch_or_init_conversations(self, inputs, system_prompt: Optional[str] = None) -> Tuple[List[str], List[Any], List[List[dict]]]:
         session_ids = []
+        new_inputs = []
         conversations = []
         for input in inputs:
             # Get session_id
@@ -39,11 +40,12 @@ class ConversationMemory:
                 session_id, input = input
             else:
                 session_id = generate_session_id()
+            new_inputs.append(input)
             session_ids.append(session_id)
             # Init and fetch conversations
             if session_id not in self.sessions:
                 self.sessions[session_id] = [] if system_prompt is None else [{"role": "system", "content": system_prompt}]
-            conversation = self.sessions[session_id]
+            conversation = deepcopy(self.sessions[session_id])
             conversations.append(conversation)
             # Update session_running_number
             if session_id not in self.session_running_number:
@@ -52,7 +54,7 @@ class ConversationMemory:
             self.running_number += 1
         # Clear sessions
         self.ensure_max_sessions()
-        return session_ids, conversations
+        return session_ids, new_inputs, conversations
     
     def create_branch(self, session_id: str):
         for i in range(self.max_branch):
@@ -68,7 +70,8 @@ class ConversationMemory:
             # Create branch session_id
             session_id = self.create_branch(session_id)
         self.sessions[session_id].append({"role": "assistant", "content": output.choices[0].message.content})
-            
+        return session_id
+
 
 
 class InputProcessor:
@@ -138,6 +141,7 @@ class InputProcessor:
     def __convert_to_conversational_inputs(self, inputs, conversations):
         new_conversations = []
         for input, prev_conversation in zip(inputs, conversations):
+            prev_conversation = deepcopy(prev_conversation)
             if input is None:
                 new_conversations.append(input)
                 continue
@@ -147,33 +151,16 @@ class InputProcessor:
             else:
                 assert isinstance(input, str), f"Input must be string. Got {input}"
                 input = {"role": "user", "content": input}
+            assert prev_conversation[-1]["role"] != "user", "The last message in the conversation must not be from user."
             prev_conversation.append(input)
             new_conversations.append(prev_conversation)
         return new_conversations
-
-    # def __add_system_prompt_to_inputs(self, inputs):
-    #     system_prompt = self.model_context.render_system_prompt(self.output_structure)
-
-    #     processed_inputs = []
-    #     for input in inputs:
-    #         input = deepcopy(input)
-    #         if input is None or system_prompt is None:
-    #             processed_inputs.append(input)
-    #         else:
-    #             if input[0]["role"] != "system":
-    #                 print("System prompt already exists, use the existing one. Note that the output_structure will not be added to the system prompt.")
-    #             else:
-    #                 input.insert(0, {"role": "system", "content": system_prompt})
-    #             processed_inputs.append(input)
-    #     return processed_inputs
 
     def __call__(self, inputs, conversations):
         # Ensure inputs type and convert inputs to list of needed
         inputs = self.__ensure_inputs_format(inputs)
         # Convert all inputs to conversational format
         return self.__convert_to_conversational_inputs(inputs, conversations)
-        # # Add system prompt (if any) to the inputs
-        # return self.__add_system_prompt_to_inputs(inputs)
     
 
 class OutputProcessor:
@@ -217,13 +204,16 @@ class OutputProcessor:
         except Exception:
             return None
 
-    def __call__(self, output) -> str:
+    def __call__(self, output, debug: bool = False) -> str:
         if output is None:
             return None
         # Convert output object to text
         output = self.__get_text_output(output)
+        if debug: print(f"RAW OUTPUT:\n{output}\n")
         # Parser and validate JSON output (if any)
-        return self.__parse_and_validate_output(output)
+        output = self.__parse_and_validate_output(output)
+        if debug: print(f"PARSED OUTPUT:\n{output}\n")
+        return output
         
 
 class Agent:
@@ -279,12 +269,16 @@ class Agent:
         inputs: List[Tuple[str, Any]],
         verbose: bool = False,
         desc: Optional[str] = None,
+        debug: bool = False,
         **kwargs,
     ) -> Tuple[List[str], List[Any]]:
-        session_ids, conversations = self.conversation_memory.fetch_or_init_conversations(
+        if debug: print("###################################### AGENT RUN ######################################")
+        session_ids, inputs, conversations = self.conversation_memory.fetch_or_init_conversations(
             inputs, system_prompt=self.get_system_prompt()
         )
+        # Process inputs
         inputs = self.input_processor(inputs, conversations)
+        if debug: print(f"Processed inputs:\n{inputs}")
 
         finished_outputs = {}
         unfinished_inputs = inputs
@@ -295,7 +289,7 @@ class Agent:
                 if unfinished_inputs[i] is None:
                     finished_outputs[i] = None
                 else:
-                    processed_output = self.output_processor(output)
+                    processed_output = self.output_processor(output, debug=debug)
                     if processed_output is not None:
                         finished_outputs[i] = processed_output
                         session_ids[i] = self.conversation_memory.update(session_ids[i], output)
@@ -306,6 +300,7 @@ class Agent:
             unfinished_inputs = [inputs[i] for i in unfinished_indices]
 
         outputs = [finished_outputs[i] if i in finished_outputs else None for i in range(len(inputs))]
+        if debug: print("###################################### AGENT DONE ######################################")
         return session_ids, outputs
     
     def run(
@@ -313,11 +308,12 @@ class Agent:
         inputs: List[Union[Tuple[str, Any], Tuple[str, Any]]],
         verbose: bool = False,
         desc: Optional[str] = None,
+        debug: bool = False,
         **kwargs,
     ) -> List[Tuple[str, Any]]:
         if not isinstance(inputs, list):
             inputs = [inputs]
-        session_ids, outputs = self._run(inputs, verbose=verbose, desc=desc, *kwargs)
+        session_ids, outputs = self._run(inputs, verbose=verbose, desc=desc, debug=debug, *kwargs)
         return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
 
 
