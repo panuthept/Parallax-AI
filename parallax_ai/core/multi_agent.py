@@ -88,6 +88,7 @@ class MultiAgent:
         if debug: print(f"Raw outputs:\n{outputs}")
 
         # Output transformation
+        outputs = [(session_id, output) for session_id, output in outputs if output is not None]  # Filter out None outputs
         if component_name in self.output_transformation:
             outputs = self.output_transformation[component_name](outputs, self.datapool)
             if debug: print(f"Transformed outputs:\n{outputs}")
