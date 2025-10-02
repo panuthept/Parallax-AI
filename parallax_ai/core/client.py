@@ -108,8 +108,9 @@ class ParallaxClient:
                     print(f"Ray detected CPUs: {ray.available_resources()['CPU']}")
                 else:
                     print("Ray detected no CPUs")
-        elif local_workers is not None and local_workers > 1:
-            self.pool = Pool(local_workers)
+        else:
+            self.pool = Pool(processes=local_workers)
+            print("Multiprocessing Pool initialized.")
 
     def _preprocess_inputs(self, inputs):
         # inputs: can be 'str', 'list[dict]', 'list[str]', or 'list[list[dict]]'
@@ -136,6 +137,7 @@ class ParallaxClient:
         self,
         inputs,
         model: str,
+        debug: bool = False,
         **kwargs,
     ):
         inputs = self._preprocess_inputs(inputs)
@@ -171,8 +173,8 @@ class ParallaxClient:
 
             model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
             address_indices = np.random.choice(len(model_addresses), len(inputs), p=self.proportions)
-
-            inputs = [(i, input, model_addresses[i]["api_key"], model_addresses[i]["base_url"]) for i, input in enumerate(inputs)]
+            if debug: print(f"Input Length: {len(inputs)}\nmodel_addresses: {model_addresses}\naddress_indices: {address_indices}\n")
+            inputs = [(i, input, model_addresses[i]["api_key"], model_addresses[i]["base_url"]) for i, input in zip(address_indices, inputs)]
             for index, output in self.pool.imap_unordered(partial_func, inputs):
                 yield (index, output)
     
@@ -182,10 +184,11 @@ class ParallaxClient:
         model: str,
         verbose: bool = False,
         desc: Optional[str] = None,
+        debug: bool = False,
         **kwargs,
     ):
         outputs = []
-        for i, output in tqdm(self._run(inputs=inputs, model=model, **kwargs), total=len(inputs), disable=not verbose, desc=desc):
+        for i, output in tqdm(self._run(inputs=inputs, model=model, debug=debug, **kwargs), total=len(inputs), disable=not verbose, desc=desc):
             outputs.append((i, output))
         outputs = sorted(outputs, key=lambda x: x[0])
         outputs = [output for _, output in outputs]
