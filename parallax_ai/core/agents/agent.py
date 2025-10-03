@@ -244,6 +244,7 @@ class Agent:
         output_structure: Optional[Union[List[Dict], Dict, type]] = None,
         input_template: Optional[str] = None,
         system_prompt: Optional[str] = None,
+        conversational_agent: bool = False,
         min_sessions: int = 100000,
         max_sessions: int = 1000000,
         max_tries: int = 5,
@@ -262,13 +263,14 @@ class Agent:
         self.output_structure = output_structure
         self.input_template = input_template
         self.system_prompt = system_prompt
+        self.conversational_agent = conversational_agent
 
         self.model_context = ModelContext(
             system_prompt=system_prompt
         )
         self.conversation_memory = ConversationMemory(
-            min_sessions=min_sessions,
-            max_sessions=max_sessions,
+            min_sessions=min_sessions if conversational_agent else 0,
+            max_sessions=max_sessions if conversational_agent else 0,
         )
         self.input_processor = InputProcessor(
             input_structure=input_structure,
@@ -291,10 +293,12 @@ class Agent:
         **kwargs,
     ) -> Tuple[List[str], List[Any]]:
         if debug: print("###################################### AGENT RUN ######################################")
+        # Fetch previous conversations or init new conversations (system prompt will be added here)
         session_ids, inputs, conversations = self.conversation_memory.fetch_or_init_conversations(
             inputs, system_prompt=self.get_system_prompt()
         )
-        # Process inputs
+
+        # Process inputs (Ensure input format and convert to conversational format)
         inputs = self.input_processor(inputs, conversations)
 
         for session_id, inp in zip(session_ids, inputs):
@@ -338,7 +342,10 @@ class Agent:
 
         if len(inputs) > 0:
             session_ids, outputs = self._run(inputs, verbose=verbose, desc=desc, debug=debug, *kwargs)
-            return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
+            if self.conversational_agent:
+                return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
+            else:
+                return [output for output in outputs]
         else:
             return []
 
