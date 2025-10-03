@@ -64,7 +64,17 @@ class ConversationMemory:
                 return new_session_id
         raise ValueError("Fail to create new branch session due to exceeding max_branch limit.")
     
-    def update(self, session_id, output):
+    def update_user(self, session_id, input):
+        assert isinstance(input, list) and len(input) > 0 and input[-1]["role"] == "user", "Input must be a list of messages with the last message from user."
+        assert session_id in self.sessions, f"Not found session id: {session_id}. Please ensure that min_sessions is not too small (must be larger than batch size)."
+        if len(self.sessions[session_id]) > 0:
+            if self.sessions[session_id][-1]["role"] == "user":
+                # Create branch session_id
+                session_id = self.create_branch(session_id)
+        self.sessions[session_id].append({"role": "user", "content": input[-1]["content"]})
+        return session_id
+    
+    def update_assistant(self, session_id, output):
         assert session_id in self.sessions, f"Not found session id: {session_id}. Please ensure that min_sessions is not too small (must be larger than batch size)."
         if self.sessions[session_id][-1]["role"] == "assistant":
             # Create branch session_id
@@ -143,7 +153,8 @@ class InputProcessor:
             else:
                 assert isinstance(input, str), f"Input must be string. Got {input}"
                 input = {"role": "user", "content": input}
-            assert prev_conversation[-1]["role"] != "user", "The last message in the conversation must not be from user."
+            if len(prev_conversation) > 0:
+                assert prev_conversation[-1]["role"] != "user", "The last message in the conversation must not be from user."
             prev_conversation.append(input)
             new_conversations.append(prev_conversation)
         return new_conversations
@@ -285,6 +296,10 @@ class Agent:
         )
         # Process inputs
         inputs = self.input_processor(inputs, conversations)
+
+        for session_id, inp in zip(session_ids, inputs):
+            if inp is not None:
+                self.conversation_memory.update_user(session_id, inp)
         if debug: print(f"Processed inputs:\n{inputs}")
 
         finished_outputs = {}
@@ -299,7 +314,7 @@ class Agent:
                     processed_output = self.output_processor(output, debug=debug)
                     if processed_output is not None:
                         finished_outputs[i] = processed_output
-                        session_ids[i] = self.conversation_memory.update(session_ids[i], output)
+                        session_ids[i] = self.conversation_memory.update_assistant(session_ids[i], output)
                     else:
                         unfinished_indices.append(i)
             if len(unfinished_indices) == 0:
