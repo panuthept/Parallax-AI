@@ -65,6 +65,9 @@ class ConversationMemory:
         raise ValueError("Fail to create new branch session due to exceeding max_branch limit.")
     
     def update_user(self, session_id, input):
+        if self.max_sessions == 0:
+            return session_id
+        
         assert isinstance(input, list) and len(input) > 0 and input[-1]["role"] == "user", "Input must be a list of messages with the last message from user."
         assert session_id in self.sessions, f"Not found session id: {session_id}. Please ensure that min_sessions is not too small (must be larger than batch size)."
         if len(self.sessions[session_id]) > 0:
@@ -75,6 +78,9 @@ class ConversationMemory:
         return session_id
     
     def update_assistant(self, session_id, output):
+        if self.max_sessions == 0:
+            return session_id
+        
         assert session_id in self.sessions, f"Not found session id: {session_id}. Please ensure that min_sessions is not too small (must be larger than batch size)."
         if self.sessions[session_id][-1]["role"] == "assistant":
             # Create branch session_id
