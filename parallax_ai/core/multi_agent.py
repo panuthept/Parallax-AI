@@ -72,6 +72,7 @@ class MultiAgent:
         component_name: str, 
         inputs: List[Tuple[str, Any]], 
         logging: bool = False, 
+        verbose: bool = False,
         debug: bool = False
     ) -> List[Tuple[str, Any]]:
         if debug: print(f"Running agent/function: {component_name} with inputs:\n{inputs}")
@@ -82,7 +83,9 @@ class MultiAgent:
             
         # Run Agent or Function
         if component_name in self.agents:
-            outputs: List[Tuple[str, Any]] = self.agents[component_name].run(inputs, debug=debug)
+            outputs: List[Tuple[str, Any]] = self.agents[component_name].run(
+                inputs, debug=debug, verbose=verbose, desc="Running agent - " + component_name
+            )
         else:
             outputs = self.auxiliary_functions(inputs)
         if debug: print(f"Raw outputs:\n{outputs}")
@@ -113,21 +116,22 @@ class MultiAgent:
         pipeline: List[Union[str, Iterable[str]]],
         inputs: List[Tuple[str, Any]],
         logging: bool = False,
+        verbose: bool = False,
         debug: bool = False,
     ) -> Dict[str, List[Tuple[str, Any]]]:
         aggregated_outputs = defaultdict(list)
         for component_name in pipeline:
             if isinstance(component_name, list):
                 outputs = self._recursive_run(
-                    component_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug, verbose=verbose
                 )
             elif isinstance(component_name, tuple):
                 outputs = self._concurrent_run(
-                    component_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug, verbose=verbose
                 )
             else:
                 outputs = self._run(
-                    component_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug, verbose=verbose
                 )
             # Aggregate outputs
             aggregated_outputs[component_name].extend(outputs)
@@ -138,20 +142,21 @@ class MultiAgent:
         pipeline: List[Union[str, Iterable[str]]],
         inputs: List[Tuple[str, Any]],
         logging: bool = False,
+        verbose: bool = False,
         debug: bool = False,
     ) -> List[Tuple[str, Any]]:
         for component_name in pipeline:
             if isinstance(component_name, list):
                 outputs = self._recursive_run(
-                    component_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug, verbose=verbose
                 )
             elif isinstance(component_name, tuple):
                 outputs = self._concurrent_run(
-                    component_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug, verbose=verbose
                     )
             else:
                 outputs = self._run(
-                    component_name, inputs, logging=logging, debug=debug
+                    component_name, inputs, logging=logging, debug=debug, verbose=verbose
                 )
             inputs = outputs
         return outputs
@@ -174,6 +179,7 @@ class MultiAgent:
         pipeline: List[Union[str, Iterable[str]]] = None,
         datapool: Optional[Dict[str, Any]] = None,
         logging: bool = False,
+        verbose: bool = False,
         debug: bool = False,
     ) -> List[Tuple[str, Any]]:
         if pipeline is None:
@@ -189,7 +195,7 @@ class MultiAgent:
         self._recursive_name_check(pipeline)
         # Run the pipeline
         outputs = self._recursive_run(
-            pipeline, inputs, logging=logging, debug=debug
+            pipeline, inputs, logging=logging, debug=debug, verbose=verbose
         )
         return outputs
 
