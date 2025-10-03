@@ -2,7 +2,7 @@ from .agent import Agent
 from copy import deepcopy
 from .model_context import ModelContext
 from dataclasses_jsonschema import JsonSchemaMixin
-from typing import Union, List, Tuple, Optional, Iterator, get_args
+from typing import Union, Any, List, Tuple, Optional, Iterator, get_args
 
 
 class ClassificationAgent(Agent):
@@ -12,9 +12,9 @@ class ClassificationAgent(Agent):
     def __init__(
         self, 
         model: str,
-        output_keys: Union[List[str], str],
         input_structure = None,
         output_structure = None,
+        output_keys: Union[List[str], str] = None,
         system_prompt: Optional[str] = None,
         max_tries: int = 5,
         n: int = 100,
@@ -54,57 +54,23 @@ class ClassificationAgent(Agent):
             **kwargs,
         )
 
-    def _duplicate_inputs(self, inputs: List[str]) -> List[str]:
+    def _duplicate_inputs(self, inputs: List[Any]) -> List[str]:
         duplicated_inputs = []
         for input in inputs:
             input = deepcopy(input)
             duplicated_inputs.extend([input] * self.n)
         return duplicated_inputs
-
-    def parallel_run(
-        self,
-        inputs,
-        model_contexts: List[ModelContext],
-        verbose: bool = False,
-        **kwargs,
-    ) -> List[List[dict[str, float]]]:
-        deplicated_inputs = self._duplicate_inputs(inputs)
-        lst_deplicated_outputs: List[List[JsonSchemaMixin]] = super().parallel_run(deplicated_inputs, model_contexts, verbose=verbose, **kwargs)
-
-        lst_outputs = []
-        for deplicated_outputs in lst_deplicated_outputs:
-            outputs = []
-            for i in range(len(inputs)):
-                output_label = None
-                for j in range(self.n):
-                    for output_key in self.output_keys:
-                        keyword = deplicated_outputs[i * self.n + j].to_dict().get(output_key)
-                        if keyword is not None:
-                            if output_label is None:
-                                output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
-                            if keyword not in output_label[output_key]:
-                                output_label[output_key][keyword] = 0
-                            output_label[output_key][keyword] += 1
-                if output_label is not None:
-                    for output_key in self.output_keys:
-                        total = sum(output_label[output_key].values())
-                        if total > 0:
-                            output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
-                        else:
-                            output_label[output_key] = None
-                outputs.append(output_label)
-            lst_outputs.append(outputs)
-        return lst_outputs
     
     def run(
         self, 
-        inputs, 
-        verbose: bool = False,
-        desc: Optional[str] = None,
+        inputs,
         **kwargs,
     ) -> List[dict[str, float]]:
+        if not isinstance(inputs, list):
+            inputs = [inputs]
+
         deplicated_inputs = self._duplicate_inputs(inputs)
-        deplicated_outputs: List[JsonSchemaMixin] = super().run(deplicated_inputs, verbose=verbose, desc=desc, **kwargs)
+        deplicated_outputs: List[JsonSchemaMixin] = super().run(deplicated_inputs, **kwargs)
 
         outputs = []
         for i in range(len(inputs)):
