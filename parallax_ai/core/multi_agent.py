@@ -73,7 +73,7 @@ class MultiAgent:
         inputs: List[Tuple[str, Any]], 
         logging: bool = False, 
         verbose: bool = False,
-        debug: bool = False
+        debug: bool = False,
     ) -> List[Tuple[str, Any]]:
         if debug: print(f"Running agent/function: {component_name} with inputs:\n{inputs}")
         # Input transformation
@@ -84,7 +84,7 @@ class MultiAgent:
         # Run Agent or Function
         if component_name in self.agents:
             outputs: List[Tuple[str, Any]] = self.agents[component_name].run(
-                inputs, debug=debug, verbose=verbose, desc="Running agent - " + component_name
+                inputs, debug=debug, verbose=verbose, desc="Running agent - " + component_name, max_tokens=2048,
             )
         else:
             outputs = self.auxiliary_functions(inputs)
@@ -188,12 +188,14 @@ class MultiAgent:
         logging: bool = False,
         verbose: bool = False,
         debug: bool = False,
+        **kwargs
     ) -> List[Tuple[str, Any]]:
         if pipeline is None:
             pipeline = self.pipeline
+
         if not isinstance(inputs, list):
             inputs = [inputs]
-        inputs = [(generate_session_id(), input) if not isinstance(input, tuple) else input for input in inputs]
+        
         # Register auxiliary data to DataPool
         if datapool is not None:
             for key, value in datapool.items():
