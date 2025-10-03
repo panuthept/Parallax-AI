@@ -17,7 +17,7 @@ class ClassificationAgent(Agent):
         output_keys: Union[List[str], str] = None,
         system_prompt: Optional[str] = None,
         max_tries: int = 5,
-        n: int = 100,
+        n: int = 10,
         **kwargs,
     ):
         super().__init__(
@@ -79,7 +79,7 @@ class ClassificationAgent(Agent):
                 if deplicated_outputs[i * self.n + j] is None:
                     continue
                 for output_key in self.output_keys:
-                    keyword = deplicated_outputs[i * self.n + j].to_dict().get(output_key)
+                    keyword = deplicated_outputs[i * self.n + j].get(output_key)
                     if keyword is not None:
                         if output_label is None:
                             output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
