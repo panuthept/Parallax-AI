@@ -90,10 +90,17 @@ class MultiAgent:
             outputs = self.auxiliary_functions(inputs)
         if debug: print(f"Raw outputs:\n{outputs}")
 
+        # Filter out None outputs
+        if self.agents[component_name].conversational_agent:
+            valid_indices = [i for i, (session_id, output) in enumerate(outputs) if output is not None]
+        else:
+            valid_indices = [i for i, output in enumerate(outputs) if output is not None]
+        inputs = [inputs[i] for i in valid_indices]
+        outputs = [outputs[i] for i in valid_indices]
+
         # Output transformation
-        outputs = [(session_id, output) for session_id, output in outputs if output is not None]  # Filter out None outputs
         if component_name in self.output_transformation:
-            outputs = self.output_transformation[component_name](outputs, self.datapool)
+            outputs = self.output_transformation[component_name](inputs, outputs, self.datapool)
             if debug: print(f"Transformed outputs:\n{outputs}")
         
         # Register outputs to datapool (If any)
