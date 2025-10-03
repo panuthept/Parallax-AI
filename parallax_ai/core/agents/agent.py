@@ -347,7 +347,7 @@ class Agent:
             inputs = [inputs]
 
         if len(inputs) > 0:
-            session_ids, outputs = self._run(inputs, verbose=verbose, desc=desc, debug=debug, *kwargs)
+            session_ids, outputs = self._run(inputs, verbose=verbose, desc=desc, debug=debug, **kwargs)
             if self.conversational_agent:
                 return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
             else:
