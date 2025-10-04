@@ -101,17 +101,18 @@ class ParallaxClient:
             self.pool = Pool(processes=local_workers)
             print("Multiprocessing Pool initialized.")
         else:
-            if not ray.is_initialized():
-                try:
-                    if ray_remote_address is not None:
-                        server_info = ray.init(address=f"ray://{ray_remote_address}:10001", **kwargs)
-                    elif ray_local_workers is not None:
-                        server_info = ray.init(num_cpus=ray_local_workers, **kwargs) 
-                    else: 
-                        server_info = ray.init()
-                    print(f"Ray initialized:\n{server_info}")
-                except:
-                    print("Fail to initialize Ray, no parallelization method is used.")
+            if ray.is_initialized():
+                ray.shutdown()
+            try:
+                if ray_remote_address is not None:
+                    server_info = ray.init(address=f"ray://{ray_remote_address}:10001", **kwargs)
+                elif ray_local_workers is not None:
+                    server_info = ray.init(num_cpus=ray_local_workers, **kwargs) 
+                else: 
+                    server_info = ray.init()
+                print(f"Ray initialized:\n{server_info}")
+            except:
+                print("Fail to initialize Ray, no parallelization method is used.")
 
     def _preprocess_inputs(self, inputs):
         # inputs: can be 'str', 'list[dict]', 'list[str]', or 'list[list[dict]]'
