@@ -21,9 +21,11 @@ class ParallaxEngine:
         self, 
         client: ParallaxClient,
         max_tries: int = 3,
+        dismiss_none_output: bool = False,
     ):
         self.client = client
         self.max_tries = max_tries
+        self.dismiss_none_output = dismiss_none_output
 
     def __call__(
         self, 
@@ -59,4 +61,6 @@ class ParallaxEngine:
             remaining_job_indices = new_remaining_job_indices
             if len(remaining_job_indices) == 0:
                 break
+        if self.dismiss_none_output:
+            jobs = [job for job in jobs if job.output is not None]
         return jobs
