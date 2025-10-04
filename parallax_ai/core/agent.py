@@ -251,7 +251,8 @@ class Agent:
         conversational_agent: bool = False,
         min_sessions: int = 100000,
         max_sessions: int = 1000000,
-        max_tries: int = 5,
+        max_tries: int = 10,
+        dismiss_none_output: bool = False,
         client: Optional[ParallaxClient] = None,
         **kwargs,
     ):  
@@ -280,7 +281,9 @@ class Agent:
         )
         self.client = ParallaxClient(**kwargs) if client is None else client
         self.engine = ParallaxEngine(
-            client=self.client, max_tries=max_tries
+            client=self.client, 
+            max_tries=max_tries,
+            dismiss_none_output=dismiss_none_output,
         )
 
     def get_system_prompt(self):
