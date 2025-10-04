@@ -32,6 +32,9 @@ class ConversationMemory:
                 del self.session_running_number[session_id]
 
     def fetch_or_init_conversations(self, inputs, system_prompt: Optional[str] = None) -> Tuple[List[str], List[Any], List[List[dict]]]:
+        if not isinstance(inputs, list):
+            inputs = [inputs]
+        
         session_ids = []
         new_inputs = []
         conversations = []
@@ -88,7 +91,6 @@ class ConversationMemory:
             session_id = self.create_branch(session_id)
         self.sessions[session_id].append({"role": "assistant", "content": output.choices[0].message.content})
         return session_id
-
 
 
 class InputProcessor:
@@ -264,9 +266,6 @@ class Agent:
         self.system_prompt = system_prompt
         self.conversational_agent = conversational_agent
 
-        # self.model_context = ModelContext(
-        #     system_prompt=system_prompt
-        # )
         self.conversation_memory = ConversationMemory(
             min_sessions=min_sessions if conversational_agent else 0,
             max_sessions=max_sessions if conversational_agent else 0,
@@ -339,6 +338,8 @@ class Agent:
         session_ids, inputs, conversations = self.conversation_memory.fetch_or_init_conversations(
             inputs, system_prompt=self.get_system_prompt()
         )
+        if len(inputs) == 0:
+            return []
         # Process inputs (Ensure input format and convert to conversational format)
         inputs = self.input_processor(inputs, conversations)
         # Update conversation memory with user inputs
@@ -363,6 +364,8 @@ class Agent:
     ) -> Tuple[List[str], List[Any]]:
         # Create jobs
         jobs = self._create_jobs(inputs, progress_name)
+        if len(jobs) == 0:
+            return [], []
         # Process the jobs by the ParallaxEngine with retries
         jobs = self.engine(jobs, **kwargs)
         # Get outputs in the original order
@@ -380,19 +383,11 @@ class Agent:
         progress_name: Optional[str] = None,
         **kwargs,
     ) -> List[Tuple[str, Any]]:
-        if not isinstance(inputs, list):
-            inputs = [inputs]
-
-        if len(inputs) > 0:
-            session_ids, outputs = self._run(
-                inputs, progress_name=progress_name, **kwargs
-            )
-            if self.conversational_agent:
-                return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
-            else:
-                return [output for output in outputs]
+        session_ids, outputs = self._run(inputs, progress_name=progress_name, **kwargs)
+        if self.conversational_agent:
+            return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
         else:
-            return []
+            return [output for output in outputs]
         
 
 class ParallalExecution:
@@ -403,37 +398,41 @@ class ParallalExecution:
         max_tries: int = 5,
     ):
         self.agents = agents
-        self.client = client if client is not None else self.agents[list(agents.keys())[0]].client
         self.max_tries = max_tries
+        self.client = client if client is not None else self.agents[list(agents.keys())[0]].client
+        self.engine = ParallaxEngine(
+            client=self.client, max_tries=max_tries
+        )
 
     def run(
         self, 
         inputs: Dict[str, Any], 
-        verbose: bool = False,
-        desc: Optional[str] = None,
-        debug: bool = False,
+        progress_names: Optional[Dict[str, str]] = None,
         **kwargs
     ) -> Dict[str, Any]:
-        # Combine multiple agents' inputs into a single list (jobs)
+        # Create jobs for all agents
         jobs = []
         for agent_name, agent_inputs in inputs.items():
             assert agent_name in self.agents, f"Agent {agent_name} not found."
-            # Process inputs for each agent using their own _process_inputs method
-            session_ids, agent_inputs = self.agents[agent_name]._process_inputs(agent_inputs)
-            jobs.extend(
-                [
-                    {
-                        "agent_name": agent_name,
-                        "model": self.agents[agent_name].model,
-                        "session_id": session_id,
-                        "input_index": input_index,
-                        "input": agent_input,
-                    }
-                    for input_index, (session_id, agent_input) in enumerate(zip(session_ids, agent_inputs))
-                ]
+            agent_jobs = self.agents[agent_name]._create_jobs(
+                agent_inputs, progress_name=agent_name if progress_names is None else progress_names[agent_name]
             )
+            jobs.extend(agent_jobs)
         # Shuffle jobs to mix different agents' jobs
         random.shuffle(jobs)
+
+        # Process the jobs by the ParallaxEngine with retries
+        jobs = self.engine(jobs, **kwargs)
+        # Get outputs in the original order
+        outputs = [job.output for job in jobs]
+        # Update conversation memory with assistant outputs
+        for job in jobs:
+            if job.output is not None:
+                job.session_id = self.conversation_memory.update_assistant(job.session_id, job.output)
+        session_ids = [job.session_id for job in jobs]
+        return session_ids, outputs
+
+
 
         # # Process the jobs by the ParallaxClient with retries
         # finished_jobs = {}
