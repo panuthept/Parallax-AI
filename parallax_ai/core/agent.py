@@ -2,6 +2,7 @@ import json
 import random
 from copy import deepcopy
 from .client import ParallaxClient
+from collections import defaultdict
 from .engine import ParallaxEngine, Job
 from ..utilities import type_validation, generate_session_id
 from typing import Optional, Union, Literal, Tuple, List, Dict, Any, get_origin, get_args
@@ -388,117 +389,6 @@ class Agent:
             return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
         else:
             return [output for output in outputs]
-        
-
-class ParallalExecution:
-    def __init__(
-        self, 
-        agents: Dict[str, Agent],
-        client: Optional[ParallaxClient] = None,
-        max_tries: int = 5,
-    ):
-        self.agents = agents
-        self.max_tries = max_tries
-        self.client = client if client is not None else self.agents[list(agents.keys())[0]].client
-        self.engine = ParallaxEngine(
-            client=self.client, max_tries=max_tries
-        )
-
-    def run(
-        self, 
-        inputs: Dict[str, Any], 
-        progress_names: Optional[Dict[str, str]] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
-        # Create jobs for all agents
-        jobs = []
-        for agent_name, agent_inputs in inputs.items():
-            assert agent_name in self.agents, f"Agent {agent_name} not found."
-            agent_jobs = self.agents[agent_name]._create_jobs(
-                agent_inputs, progress_name=agent_name if progress_names is None else progress_names[agent_name]
-            )
-            jobs.extend(agent_jobs)
-        # Shuffle jobs to mix different agents' jobs
-        random.shuffle(jobs)
-
-        # Process the jobs by the ParallaxEngine with retries
-        jobs = self.engine(jobs, **kwargs)
-        # Get outputs in the original order
-        outputs = [job.output for job in jobs]
-        # Update conversation memory with assistant outputs
-        for job in jobs:
-            if job.output is not None:
-                job.session_id = self.conversation_memory.update_assistant(job.session_id, job.output)
-        session_ids = [job.session_id for job in jobs]
-        return session_ids, outputs
-
-
-
-        # # Process the jobs by the ParallaxClient with retries
-        # finished_jobs = {}
-        # unfinished_indices = []
-        # for i, job in enumerate(jobs):
-        #     if job["input"] is None:
-        #         finished_jobs[i] = None
-        #     else:
-        #         unfinished_indices.append(i)
-
-        # for _ in range(self.max_tries):
-        #     # Get unfinished inputs
-        #     unfinished_inputs = [inputs[i] for i in unfinished_indices]
-        #     # Run client
-        #     outputs = self.client.run(
-        #         inputs=unfinished_inputs, 
-        #         model=self.model, 
-        #         verbose=verbose, 
-        #         desc=desc, 
-        #         **kwargs,
-        #     )
-        #     current_unfinished_indices = []
-        #     for i, output in enumerate(outputs):
-        #         true_index = unfinished_indices[i]
-        #         # Check output validity and convert output to desired format
-        #         processed_output = agent.output_processor(output, debug=debug)
-        #         if processed_output is None:
-        #             # Not pass
-        #             current_unfinished_indices.append(true_index)
-        #         else:
-        #             # Pass
-        #             # finished_outputs[true_index] = processed_output
-        #     unfinished_indices = current_unfinished_indices
-        #     if len(unfinished_indices) == 0:
-        #         break
-
-        # # Running agents
-        # finished_outputs = {}
-        # unfinished_inputs = combined_inputs
-        # true_indices = list(range(len(combined_inputs)))
-        # for _ in range(self.max_tries):
-        #     unfinished_indices = []
-
-        #     combined_outputs = self.client.run(
-        #         inputs=[agent_input for _, _, agent_input in unfinished_inputs],
-        #         models=[model for _, model, _ in unfinished_inputs],
-        #         **kwargs,
-        #     )
-
-        #     for i, output in enumerate(combined_outputs):
-        #         agent_name, _, agent_input = unfinished_inputs[i]
-        #         agent = self.agents[agent_name]
-
-        #         true_index = true_indices[i]
-        #         if agent_input is None:
-        #             finished_outputs[true_index] = None
-        #         else:
-        #             processed_output = agent.output_processor(output, debug=debug)
-        #             if processed_output is not None:
-        #                 finished_outputs[true_index] = processed_output
-        #             else:
-        #                 unfinished_indices.append(true_index)
-
-        # outputs = defaultdict(list)
-        # for agent_name, combined_output in zip(agent_names, combined_outputs):
-        #     outputs[agent_name].append(combined_output)
 
 
 if __name__ == "__main__":
