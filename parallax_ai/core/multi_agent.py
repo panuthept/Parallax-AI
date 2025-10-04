@@ -91,10 +91,10 @@ class MultiAgent:
         if debug: print(f"Raw outputs:\n{outputs}")
 
         # Filter out None outputs
-        if self.agents[component_name].conversational_agent:
-            valid_indices = [i for i, (session_id, output) in enumerate(outputs) if output is not None]
-        else:
-            valid_indices = [i for i, output in enumerate(outputs) if output is not None]
+        # if self.agents[component_name].conversational_agent:
+        #     valid_indices = [i for i, (session_id, output) in enumerate(outputs) if output is not None]
+        # else:
+        valid_indices = [i for i, output in enumerate(outputs) if output is not None]
         inputs = [inputs[i] for i in valid_indices]
         outputs = [outputs[i] for i in valid_indices]
 
@@ -193,19 +193,29 @@ class MultiAgent:
         if pipeline is None:
             pipeline = self.pipeline
 
-        if not isinstance(inputs, list):
-            inputs = [inputs]
+        # if not isinstance(inputs, list):
+        #     inputs = [inputs]
         
         # Register auxiliary data to DataPool
         if datapool is not None:
             for key, value in datapool.items():
-                self.register_data(key, value)
+                self.register_data(key, value, allow_overwrite=True)
         # Check if all agent names are valid
         self._recursive_name_check(pipeline)
+
         # Run the pipeline
-        outputs = self._recursive_run(
-            pipeline, inputs, logging=logging, debug=debug, verbose=verbose
-        )
+        if isinstance(pipeline, list):
+            outputs = self._recursive_run(
+                pipeline, inputs, logging=logging, debug=debug, verbose=verbose
+            )
+        elif isinstance(pipeline, tuple):
+            outputs = self._concurrent_run(
+                pipeline, inputs, logging=logging, debug=debug, verbose=verbose
+            )
+        else:
+            outputs = self._run(
+                pipeline, inputs, logging=logging, debug=debug, verbose=verbose
+            )
         return outputs
 
 
