@@ -1,9 +1,10 @@
 import json
+import random
 from copy import deepcopy
-from .model_context import ModelContext
-from parallax_ai.core import ParallaxClient
-from parallax_ai.utilities import type_validation, generate_session_id
-from typing import Optional, Union, Literal, Tuple, List, Dict, Any, get_origin
+from .client import ParallaxClient
+from .engine import ParallaxEngine, Job
+from ..utilities import type_validation, generate_session_id
+from typing import Optional, Union, Literal, Tuple, List, Dict, Any, get_origin, get_args
 
 
 class ConversationMemory:
@@ -105,7 +106,7 @@ class InputProcessor:
         input = {key: value for key, value in input.items() if key in self.input_structure}
         # If not all keys are in the input, raise error
         for key in self.input_structure:
-            assert key in input, f"key '{key}' missing from the inputs of the agent named: {self.name}"
+            assert key in input, f"key '{key}' missing from the inputs of the agent"
         # Check type of each value
         for key, value in input.items():
             if not type_validation(value, self.input_structure[key]):
@@ -180,9 +181,6 @@ class OutputProcessor:
         return output.choices[0].message.content
     
     def __parse_and_validate_output(self, output: str) -> Union[Dict, str]:
-        if output is None:
-            return None
-        
         if self.output_structure is None:
             return output
         
@@ -229,15 +227,13 @@ class OutputProcessor:
         except Exception:
             return None
 
-    def __call__(self, output, debug: bool = False) -> str:
+    def __call__(self, output) -> str:
         if output is None:
             return None
         # Convert output object to text
         output = self.__get_text_output(output)
-        if debug: print(f"RAW OUTPUT:\n{output}\n")
         # Parser and validate JSON output (if any)
         output = self.__parse_and_validate_output(output)
-        if debug: print(f"PARSED OUTPUT:\n{output}\n")
         return output
         
 
@@ -245,7 +241,6 @@ class Agent:
     def __init__(
         self, 
         model: str,
-        name: Optional[str] = None,
         input_structure: Optional[Union[Dict, type]] = None,
         output_structure: Optional[Union[List[Dict], Dict, type]] = None,
         input_template: Optional[str] = None,
@@ -263,17 +258,15 @@ class Agent:
             assert (isinstance(output_structure, list) and isinstance(output_structure[0], dict)) or isinstance(output_structure, dict) or ((hasattr(output_structure, '__origin__') and get_origin(output_structure) == Literal)), f"output_structure only support list of dictionary,  dictionary or Literal type. Got {output_structure}."
 
         self.model = model
-        self.name = name
-        self.max_tries = max_tries
         self.input_structure = input_structure
         self.output_structure = output_structure
         self.input_template = input_template
         self.system_prompt = system_prompt
         self.conversational_agent = conversational_agent
 
-        self.model_context = ModelContext(
-            system_prompt=system_prompt
-        )
+        # self.model_context = ModelContext(
+        #     system_prompt=system_prompt
+        # )
         self.conversation_memory = ConversationMemory(
             min_sessions=min_sessions if conversational_agent else 0,
             max_sessions=max_sessions if conversational_agent else 0,
@@ -286,64 +279,105 @@ class Agent:
             output_structure=output_structure,
         )
         self.client = ParallaxClient(**kwargs) if client is None else client
+        self.engine = ParallaxEngine(
+            client=self.client, max_tries=max_tries
+        )
 
     def get_system_prompt(self):
-        return self.model_context.render_system_prompt(self.output_structure)
+        system_prompt = self.system_prompt
+        if system_prompt is None:
+            return None
 
-    def _run(
+        output_structure = self.output_structure
+        if (isinstance(output_structure, list) and isinstance(output_structure[0], dict)) or isinstance(output_structure, dict):
+            is_list = isinstance(output_structure, list)
+            if is_list:
+                output_structure = output_structure[0]
+
+            schema = json.dumps({k: str(v).replace("typing.", "").replace("<class '", "").replace("'>", "") for k, v in output_structure.items()})
+            items = []
+            for item in schema[1:-1].split("\", \""):
+                if not item.startswith('"'):
+                    item = '"' + item
+                if not item.endswith('"'):
+                    item = item + '"'
+                key, value = item.split(": ")
+                value = value[1:-1]
+                item = f"{key}: {value}"
+                items.append(item)
+            schema = "{" + ", ".join(items) + "}"
+            system_prompt = system_prompt + "\n\n" if system_prompt is not None else ""
+            if is_list:
+                system_prompt += (
+                    "The final output must be a JSON array of objects that exactly match the following schema:\n"
+                    "```json\n"
+                    "[{output_structure}]\n"
+                    "```"
+                ).format(output_structure=schema)
+            else:
+                system_prompt += (
+                    "The final output must be a single JSON that exactly matches the following schema:\n"
+                    "```json\n"
+                    "{output_structure}\n"
+                    "```"
+                ).format(output_structure=schema)
+        elif get_origin(output_structure) == Literal:
+            keywords = "\n".join(list(get_args(output_structure)))
+            system_prompt = system_prompt + "\n\n" if system_prompt is not None else ""
+            system_prompt += (
+                "The final output must be a one of the following keyword:\n"
+                "{keywords}"
+            ).format(keywords=keywords)
+        return system_prompt
+    
+    def _create_jobs(
         self, 
         inputs: List[Tuple[str, Any]],
-        verbose: bool = False,
-        desc: Optional[str] = None,
-        debug: bool = False,
-        **kwargs,
-    ) -> Tuple[List[str], List[Any]]:
-        if debug: print("###################################### AGENT RUN ######################################")
+        progress_name: Optional[str] = None
+    ) -> List[Job]:
         # Fetch previous conversations or init new conversations (system prompt will be added here)
         session_ids, inputs, conversations = self.conversation_memory.fetch_or_init_conversations(
             inputs, system_prompt=self.get_system_prompt()
         )
-
         # Process inputs (Ensure input format and convert to conversational format)
         inputs = self.input_processor(inputs, conversations)
-
+        # Update conversation memory with user inputs
         for session_id, inp in zip(session_ids, inputs):
             if inp is not None:
                 self.conversation_memory.update_user(session_id, inp)
-        if debug: print(f"Processed inputs:\n{inputs}")
+        return [
+            Job(
+                inp=inp, 
+                model=self.model, 
+                session_id=session_id,
+                output_processor=self.output_processor,
+                progress_name=progress_name,
+            ) for session_id, inp in zip(session_ids, inputs)
+        ]
 
-        finished_outputs = {}
-        unfinished_inputs = inputs
-        true_indices = list(range(len(inputs)))
-        for _ in range(self.max_tries):
-            unfinished_indices = []
-            outputs = self.client.run(inputs=unfinished_inputs, model=self.model, verbose=verbose, desc=desc, **kwargs)
-            for i, output in enumerate(outputs):
-                true_index = true_indices[i]
-                if unfinished_inputs[i] is None:
-                    finished_outputs[true_index] = None
-                else:
-                    processed_output = self.output_processor(output, debug=debug)
-                    if processed_output is not None:
-                        finished_outputs[true_index] = processed_output
-                        session_ids[true_index] = self.conversation_memory.update_assistant(session_ids[i], output)
-                    else:
-                        unfinished_indices.append(true_index)
-            if len(unfinished_indices) == 0:
-                break
-            unfinished_inputs = [inputs[true_index] for true_index in unfinished_indices]
-            true_indices = unfinished_indices
-
-        outputs = [finished_outputs[i] if i in finished_outputs else None for i in range(len(inputs))]
-        if debug: print("###################################### AGENT DONE ######################################")
+    def _run(
+        self, 
+        inputs: List[Tuple[str, Any]],
+        progress_name: Optional[str] = None,
+        **kwargs,
+    ) -> Tuple[List[str], List[Any]]:
+        # Create jobs
+        jobs = self._create_jobs(inputs, progress_name)
+        # Process the jobs by the ParallaxEngine with retries
+        jobs = self.engine(jobs, **kwargs)
+        # Get outputs in the original order
+        outputs = [job.output for job in jobs]
+        # Update conversation memory with assistant outputs
+        for job in jobs:
+            if job.output is not None:
+                job.session_id = self.conversation_memory.update_assistant(job.session_id, job.output)
+        session_ids = [job.session_id for job in jobs]
         return session_ids, outputs
     
     def run(
         self, 
         inputs: List[Union[Tuple[str, Any], Tuple[str, Any]]],
-        verbose: bool = False,
-        desc: Optional[str] = None,
-        debug: bool = False,
+        progress_name: Optional[str] = None,
         **kwargs,
     ) -> List[Tuple[str, Any]]:
         if not isinstance(inputs, list):
@@ -351,7 +385,7 @@ class Agent:
 
         if len(inputs) > 0:
             session_ids, outputs = self._run(
-                inputs, verbose=verbose, desc=desc, debug=debug, **kwargs
+                inputs, progress_name=progress_name, **kwargs
             )
             if self.conversational_agent:
                 return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
@@ -359,6 +393,113 @@ class Agent:
                 return [output for output in outputs]
         else:
             return []
+        
+
+class ParallalExecution:
+    def __init__(
+        self, 
+        agents: Dict[str, Agent],
+        client: Optional[ParallaxClient] = None,
+        max_tries: int = 5,
+    ):
+        self.agents = agents
+        self.client = client if client is not None else self.agents[list(agents.keys())[0]].client
+        self.max_tries = max_tries
+
+    def run(
+        self, 
+        inputs: Dict[str, Any], 
+        verbose: bool = False,
+        desc: Optional[str] = None,
+        debug: bool = False,
+        **kwargs
+    ) -> Dict[str, Any]:
+        # Combine multiple agents' inputs into a single list (jobs)
+        jobs = []
+        for agent_name, agent_inputs in inputs.items():
+            assert agent_name in self.agents, f"Agent {agent_name} not found."
+            # Process inputs for each agent using their own _process_inputs method
+            session_ids, agent_inputs = self.agents[agent_name]._process_inputs(agent_inputs)
+            jobs.extend(
+                [
+                    {
+                        "agent_name": agent_name,
+                        "model": self.agents[agent_name].model,
+                        "session_id": session_id,
+                        "input_index": input_index,
+                        "input": agent_input,
+                    }
+                    for input_index, (session_id, agent_input) in enumerate(zip(session_ids, agent_inputs))
+                ]
+            )
+        # Shuffle jobs to mix different agents' jobs
+        random.shuffle(jobs)
+
+        # # Process the jobs by the ParallaxClient with retries
+        # finished_jobs = {}
+        # unfinished_indices = []
+        # for i, job in enumerate(jobs):
+        #     if job["input"] is None:
+        #         finished_jobs[i] = None
+        #     else:
+        #         unfinished_indices.append(i)
+
+        # for _ in range(self.max_tries):
+        #     # Get unfinished inputs
+        #     unfinished_inputs = [inputs[i] for i in unfinished_indices]
+        #     # Run client
+        #     outputs = self.client.run(
+        #         inputs=unfinished_inputs, 
+        #         model=self.model, 
+        #         verbose=verbose, 
+        #         desc=desc, 
+        #         **kwargs,
+        #     )
+        #     current_unfinished_indices = []
+        #     for i, output in enumerate(outputs):
+        #         true_index = unfinished_indices[i]
+        #         # Check output validity and convert output to desired format
+        #         processed_output = agent.output_processor(output, debug=debug)
+        #         if processed_output is None:
+        #             # Not pass
+        #             current_unfinished_indices.append(true_index)
+        #         else:
+        #             # Pass
+        #             # finished_outputs[true_index] = processed_output
+        #     unfinished_indices = current_unfinished_indices
+        #     if len(unfinished_indices) == 0:
+        #         break
+
+        # # Running agents
+        # finished_outputs = {}
+        # unfinished_inputs = combined_inputs
+        # true_indices = list(range(len(combined_inputs)))
+        # for _ in range(self.max_tries):
+        #     unfinished_indices = []
+
+        #     combined_outputs = self.client.run(
+        #         inputs=[agent_input for _, _, agent_input in unfinished_inputs],
+        #         models=[model for _, model, _ in unfinished_inputs],
+        #         **kwargs,
+        #     )
+
+        #     for i, output in enumerate(combined_outputs):
+        #         agent_name, _, agent_input = unfinished_inputs[i]
+        #         agent = self.agents[agent_name]
+
+        #         true_index = true_indices[i]
+        #         if agent_input is None:
+        #             finished_outputs[true_index] = None
+        #         else:
+        #             processed_output = agent.output_processor(output, debug=debug)
+        #             if processed_output is not None:
+        #                 finished_outputs[true_index] = processed_output
+        #             else:
+        #                 unfinished_indices.append(true_index)
+
+        # outputs = defaultdict(list)
+        # for agent_name, combined_output in zip(agent_names, combined_outputs):
+        #     outputs[agent_name].append(combined_output)
 
 
 if __name__ == "__main__":

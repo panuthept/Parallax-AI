@@ -140,7 +140,6 @@ class ParallaxClient:
         self,
         inputs,
         models: List[str],
-        debug: bool = False,
         **kwargs,
     ):
         assert len(models) == len(inputs), f"Length of models ({len(models)}) should be equal to length of inputs ({len(inputs)})."
@@ -177,9 +176,9 @@ class ParallaxClient:
                     index, output = ray.get(task)
                     yield (index, output)
         elif self.pool is not None:
+            # Prepare partial function for multiprocessing
             partial_func = partial(wrapped_openai_completions, **kwargs)
-            
-            if debug: print(f"Input Length: {len(inputs)}\nmodel_addresses: {model_addresses}\naddress_indices: {address_indices}\n")
+            # Prepare inputs for multiprocessing
             inputs = [(i, inputs[i], model_addresses[i]["api_key"], model_addresses[i]["base_url"], models[i]) for i in range(len(inputs))]
             for index, output in self.pool.imap_unordered(partial_func, inputs):
                 yield (index, output)
@@ -193,15 +192,29 @@ class ParallaxClient:
         self,
         inputs,
         model: Union[str, List[str]],
-        verbose: bool = False,
-        desc: Optional[str] = None,
-        debug: bool = False,
+        progress_name: Optional[Union[str, List[Optional[str]]]] = None,
         **kwargs,
     ):
-        outputs = []
+        # Duplicate model if single string is provided
         models = [model] * len(inputs) if isinstance(model, str) else model
-        for i, output in tqdm(self._run(inputs=inputs, models=models, debug=debug, **kwargs), total=len(inputs), disable=not verbose, desc=desc):
+        # Progess bar setup
+        pbars = {}
+        if progress_name is not None:
+            # Duplicate progress_name if single string is provided
+            progress_names = [progress_name] * len(inputs) if isinstance(progress_name, str) else progress_name
+            assert len(progress_names) == len(inputs), f"Length of progress_name ({len(progress_names)}) should be equal to length of inputs ({len(inputs)})."
+            for name in set(progress_names):
+                if name is not None:
+                    pbars[name] = tqdm(total=len([n for n in progress_names if n == name]), desc=name, position=len(pbars))
+
+        # Run
+        outputs = []
+        for i, output in self._run(inputs=inputs, models=models, **kwargs):
+            if progress_name is not None and progress_names[i] is not None:
+                pbars[progress_names[i]].update(1)
             outputs.append((i, output))
+        
+        # Sort outputs to the original order
         outputs = sorted(outputs, key=lambda x: x[0])
         outputs = [output for _, output in outputs]
         return outputs
@@ -215,5 +228,4 @@ if __name__ == "__main__":
     outputs = client.run(
         inputs=inputs,
         model="gemma3:1b-it-qat",
-        verbose=True
     )

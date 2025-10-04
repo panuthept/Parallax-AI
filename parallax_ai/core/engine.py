@@ -1,16 +1,16 @@
 from dataclasses import dataclass
-from parallax_ai.core import ParallaxClient
-from typing import Optional, Callable, Literal, Tuple, List, Dict, Any, get_origin
+from typing import Optional, Callable, List, Any
+from parallax_ai.core.client import ParallaxClient
 
 
 @dataclass
 class Job:
-    input: Any
+    inp: Any
     model: str
     output: Any = None
-    output_processor: Optional[Callable] = None  # Function to process the output
     session_id: Optional[str] = None  # Session ID for conversational models
-    progress_callback: Optional[Callable[[int, int], None]] = None  # Function to report progress
+    output_processor: Optional[Callable] = None  # Function to process the output
+    progress_name: Optional[str] = None  # Name for progress bar
 
 
 class ParallaxEngine:
@@ -32,7 +32,7 @@ class ParallaxEngine:
     ):
         remaining_job_indices = []
         for i in range(len(jobs)):
-            if jobs[i].input is None:
+            if jobs[i].inp is None:
                 jobs[i].output = None
             else:
                 remaining_job_indices.append(i)
@@ -40,15 +40,16 @@ class ParallaxEngine:
         for _ in range(self.max_tries):
             # Run client
             outputs = self.client.run(
-                inputs=[jobs[true_index].input for true_index in remaining_job_indices], 
+                inputs=[jobs[true_index].inp for true_index in remaining_job_indices], 
                 model=[jobs[true_index].model for true_index in remaining_job_indices], 
+                progress_name=[jobs[true_index].progress_name for true_index in remaining_job_indices],
                 **kwargs,
             )
             new_remaining_job_indices = []
             for i, output in enumerate(outputs):
                 true_index = remaining_job_indices[i]
                 # Check output validity and convert output to desired format
-                processed_output = jobs[true_index].output_processor(output)
+                processed_output = jobs[true_index].output_processor(output) if jobs[true_index].output_processor is not None else output
                 if processed_output is None:
                     # Not pass
                     new_remaining_job_indices.append(true_index)

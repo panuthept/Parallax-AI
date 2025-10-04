@@ -1,8 +1,7 @@
-from .agent import Agent
+from ..agent import Agent
 from copy import deepcopy
-from .model_context import ModelContext
 from dataclasses_jsonschema import JsonSchemaMixin
-from typing import Union, Any, List, Tuple, Optional, Iterator, get_args
+from typing import Union, Any, List, Optional, get_args
 
 
 class ClassificationAgent(Agent):

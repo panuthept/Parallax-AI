@@ -1,9 +1,8 @@
 import os
 import yaml
 import json
+from .agent import Agent
 from collections import defaultdict
-from parallax_ai.core.agents.agent import Agent
-from parallax_ai.utilities import generate_session_id
 from typing import Literal, Union, Tuple, List, Dict, Iterable, Callable, Optional, Any
 
 class MultiAgent:
