@@ -378,17 +378,27 @@ class Agent:
         session_ids = [job.session_id for job in jobs]
         return session_ids, outputs
     
+    def input_transformation(self, inputs, progress_name: Optional[str] = None):
+        return inputs, progress_name
+    
+    def output_transformation(self, outputs):
+        return outputs
+    
     def run(
         self, 
         inputs: List[Union[Tuple[str, Any], Tuple[str, Any]]],
         progress_name: Optional[str] = None,
         **kwargs,
     ) -> List[Tuple[str, Any]]:
+        inputs, progress_name = self.input_transformation(inputs, progress_name)
+
         session_ids, outputs = self._run(inputs, progress_name=progress_name, **kwargs)
         if self.conversational_agent:
-            return [(session_id, output) for session_id, output in zip(session_ids, outputs)]
+            outputs = [(session_id, output) for session_id, output in zip(session_ids, outputs)]
         else:
-            return [output for output in outputs]
+            outputs = [output for output in outputs]
+
+        return self.output_transformation(outputs)
 
 
 if __name__ == "__main__":

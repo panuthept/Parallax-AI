@@ -19,6 +19,8 @@ class ClassificationAgent(Agent):
         n: int = 10,
         **kwargs,
     ):
+        assert output_structure is not None, "output_structure must be provided for ClassificationAgent."
+        assert output_keys is not None, "output_keys must be provided for ClassificationAgent."
         super().__init__(
             model=model,
             input_structure=input_structure,
@@ -33,46 +35,20 @@ class ClassificationAgent(Agent):
         for output_key in self.output_keys:
             assert output_key in self.output_structure, f"output_key '{output_key}' not found in output_structure"
             self.output_classes[output_key] = list(get_args(self.output_structure[output_key]))
+    
+    def input_transformation(self, inputs, progress_name = None):
+        if not isinstance(inputs, list):
+            inputs = [inputs]
 
-    @classmethod
-    def from_agent(
-        cls, 
-        agent: Agent, 
-        output_keys: Union[List[str], str],
-        n: int = 100,
-        **kwargs,
-    ):
-        return ClassificationAgent(
-            model=agent.model,
-            output_keys=output_keys,
-            input_structure=agent.input_structure,
-            output_structure=agent.output_structure,
-            system_prompt=agent.system_prompt,
-            max_tries=agent.max_tries,
-            n=n,
-            **kwargs,
-        )
-
-    def _duplicate_inputs(self, inputs: List[Any]) -> List[str]:
         duplicated_inputs = []
         for input in inputs:
             input = deepcopy(input)
             duplicated_inputs.extend([input] * self.n)
-        return duplicated_inputs
+        return duplicated_inputs, progress_name
     
-    def run(
-        self, 
-        inputs,
-        **kwargs,
-    ) -> List[dict[str, float]]:
-        if not isinstance(inputs, list):
-            inputs = [inputs]
-
-        deplicated_inputs = self._duplicate_inputs(inputs)
-        deplicated_outputs: List[JsonSchemaMixin] = super().run(deplicated_inputs, **kwargs)
-
+    def output_transformation(self, deplicated_outputs):
         outputs = []
-        for i in range(len(inputs)):
+        for i in range(len(deplicated_outputs) // self.n):
             output_label = None
             for j in range(self.n):
                 if deplicated_outputs[i * self.n + j] is None:
@@ -98,9 +74,6 @@ class ClassificationAgent(Agent):
 
 if __name__ == "__main__":
     from typing import Literal
-    from dataclasses import dataclass
-    from dataclasses_jsonschema import JsonSchemaMixin
-
 
     agent = ClassificationAgent(
         model="google/gemma-3-27b-it",
