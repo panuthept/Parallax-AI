@@ -74,6 +74,7 @@ class ParallaxClient:
         local_workers: Optional[int] = None,
         proportions: Optional[List[float]] = None,
         chunk_size: Optional[int] = 1,
+        max_tokens: int = 2048,
         **kwargs,
     ):
         if base_url is None:
@@ -95,6 +96,7 @@ class ParallaxClient:
         self.model_remote_address = model_remote_address
         self.proportions = proportions
         self.chunk_size = chunk_size
+        self.max_tokens = max_tokens
 
         self.pool = None
         if local_workers is not None and local_workers > 1:
@@ -142,6 +144,7 @@ class ParallaxClient:
         debug: bool = False,
         **kwargs,
     ):
+        kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
         inputs = self._preprocess_inputs(inputs)
 
         if ray.is_initialized():
