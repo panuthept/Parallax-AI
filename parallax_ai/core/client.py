@@ -43,23 +43,22 @@ def openai_completions(
         return index, None
 
 
-def batched_openai_completions(
-    batch_inputs,
-    api_key,
-    base_url,
-    model,
-    **kwargs,
-):
-    """ Preventing too fine-grained parallelization """
-    return [openai_completions(inputs, api_key, base_url, model, **kwargs) for inputs in batch_inputs]
+# def batched_openai_completions(
+#     batch_inputs,
+#     api_key,
+#     base_url,
+#     model,
+#     **kwargs,
+# ):
+#     """ Preventing too fine-grained parallelization """
+#     return [openai_completions(inputs, api_key, base_url, model, **kwargs) for inputs in batch_inputs]
 
 
 def wrapped_openai_completions(
     inputs,
-    model,
     **kwargs,
 ):
-    index, input, api_key, base_url = inputs
+    index, input, api_key, base_url, model = inputs
     return openai_completions((index, input), api_key, base_url, model, **kwargs)
 
 
@@ -140,66 +139,68 @@ class ParallaxClient:
     def _run(
         self,
         inputs,
-        model: str,
+        models: List[str],
         debug: bool = False,
         **kwargs,
     ):
+        assert len(models) == len(inputs), f"Length of models ({len(models)}) should be equal to length of inputs ({len(inputs)})."
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
         inputs = self._preprocess_inputs(inputs)
 
+        model_addresses = []
+        for model in models:
+            cand_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
+            model_addresses.append(np.random.choice(cand_addresses, size=1, p=self.proportions)[0])
+
         if ray.is_initialized():
-            partial_func = partial(batched_openai_completions, model=model, **kwargs)
+            partial_func = partial(openai_completions, **kwargs)
 
             @ray.remote
-            def remote_openai_completions(batch_inputs, api_key, base_url):
-                return partial_func(batch_inputs=batch_inputs, api_key=api_key, base_url=base_url)
+            def remote_openai_completions(inputs, api_key, base_url, model):
+                return partial_func(inputs=inputs, api_key=api_key, base_url=base_url, model=model)
 
             inputs = [(i, input) for i, input in enumerate(inputs)]
-            batch_inputs = [inputs[i:i + self.chunk_size] for i in range(0, len(inputs), self.chunk_size)]
 
-            model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
-            address_indices = np.random.choice(len(model_addresses), len(batch_inputs), p=self.proportions)
             running_tasks = [
                 remote_openai_completions.remote(
-                    batch_inputs[i],
-                    api_key=model_addresses[address_indices[i]]["api_key"],
-                    base_url=model_addresses[address_indices[i]]["base_url"],
+                    inputs[i],
+                    api_key=model_addresses[i]["api_key"],
+                    base_url=model_addresses[i]["base_url"],
+                    model=models[i],
                 )
-                for i in range(len(batch_inputs))
+                for i in range(len(inputs))
             ]
             
             while running_tasks:
                 done_tasks, running_tasks = ray.wait(running_tasks, num_returns=1)
                 for task in done_tasks:
-                    for index, output in ray.get(task):
-                        yield (index, output)
+                    index, output = ray.get(task)
+                    yield (index, output)
         elif self.pool is not None:
-            partial_func = partial(wrapped_openai_completions, model=model, **kwargs)
-
-            model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
-            address_indices = np.random.choice(len(model_addresses), len(inputs), p=self.proportions)
+            partial_func = partial(wrapped_openai_completions, **kwargs)
+            
             if debug: print(f"Input Length: {len(inputs)}\nmodel_addresses: {model_addresses}\naddress_indices: {address_indices}\n")
-            inputs = [(i, inputs[i], model_addresses[address_indices[i]]["api_key"], model_addresses[address_indices[i]]["base_url"]) for i in range(len(inputs))]
+            inputs = [(i, inputs[i], model_addresses[i]["api_key"], model_addresses[i]["base_url"], models[i]) for i in range(len(inputs))]
             for index, output in self.pool.imap_unordered(partial_func, inputs):
                 yield (index, output)
         else:
-            model_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
-            address_indices = np.random.choice(len(model_addresses), len(inputs), p=self.proportions)
             for i in range(len(inputs)):
-                api_key = model_addresses[address_indices[i]]["api_key"]
-                base_url = model_addresses[address_indices[i]]["base_url"]
-                yield openai_completions((i, inputs[i]), api_key, base_url, model, **kwargs)
+                api_key = model_addresses[i]["api_key"]
+                base_url = model_addresses[i]["base_url"]
+                yield openai_completions((i, inputs[i]), api_key, base_url, models[i], **kwargs)
+
     def run(
         self,
         inputs,
-        model: str,
+        model: Union[str, List[str]],
         verbose: bool = False,
         desc: Optional[str] = None,
         debug: bool = False,
         **kwargs,
     ):
         outputs = []
-        for i, output in tqdm(self._run(inputs=inputs, model=model, debug=debug, **kwargs), total=len(inputs), disable=not verbose, desc=desc):
+        models = [model] * len(inputs) if isinstance(model, str) else model
+        for i, output in tqdm(self._run(inputs=inputs, models=models, debug=debug, **kwargs), total=len(inputs), disable=not verbose, desc=desc):
             outputs.append((i, output))
         outputs = sorted(outputs, key=lambda x: x[0])
         outputs = [output for _, output in outputs]
