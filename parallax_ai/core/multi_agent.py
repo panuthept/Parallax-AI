@@ -82,14 +82,14 @@ class ParallaxMultiAgent:
         agent_names, session_ids, outputs = self._run(inputs, progress_names=progress_names, **kwargs)
         
         # Get outputs for each agent
-        outputs = defaultdict(list)
+        dict_outputs = defaultdict(list)
         for agent_name, session_id, output in zip(agent_names, session_ids, outputs):
             if self.agents[agent_name].conversational_agent:
-                outputs[agent_name].append((session_id, output))
+                dict_outputs[agent_name].append((session_id, output))
             else:
-                outputs[agent_name].append(output)
+                dict_outputs[agent_name].append(output)
 
         # Transform outputs for all agents
-        for agent_name in outputs.keys():
-            outputs[agent_name] = self.agents[agent_name].output_transformation(outputs[agent_name])
-        return outputs
+        for agent_name in dict_outputs.keys():
+            dict_outputs[agent_name] = self.agents[agent_name].output_transformation(dict_outputs[agent_name])
+        return dict_outputs
