@@ -111,7 +111,7 @@ class ParallaxClient:
                 elif ray_local_workers is not None:
                     server_info = ray.init(num_cpus=ray_local_workers, **kwargs) 
                 else: 
-                    server_info = ray.init()
+                    server_info = ray.init(**kwargs)
                 print(f"Ray initialized:\n{server_info}")
             except:
                 print("Fail to initialize Ray, no parallelization method is used.")
