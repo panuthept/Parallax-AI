@@ -314,22 +314,25 @@ class Agent:
 
         finished_outputs = {}
         unfinished_inputs = inputs
+        true_indices = list(range(len(inputs)))
         for _ in range(self.max_tries):
             unfinished_indices = []
             outputs = self.client.run(inputs=unfinished_inputs, model=self.model, verbose=verbose, desc=desc, **kwargs)
             for i, output in enumerate(outputs):
+                true_index = true_indices[i]
                 if unfinished_inputs[i] is None:
-                    finished_outputs[i] = None
+                    finished_outputs[true_index] = None
                 else:
                     processed_output = self.output_processor(output, debug=debug)
                     if processed_output is not None:
-                        finished_outputs[i] = processed_output
-                        session_ids[i] = self.conversation_memory.update_assistant(session_ids[i], output)
+                        finished_outputs[true_index] = processed_output
+                        session_ids[true_index] = self.conversation_memory.update_assistant(session_ids[i], output)
                     else:
-                        unfinished_indices.append(i)
+                        unfinished_indices.append(true_index)
             if len(unfinished_indices) == 0:
                 break
-            unfinished_inputs = [inputs[i] for i in unfinished_indices]
+            unfinished_inputs = [inputs[true_index] for true_index in unfinished_indices]
+            true_indices = unfinished_indices
 
         outputs = [finished_outputs[i] if i in finished_outputs else None for i in range(len(inputs))]
         if debug: print("###################################### AGENT DONE ######################################")
