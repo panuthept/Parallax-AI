@@ -72,7 +72,7 @@ class ParallaxClient:
         ray_local_workers: Optional[int] = None,
         local_workers: Optional[int] = None,
         proportions: Optional[List[float]] = None,
-        chunk_size: Optional[int] = 1,
+        chunk_size: Optional[int] = 6000,   # Maximum requests to send in each batch
         max_tokens: int = 2048,
         **kwargs,
     ):
@@ -151,42 +151,52 @@ class ParallaxClient:
             cand_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
             model_addresses.append(np.random.choice(cand_addresses, size=1, p=self.proportions)[0])
 
-        if ray.is_initialized():
-            partial_func = partial(openai_completions, **kwargs)
+        for start_index in range(0, len(inputs), self.chunk_size):
+            batched_inputs = inputs[start_index: start_index + self.chunk_size]
+            batched_model_addresses = model_addresses[start_index: start_index + self.chunk_size]
+            batched_models = models[start_index: start_index + self.chunk_size]
 
-            @ray.remote
-            def remote_openai_completions(inputs, api_key, base_url, model):
-                return partial_func(inputs=inputs, api_key=api_key, base_url=base_url, model=model)
+            if ray.is_initialized():
+                partial_func = partial(openai_completions, **kwargs)
 
-            inputs = [(i, input) for i, input in enumerate(inputs)]
+                @ray.remote
+                def remote_openai_completions(inputs, api_key, base_url, model):
+                    return partial_func(inputs=inputs, api_key=api_key, base_url=base_url, model=model)
 
-            running_tasks = [
-                remote_openai_completions.remote(
-                    inputs[i],
-                    api_key=model_addresses[i]["api_key"],
-                    base_url=model_addresses[i]["base_url"],
-                    model=models[i],
-                )
-                for i in range(len(inputs))
-            ]
-            
-            while running_tasks:
-                done_tasks, running_tasks = ray.wait(running_tasks, num_returns=1)
-                for task in done_tasks:
-                    index, output = ray.get(task)
+                running_tasks = [
+                    remote_openai_completions.remote(
+                        inputs=(i, batched_inputs[i]),
+                        api_key=batched_model_addresses[i]["api_key"],
+                        base_url=batched_model_addresses[i]["base_url"],
+                        model=batched_models[i],
+                    )
+                    for i in range(len(batched_inputs))
+                ]
+                
+                while running_tasks:
+                    done_tasks, running_tasks = ray.wait(running_tasks, num_returns=1)
+                    for task in done_tasks:
+                        index, output = ray.get(task)
+                        yield (index, output)
+            elif self.pool is not None:
+                # Prepare partial function for multiprocessing
+                partial_func = partial(wrapped_openai_completions, **kwargs)
+                # Prepare inputs for multiprocessing
+                batched_inputs = [
+                    (i, batched_inputs[i], batched_model_addresses[i]["api_key"], batched_model_addresses[i]["base_url"], batched_models[i]) 
+                    for i in range(len(batched_inputs))
+                ]
+                for index, output in self.pool.imap_unordered(partial_func, batched_inputs):
                     yield (index, output)
-        elif self.pool is not None:
-            # Prepare partial function for multiprocessing
-            partial_func = partial(wrapped_openai_completions, **kwargs)
-            # Prepare inputs for multiprocessing
-            inputs = [(i, inputs[i], model_addresses[i]["api_key"], model_addresses[i]["base_url"], models[i]) for i in range(len(inputs))]
-            for index, output in self.pool.imap_unordered(partial_func, inputs):
-                yield (index, output)
-        else:
-            for i in range(len(inputs)):
-                api_key = model_addresses[i]["api_key"]
-                base_url = model_addresses[i]["base_url"]
-                yield openai_completions((i, inputs[i]), api_key, base_url, models[i], **kwargs)
+            else:
+                for i in range(len(batched_inputs)):
+                    yield openai_completions(
+                        (i, batched_inputs[i]), 
+                        batched_model_addresses[i]["api_key"], 
+                        batched_model_addresses[i]["base_url"], 
+                        batched_models[i], 
+                        **kwargs
+                    )
 
     def run(
         self,
