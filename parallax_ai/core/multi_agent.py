@@ -11,13 +11,14 @@ class ParallaxMultiAgent:
         self, 
         agents: Dict[str, Agent],
         client: Optional[ParallaxClient] = None,
-        max_tries: int = 5,
+        max_tries: int = 1,
+        dismiss_none_output: bool = False,
     ):
         self.agents = agents
         self.max_tries = max_tries
         self.client = client if client is not None else self.agents[list(agents.keys())[0]].client
         self.engine = ParallaxEngine(
-            client=self.client, max_tries=max_tries
+            client=self.client, max_tries=max_tries, dismiss_none_output=dismiss_none_output
         )
 
     def _run(
