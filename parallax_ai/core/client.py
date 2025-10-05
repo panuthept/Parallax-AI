@@ -145,6 +145,8 @@ class ParallaxClient:
         assert len(models) == len(inputs), f"Length of models ({len(models)}) should be equal to length of inputs ({len(inputs)})."
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
         inputs = self._preprocess_inputs(inputs)
+        
+        indices = list(range(len(inputs)))
 
         model_addresses = []
         for model in models:
@@ -152,6 +154,7 @@ class ParallaxClient:
             model_addresses.append(np.random.choice(cand_addresses, size=1, p=self.proportions)[0])
 
         for start_index in range(0, len(inputs), self.chunk_size):
+            batched_indices = indices[start_index: start_index + self.chunk_size]
             batched_inputs = inputs[start_index: start_index + self.chunk_size]
             batched_model_addresses = model_addresses[start_index: start_index + self.chunk_size]
             batched_models = models[start_index: start_index + self.chunk_size]
@@ -165,7 +168,7 @@ class ParallaxClient:
 
                 running_tasks = [
                     remote_openai_completions.remote(
-                        inputs=(i, batched_inputs[i]),
+                        inputs=(batched_indices[i], batched_inputs[i]),
                         api_key=batched_model_addresses[i]["api_key"],
                         base_url=batched_model_addresses[i]["base_url"],
                         model=batched_models[i],
@@ -183,7 +186,7 @@ class ParallaxClient:
                 partial_func = partial(wrapped_openai_completions, **kwargs)
                 # Prepare inputs for multiprocessing
                 batched_inputs = [
-                    (i, batched_inputs[i], batched_model_addresses[i]["api_key"], batched_model_addresses[i]["base_url"], batched_models[i]) 
+                    (batched_indices[i], batched_inputs[i], batched_model_addresses[i]["api_key"], batched_model_addresses[i]["base_url"], batched_models[i]) 
                     for i in range(len(batched_inputs))
                 ]
                 for index, output in self.pool.imap_unordered(partial_func, batched_inputs):
@@ -191,7 +194,7 @@ class ParallaxClient:
             else:
                 for i in range(len(batched_inputs)):
                     yield openai_completions(
-                        (i, batched_inputs[i]), 
+                        (batched_indices[i], batched_inputs[i]), 
                         batched_model_addresses[i]["api_key"], 
                         batched_model_addresses[i]["base_url"], 
                         batched_models[i], 
