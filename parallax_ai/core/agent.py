@@ -273,6 +273,8 @@ class Agent:
         self.input_template = input_template
         self.system_prompt = system_prompt
         self.conversational_agent = conversational_agent
+        self.max_tries = max_tries
+        self.dismiss_none_output = dismiss_none_output
 
         self.conversation_memory = ConversationMemory(
             min_sessions=min_sessions if conversational_agent else 0,

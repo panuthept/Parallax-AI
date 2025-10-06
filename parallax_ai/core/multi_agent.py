@@ -1,5 +1,6 @@
 import random
 from .agent import Agent
+from copy import deepcopy
 from .client import ParallaxClient
 from collections import defaultdict
 from .engine import ParallaxEngine
@@ -10,16 +11,24 @@ class ParallaxMultiAgent:
     def __init__(
         self, 
         agents: Dict[str, Agent],
+        progress_names: Optional[Dict[str, str]] = None,
         client: Optional[ParallaxClient] = None,
         max_tries: int = 1,
         dismiss_none_output: bool = False,
     ):
         self.agents = agents
+        self.progress_names = progress_names if progress_names is not None else {}
         self.max_tries = max_tries
         self.client = client if client is not None else self.agents[list(agents.keys())[0]].client
         self.engine = ParallaxEngine(
             client=self.client, max_tries=max_tries, dismiss_none_output=dismiss_none_output
         )
+
+        for agent in self.agents.values():
+            if agent.max_tries != max_tries:
+                print(f"Warning: Agent {agent} has max_tries={agent.max_tries}, but ParallaxMultiAgent has max_tries={max_tries}. Overriding agent's setting.")
+            if agent.dismiss_none_output != dismiss_none_output:
+                print(f"Warning: Agent {agent} has dismiss_none_output={agent.dismiss_none_output}, but ParallaxMultiAgent has dismiss_none_output={dismiss_none_output}. Overriding agent's setting.")
 
     def _run(
         self, 
@@ -72,8 +81,13 @@ class ParallaxMultiAgent:
         progress_names: Optional[Dict[str, str]] = None,
         **kwargs
     ) -> Dict[str, Any]:
+        # Use default progress names if not provided
         if progress_names is None:
-            progress_names = {}
+            progress_names = deepcopy(self.progress_names)
+        for agent_name in inputs.keys():
+            if agent_name not in progress_names:
+                progress_names[agent_name] = self.progress_names.get(agent_name, None)
+                
         # Transform inputs for all agents
         for agent_name in inputs.keys():
             assert agent_name in self.agents, f"Agent {agent_name} not found."
