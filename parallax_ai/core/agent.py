@@ -113,7 +113,7 @@ class InputProcessor:
         # Check type of each value
         for key, value in input.items():
             if not type_validation(value, self.input_structure[key]):
-                raise ValueError(f"Type of key '{key}' is not valid: expecting {self.input_structure[key]} but got {type(value)} from the agent named: {self.name}")
+                raise ValueError(f"Type of key '{key}' is not valid: expecting {self.input_structure[key]} but got {type(value)}.")
 
         if self.input_template is None:
             return "\n\n".join([f'{key.replace("_", " ").capitalize()}:\n{value}' for key, value in input.items()])
@@ -206,12 +206,18 @@ class OutputProcessor:
                     outputs = output
                     valid_outputs = []
                     # Check if all keys are in the output
-                    for key in self.output_structure[0]:
-                        for output in outputs:
-                            if key in output:
-                                # Check if all values are valid
-                                type_validation(output[key], self.output_structure[0][key], raise_error=True)
-                                valid_outputs.append(output)
+                    for output in outputs:
+                        is_valid = True
+                        for key in self.output_structure[0]:
+                            if key not in output:
+                                is_valid = False
+                                break
+                            # Check if all values are valid
+                            if not type_validation(output[key], self.output_structure[0][key]):
+                                is_valid = False
+                                break
+                        if is_valid:
+                            valid_outputs.append(output)
                     if len(valid_outputs) == 0:
                         raise ValueError("No valid output found")
                     output = valid_outputs
@@ -251,7 +257,7 @@ class Agent:
         conversational_agent: bool = False,
         min_sessions: int = 100000,
         max_sessions: int = 1000000,
-        max_tries: int = 10,
+        max_tries: int = 1,
         dismiss_none_output: bool = False,
         client: Optional[ParallaxClient] = None,
         **kwargs,
@@ -267,6 +273,8 @@ class Agent:
         self.input_template = input_template
         self.system_prompt = system_prompt
         self.conversational_agent = conversational_agent
+        self.max_tries = max_tries
+        self.dismiss_none_output = dismiss_none_output
 
         self.conversation_memory = ConversationMemory(
             min_sessions=min_sessions if conversational_agent else 0,
