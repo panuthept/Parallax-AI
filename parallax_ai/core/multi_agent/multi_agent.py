@@ -226,9 +226,12 @@ class MultiAgent:
                     deepcopy(self.packages[package_index].external_data)
                 )
             self.packages[package_index].agent_outputs[agent_name] = agent_outputs
-            outputs[agent_name] = agent_outputs
+
+        # Get return outputs (the outputs from the oldest package)
+        # [NOTE] Do not move this line after clearing packages
+        oldest_outputs = self.packages[0].agent_outputs if len(self.packages) > 0 else None
 
         # Remove finished or stalled packages
         self.packages = self._clear_packages(self.packages, package_indices)
 
-        return outputs
+        return oldest_outputs
