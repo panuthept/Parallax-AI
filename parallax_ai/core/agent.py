@@ -113,7 +113,7 @@ class InputProcessor:
         # Check type of each value
         for key, value in input.items():
             if not type_validation(value, self.input_structure[key]):
-                raise ValueError(f"Type of key '{key}' is not valid: expecting {self.input_structure[key]} but got {type(value)} from the agent named: {self.name}")
+                raise ValueError(f"Type of key '{key}' is not valid: expecting {self.input_structure[key]} but got {type(value)}.")
 
         if self.input_template is None:
             return "\n\n".join([f'{key.replace("_", " ").capitalize()}:\n{value}' for key, value in input.items()])
