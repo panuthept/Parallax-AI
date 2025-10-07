@@ -207,6 +207,10 @@ class MultiAgent:
         if inputs is not None or external_data is not None:
             package = self.init_package(inputs, external_data)
             self.packages.append(package)
+        else:
+            if len(self.packages) == 0:
+                print("Warning: No packages to process. Please provide inputs or external_data to create a new package.")
+                return {}
 
         # Input processing for all agents
         inputs, package_indices = self._get_pipeline_inputs(self.packages, self.agent_ios)
@@ -229,7 +233,7 @@ class MultiAgent:
 
         # Get return outputs (the outputs from the oldest package)
         # [NOTE] Do not move this line after clearing packages
-        oldest_outputs = self.packages[0].agent_outputs if len(self.packages) > 0 else None
+        oldest_outputs = self.packages[0].agent_outputs if len(self.packages) > 0 else {}
 
         # Remove finished or stalled packages
         self.packages = self._clear_packages(self.packages, package_indices)
