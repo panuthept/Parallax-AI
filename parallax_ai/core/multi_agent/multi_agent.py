@@ -219,7 +219,7 @@ class MultiAgent:
         inputs, package_indices = self._get_pipeline_inputs(self.packages, self.agent_ios)
 
         # Execute Agents
-        outputs = self._run(inputs, **kwargs)
+        outputs = self._run(deepcopy(inputs), **kwargs)
 
         # Update packages with outputs
         for agent_name, agent_outputs in outputs.items():
