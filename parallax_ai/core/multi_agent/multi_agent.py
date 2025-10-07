@@ -18,6 +18,9 @@ class MultiAgent:
         max_tries: int = 1,
         dismiss_none_output: bool = False,
     ):
+        if dismiss_none_output:
+            print("Warning: dismiss_none_output is set to True. This may lead to loss of some outputs and length mismatched with inputs.")
+
         self.agents = agents
         self.agent_ios = agent_ios if agent_ios is not None else {}
         self.progress_names = progress_names if progress_names is not None else {}
@@ -27,11 +30,11 @@ class MultiAgent:
             client=self.client, max_tries=max_tries, dismiss_none_output=dismiss_none_output
         )
 
-        for agent in self.agents.values():
+        for name, agent in self.agents.items():
             if agent.max_tries != max_tries:
-                print(f"Warning: Agent {agent} has max_tries={agent.max_tries}, but ParallaxMultiAgent has max_tries={max_tries}. Overriding agent's setting.")
+                print(f"Warning: Agent '{name}' has max_tries={agent.max_tries}, but ParallaxMultiAgent has max_tries={max_tries}. Overriding agent's setting.")
             if agent.dismiss_none_output != dismiss_none_output:
-                print(f"Warning: Agent {agent} has dismiss_none_output={agent.dismiss_none_output}, but ParallaxMultiAgent has dismiss_none_output={dismiss_none_output}. Overriding agent's setting.")
+                print(f"Warning: Agent '{name}' has dismiss_none_output={agent.dismiss_none_output}, but ParallaxMultiAgent has dismiss_none_output={dismiss_none_output}. Overriding agent's setting.")
         
         self.packages: List[Package] = []
 
