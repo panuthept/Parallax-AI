@@ -1,3 +1,4 @@
+from uuid import UUID, uuid4
 from dataclasses import dataclass, field
 from typing import Dict, List, Callable, Optional, Any
 
@@ -17,6 +18,7 @@ class AgentIO:
 
 @dataclass
 class Package:
+    id: UUID = field(default_factory=lambda: uuid4())
     agent_inputs: Dict[str, Any] = field(default_factory=dict)    # agent_name -> inputs
     agent_outputs: Dict[str, Any] = field(default_factory=dict)   # agent_name -> outputs
     external_data: Dict[str, Any] = field(default_factory=dict)      # data_name -> data_value
