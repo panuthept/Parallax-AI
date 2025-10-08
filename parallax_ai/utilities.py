@@ -11,7 +11,7 @@ def save_type_structure(type_structure: Any) -> Any:
     """
     # Handle plain dictionaries (like {"text": str})
     if isinstance(type_structure, dict):
-        return {"plain_dict": {k: save_type_structure(v) for k, v in type_structure.items()}}
+        return {k: save_type_structure(v) for k, v in type_structure.items()}
     
     origin = get_origin(type_structure)
     if origin is None:
@@ -72,21 +72,28 @@ def load_type_structure(data: Any) -> Any:
             return data
     
     if isinstance(data, dict):
-        for key, value in data.items():
-            if key == "plain_dict":
-                return {k: load_type_structure(v) for k, v in value.items()}
-            elif key == "list":
-                return List[load_type_structure(value)]
-            elif key == "dict":
-                return Dict[load_type_structure(value[0]), load_type_structure(value[1])]
-            elif key == "tuple":
-                return Tuple[tuple(load_type_structure(v) for v in value)]
-            elif key == "union":
-                return Union[tuple(load_type_structure(v) for v in value)]
-            else:
-                origin = eval(key, eval_globals)
-                args = tuple(load_type_structure(v) for v in value)
-                return origin[args]
+        # Check if this is a structured typing dictionary (has special keys)
+        special_keys = {"list", "dict", "tuple", "union"}
+        typing_keys = {k for k in data.keys() if k.startswith("typing.") or k.startswith("<class")}
+        
+        if any(key in special_keys for key in data.keys()) or typing_keys:
+            # This is a structured typing dictionary
+            for key, value in data.items():
+                if key == "list":
+                    return List[load_type_structure(value)]
+                elif key == "dict":
+                    return Dict[load_type_structure(value[0]), load_type_structure(value[1])]
+                elif key == "tuple":
+                    return Tuple[tuple(load_type_structure(v) for v in value)]
+                elif key == "union":
+                    return Union[tuple(load_type_structure(v) for v in value)]
+                else:
+                    origin = eval(key, eval_globals)
+                    args = tuple(load_type_structure(v) for v in value)
+                    return origin[args]
+        else:
+            # This is a plain dictionary
+            return {k: load_type_structure(v) for k, v in data.items()}
     
     raise ValueError(f"Invalid data format for type structure: {data}")
 

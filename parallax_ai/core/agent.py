@@ -310,7 +310,11 @@ class Agent:
             "dismiss_none_output": self.dismiss_none_output,
         }
         with open(path, "w") as f:
-            yaml.dump(config, f)
+            # Configure YAML to use literal style for multiline strings
+            yaml.add_representer(str, lambda dumper, data: 
+                dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|') 
+                if '\n' in data else dumper.represent_scalar('tag:yaml.org,2002:str', data))
+            yaml.dump(config, f, allow_unicode=True)
 
     @classmethod
     def load(cls, path: str):
