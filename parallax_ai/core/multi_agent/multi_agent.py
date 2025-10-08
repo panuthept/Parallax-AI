@@ -1,4 +1,5 @@
 import random
+from uuid import uuid4
 from ..agent import Agent
 from copy import deepcopy
 from ..client import Client
@@ -132,12 +133,20 @@ class MultiAgent:
             dict_outputs[agent_name] = self.agents[agent_name].output_transformation(dict_outputs[agent_name])
         return dict_outputs
     
-    def init_package(self, inputs: Optional[Dict[str, Any]] = None, external_data: Optional[Dict[str, Any]] = None) -> Package:
-        package = Package(external_data=external_data)
+    def init_package(
+        self, 
+        inputs: Optional[Dict[str, Any]] = None, 
+        external_data: Optional[Dict[str, Any]] = None,
+        tracking_id: Optional[str] = None,
+    ) -> Package:
+        package = Package(
+            id=tracking_id if tracking_id is not None else uuid4().hex,
+            external_data=external_data, 
+        )
         if inputs is not None:
             for agent_name, agent_inputs in inputs.items():
                 assert agent_name in self.agents, f"Unknown agent name: '{agent_name}' in inputs."
-                package.inputs[agent_name] = agent_inputs
+                package.agent_inputs[agent_name] = agent_inputs
         return package
     
     def is_dependency_fulfilled(self, package: Package, dependency: Dependency) -> bool:
@@ -215,15 +224,20 @@ class MultiAgent:
         packages = [package for i, package in enumerate(packages) if i not in removable_package_indices]
         return packages
     
-    def run(
+    def run_single_step(
         self,
         inputs=None,
+        tracking_id=None,
         external_data=None,
+        return_tracking_id=False,
         **kwargs,
     ):
+        """
+        Run a single step of the multi-agent pipeline.
+        """
         # Create new package (if inputs or external_data are provided)
         if inputs is not None or external_data is not None:
-            package = self.init_package(inputs, external_data)
+            package = self.init_package(inputs, external_data, tracking_id=tracking_id)
             self.packages.append(package)
         else:
             if len(self.packages) == 0:
@@ -252,11 +266,63 @@ class MultiAgent:
                 )
             self.packages[package_index].agent_outputs[agent_name] = agent_outputs
 
-        # Get return outputs (the outputs from the oldest package)
+        # Get return all outputs
         # [NOTE] Do not move this line after clearing packages
-        oldest_outputs = self.packages[0].agent_outputs if len(self.packages) > 0 else {}
+        if return_tracking_id:
+            all_outputs = [(pkg.id, pkg.agent_outputs) for pkg in self.packages]
+        else:
+            all_outputs = [pkg.agent_outputs for pkg in self.packages]
 
         # Remove finished or stalled packages
         self.packages = self._clear_packages(self.packages, package_indices)
 
-        return oldest_outputs
+        return all_outputs
+    
+    def flush(self, **kwargs):
+        """
+        Finish all the remaining packages.
+        """
+        all_outputs = {}
+        while len(self.packages) > 0:
+            outputs = self.run_single_step(return_tracking_id=True, **kwargs)
+            for id, out in outputs:
+                all_outputs[id] = out
+        return list(all_outputs.values())
+    
+    def run(
+        self,
+        inputs=None,
+        external_data=None,
+        **kwargs,
+    ):
+        """
+        Run the given inputs through the multi-agent pipeline until all agents have produced outputs.
+        """
+        assert inputs is not None or external_data is not None, "Please provide inputs or external_data to run the multi-agent pipeline."
+        outputs = self.run_single_step(inputs=inputs, external_data=external_data, **kwargs)[0]
+        flush_outputs = self.flush(**kwargs)
+        if len(flush_outputs) > 0:
+            outputs = flush_outputs[0]
+        return outputs
+    
+    def run_until(
+        self,
+        condition_fn,
+        inputs=None,
+        external_data=None,
+        max_steps: int = 10,
+        **kwargs,
+    ):
+        """
+        Run the multi-agent pipeline until the condition function is satisfied or max_steps is reached.
+        The condition function takes in a dictionary of agent outputs and returns a boolean.
+        """
+        assert inputs is not None or external_data is not None, "Please provide inputs or external_data to run the multi-agent pipeline."
+        steps = 0
+        outputs = self.run_single_step(inputs=inputs, external_data=external_data, **kwargs)[0]
+        while not condition_fn(outputs) and steps < max_steps:
+            all_outputs = self.run_single_step(**kwargs)
+            if len(all_outputs) > 0:
+                outputs = all_outputs[0]
+            steps += 1
+        return outputs
