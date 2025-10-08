@@ -36,7 +36,7 @@ class MultiAgent:
         
         self.packages: List[Package] = []
 
-    def __run(
+    def _run(
         self, 
         inputs: List[Tuple[str, Any]],
         progress_names: Optional[Dict[str, str]] = None,
@@ -91,7 +91,7 @@ class MultiAgent:
             outputs = [out for out in outputs if out is not None]
         return agent_names, session_ids, inputs, outputs
 
-    def _run(
+    def run(
         self, 
         inputs: Dict[str, Any], 
         progress_names: Optional[Dict[str, str]] = None,
@@ -111,7 +111,7 @@ class MultiAgent:
             inputs[agent_name], progress_names[agent_name] = self.agents[agent_name].input_transformation(inputs[agent_name], progress_names.get(agent_name, None))
 
         # Run all agents
-        agent_names, session_ids, inputs, outputs = self.__run(inputs, progress_names=progress_names, **kwargs)
+        agent_names, session_ids, inputs, outputs = self._run(inputs, progress_names=progress_names, **kwargs)
         
         # Get outputs for each agent
         dict_outputs = defaultdict(list)
@@ -215,7 +215,7 @@ class MultiAgent:
         packages = [package for i, package in enumerate(packages) if i not in removable_package_indices]
         return packages
     
-    def run(
+    def run_single_step(
         self,
         inputs=None,
         external_data=None,
@@ -252,11 +252,11 @@ class MultiAgent:
                 )
             self.packages[package_index].agent_outputs[agent_name] = agent_outputs
 
-        # Get return outputs (the outputs from the oldest package)
+        # Get return all outputs
         # [NOTE] Do not move this line after clearing packages
-        oldest_outputs = self.packages[0].agent_outputs if len(self.packages) > 0 else {}
+        all_outputs = [pkg.agent_outputs for pkg in self.packages]
 
         # Remove finished or stalled packages
         self.packages = self._clear_packages(self.packages, package_indices)
 
-        return oldest_outputs
+        return all_outputs
