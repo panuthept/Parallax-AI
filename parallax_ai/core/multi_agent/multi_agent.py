@@ -1,7 +1,7 @@
 import random
 from ..agent import Agent
 from copy import deepcopy
-from ..client import ParallaxClient
+from ..client import Client
 from collections import defaultdict
 from ..engine import ParallaxEngine
 from typing import Any, Dict, List, Optional, Tuple
@@ -14,7 +14,7 @@ class MultiAgent:
         agents: Dict[str, Agent],
         agent_ios: Optional[Dict[str, AgentIO]] = None,
         progress_names: Optional[Dict[str, str]] = None,
-        client: Optional[ParallaxClient] = None,
+        client: Optional[Client] = None,
         max_tries: int = 1,
         dismiss_none_output: bool = False,
     ):

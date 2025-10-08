@@ -62,7 +62,7 @@ def wrapped_openai_completions(
     return openai_completions((index, input), api_key, base_url, model, **kwargs)
 
 
-class ParallaxClient:
+class Client:
     def __init__(
         self, 
         api_key: str = "EMPTY",
@@ -234,7 +234,7 @@ class ParallaxClient:
 
 
 if __name__ == "__main__":
-    client = ParallaxClient(
+    client = Client(
         base_url="http://localhost:8888/v1",
     )
     inputs = ["Sing me a song."] * 1000

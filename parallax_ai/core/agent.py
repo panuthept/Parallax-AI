@@ -1,6 +1,6 @@
 import json
 from copy import deepcopy
-from .client import ParallaxClient
+from .client import Client
 from .engine import ParallaxEngine, Job
 from ..utilities import type_validation, generate_session_id
 from typing import Optional, Union, Literal, Tuple, List, Dict, Any, get_origin, get_args
@@ -257,7 +257,7 @@ class Agent:
         max_sessions: int = 1000000,
         max_tries: int = 1,
         dismiss_none_output: bool = False,
-        client: Optional[ParallaxClient] = None,
+        client: Optional[Client] = None,
         **kwargs,
     ):  
         if input_structure is not None:
@@ -285,7 +285,7 @@ class Agent:
         self.output_processor = OutputProcessor(
             output_structure=output_structure,
         )
-        self.client = ParallaxClient(**kwargs) if client is None else client
+        self.client = Client(**kwargs) if client is None else client
         self.engine = ParallaxEngine(
             client=self.client, 
             max_tries=max_tries,
