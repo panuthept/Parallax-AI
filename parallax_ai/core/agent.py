@@ -1,8 +1,6 @@
 import json
-import random
 from copy import deepcopy
 from .client import ParallaxClient
-from collections import defaultdict
 from .engine import ParallaxEngine, Job
 from ..utilities import type_validation, generate_session_id
 from typing import Optional, Union, Literal, Tuple, List, Dict, Any, get_origin, get_args
@@ -292,6 +290,51 @@ class Agent:
             client=self.client, 
             max_tries=max_tries,
             dismiss_none_output=dismiss_none_output,
+        )
+
+    def save(self, path: str):
+        import os
+        import yaml
+        from ..utilities import save_type_structure
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        config = {
+            "model": self.model,
+            "input_structure": save_type_structure(self.input_structure),
+            "output_structure": save_type_structure(self.output_structure),
+            "input_template": self.input_template,
+            "system_prompt": self.system_prompt,
+            "conversational_agent": self.conversational_agent,
+            "min_sessions": self.conversation_memory.min_sessions,
+            "max_sessions": self.conversation_memory.max_sessions,
+            "max_tries": self.max_tries,
+            "dismiss_none_output": self.dismiss_none_output,
+        }
+        with open(path, "w") as f:
+            # Configure YAML to use literal style for multiline strings
+            yaml.add_representer(str, lambda dumper, data: 
+                dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|') 
+                if '\n' in data else dumper.represent_scalar('tag:yaml.org,2002:str', data))
+            yaml.dump(config, f, allow_unicode=True)
+
+    @classmethod
+    def load(cls, path: str):
+        import yaml
+        from ..utilities import load_type_structure
+        with open(path, "r") as f:
+            config = yaml.safe_load(f)
+        config["input_structure"] = load_type_structure(config.get("input_structure", None))
+        config["output_structure"] = load_type_structure(config.get("output_structure", None))
+        return Agent(
+            model=config.get("model", None),
+            input_structure=config.get("input_structure", None),
+            output_structure=config.get("output_structure", None),
+            input_template=config.get("input_template", None),
+            system_prompt=config.get("system_prompt", None),
+            conversational_agent=config.get("conversational_agent", False),
+            min_sessions=config.get("min_sessions", 100000),
+            max_sessions=config.get("max_sessions", 1000000),
+            max_tries=config.get("max_tries", 1),
+            dismiss_none_output=config.get("dismiss_none_output", False),
         )
 
     def get_system_prompt(self):
