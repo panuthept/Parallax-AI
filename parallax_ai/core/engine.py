@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Callable, List, Any
-from parallax_ai.core.client import ParallaxClient
+from parallax_ai.core.client import Client
 
 
 @dataclass
@@ -19,7 +19,7 @@ class ParallaxEngine:
     """
     def __init__(
         self, 
-        client: ParallaxClient,
+        client: Client,
         max_tries: int = 3,
         dismiss_none_output: bool = False,
     ):

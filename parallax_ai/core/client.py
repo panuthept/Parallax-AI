@@ -62,7 +62,7 @@ def wrapped_openai_completions(
     return openai_completions((index, input), api_key, base_url, model, **kwargs)
 
 
-class ParallaxClient:
+class Client:
     def __init__(
         self, 
         api_key: str = "EMPTY",
@@ -98,10 +98,7 @@ class ParallaxClient:
         self.max_tokens = max_tokens
 
         self.pool = None
-        if local_workers is not None and local_workers > 1:
-            self.pool = Pool(processes=local_workers)
-            print("Multiprocessing Pool initialized.")
-        else:
+        if ray_remote_address is not None or ray_local_workers is not None:
             if ray.is_initialized():
                 ray.shutdown()
             try:
@@ -109,11 +106,12 @@ class ParallaxClient:
                     server_info = ray.init(address=f"ray://{ray_remote_address}:10001", **kwargs)
                 elif ray_local_workers is not None:
                     server_info = ray.init(num_cpus=ray_local_workers, **kwargs) 
-                else: 
-                    server_info = ray.init(**kwargs)
                 print(f"Ray initialized:\n{server_info}")
             except:
                 print("Fail to initialize Ray, no parallelization method is used.")
+        else:
+            self.pool = Pool(processes=local_workers)
+            print("Multiprocessing Pool initialized.")
 
     def _preprocess_inputs(self, inputs):
         # inputs: can be 'str', 'list[dict]', 'list[str]', or 'list[list[dict]]'
@@ -234,7 +232,7 @@ class ParallaxClient:
 
 
 if __name__ == "__main__":
-    client = ParallaxClient(
+    client = Client(
         base_url="http://localhost:8888/v1",
     )
     inputs = ["Sing me a song."] * 1000
