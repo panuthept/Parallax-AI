@@ -13,6 +13,10 @@ def save_type_structure(type_structure: Any) -> Any:
     if isinstance(type_structure, dict):
         return {k: save_type_structure(v) for k, v in type_structure.items()}
     
+    # Handle plain lists (like [{"label": str, "confidence": float}])
+    if isinstance(type_structure, list):
+        return [save_type_structure(item) for item in type_structure]
+    
     origin = get_origin(type_structure)
     if origin is None:
         # Handle basic types properly
@@ -70,6 +74,10 @@ def load_type_structure(data: Any) -> Any:
         except:
             # If eval fails, return the string as is
             return data
+    
+    # Handle plain lists (like [{"label": str, "confidence": float}])
+    if isinstance(data, list):
+        return [load_type_structure(item) for item in data]
     
     if isinstance(data, dict):
         # Check if this is a structured typing dictionary (has special keys)

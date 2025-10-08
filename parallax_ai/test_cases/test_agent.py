@@ -23,12 +23,12 @@ def test_save_and_load_methods():
     assert agent.max_tries == loaded_agent.max_tries
     print("#1 test passed.")
 
-    # structured input and output with Literal
+    # structured input and output with Literal types
     from typing import Literal
     agent = Agent(
         model="gpt-3.5-turbo", 
-        input_structure={"label": Literal["positive", "negative", "neutral"]}, 
-        output_structure={"label": Literal["positive", "negative", "neutral"]},
+        input_structure={"text": Literal["positive", "negative", "neutral"], "id": int}, 
+        output_structure={"label": Literal["positive", "negative", "neutral"], "confidence": float},
         system_prompt=(
             "Classify the sentiment of the text.\n"
             "Respond with one of the following keywords: positive, negative, neutral."
@@ -47,12 +47,12 @@ def test_save_and_load_methods():
     assert agent.max_tries == loaded_agent.max_tries
     print("#2 test passed.")
 
-    # structured input and output with normal types
+    # structured input and output with Literal types
     from typing import Literal
     agent = Agent(
         model="gpt-3.5-turbo", 
-        input_structure={"text": str}, 
-        output_structure=[{"label": str, "confidence": float}],
+        input_structure={"text": Literal["positive", "negative", "neutral"], "id": int}, 
+        output_structure=[{"label": Literal["positive", "negative", "neutral"], "confidence": float}],
         system_prompt=(
             "Classify the sentiment of the text.\n"
             "Respond with one of the following keywords: positive, negative, neutral."
