@@ -35,7 +35,9 @@ class ClassificationAgent(Agent):
         for output_key in self.output_keys:
             assert output_key in self.output_structure, f"output_key '{output_key}' not found in output_structure"
             self.output_classes[output_key] = list(get_args(self.output_structure[output_key]))
-    
+
+        assert self.conversational_agent is False, "Currently ClassificationAgent does not support conversational mode."
+
     def input_transformation(self, inputs, progress_name = None):
         if not isinstance(inputs, list):
             inputs = [inputs]
@@ -49,12 +51,14 @@ class ClassificationAgent(Agent):
     def output_transformation(self, deplicated_outputs):
         outputs = []
         for i in range(len(deplicated_outputs) // self.n):
+            inp = deplicated_outputs[i * self.n][0] if isinstance(deplicated_outputs[i * self.n], tuple) else None
             output_label = None
             for j in range(self.n):
-                if deplicated_outputs[i * self.n + j] is None:
+                output = deplicated_outputs[i * self.n + j][-1] if isinstance(deplicated_outputs[i * self.n + j], tuple) else deplicated_outputs[i * self.n + j]
+                if output is None:
                     continue
                 for output_key in self.output_keys:
-                    keyword = deplicated_outputs[i * self.n + j].get(output_key)
+                    keyword = output.get(output_key, None)
                     if keyword is not None:
                         if output_label is None:
                             output_label = {output_key: {label: 0 for label in classes} for output_key, classes in self.output_classes.items()}
@@ -68,7 +72,10 @@ class ClassificationAgent(Agent):
                         output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
                     else:
                         output_label[output_key] = None
-            outputs.append(output_label)
+            if inp is not None:
+                outputs.append((inp, output_label))
+            else:
+                outputs.append(output_label)
         return outputs
 
 

@@ -373,7 +373,7 @@ class Agent:
         inputs: List[Tuple[str, Any]],
         progress_name: Optional[str] = None,
         **kwargs,
-    ) -> Tuple[List[str], List[Any]]:
+    ) -> Tuple[List[str], List[Any], List[Any]]:
         # Create jobs
         jobs = self._create_jobs(inputs, progress_name)
         if len(jobs) == 0:
@@ -381,13 +381,14 @@ class Agent:
         # Process the jobs by the ParallaxEngine with retries
         jobs = self.engine(jobs, **kwargs)
         # Get outputs in the original order
+        inputs = [job.inp for job in jobs]
         outputs = [job.output for job in jobs]
         # Update conversation memory with assistant outputs
         for job in jobs:
             if job.output is not None:
                 job.session_id = self.conversation_memory.update_assistant(job.session_id, job.output)
         session_ids = [job.session_id for job in jobs]
-        return session_ids, outputs
+        return session_ids, inputs, outputs
     
     def input_transformation(self, inputs, progress_name: Optional[str] = None):
         return inputs, progress_name
@@ -399,15 +400,22 @@ class Agent:
         self, 
         inputs: List[Union[Tuple[str, Any], Tuple[str, Any]]],
         progress_name: Optional[str] = None,
+        return_inputs: bool = False,
         **kwargs,
     ) -> List[Tuple[str, Any]]:
         inputs, progress_name = self.input_transformation(inputs, progress_name)
 
-        session_ids, outputs = self._run(inputs, progress_name=progress_name, **kwargs)
+        session_ids, inputs, outputs = self._run(inputs, progress_name=progress_name, **kwargs)
         if self.conversational_agent:
-            outputs = [(session_id, output) for session_id, output in zip(session_ids, outputs)]
+            if return_inputs:
+                outputs = [(session_id, inp, output) for session_id, inp, output in zip(session_ids, inputs, outputs)]
+            else:
+                outputs = [(session_id, output) for session_id, output in zip(session_ids, outputs)]
         else:
-            outputs = [output for output in outputs]
+            if return_inputs:
+                outputs = [(inp, output) for inp, output in zip(inputs, outputs)]
+            else:
+                outputs = [output for output in outputs]
 
         return self.output_transformation(outputs)
 
