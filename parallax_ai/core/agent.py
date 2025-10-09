@@ -285,7 +285,7 @@ class Agent:
         self.output_processor = OutputProcessor(
             output_structure=output_structure,
         )
-        self.client = Client(**kwargs) if client is None else client
+        self.client = client
         self.engine = ParallaxEngine(
             client=self.client, 
             max_tries=max_tries,
@@ -447,6 +447,7 @@ class Agent:
         return_inputs: bool = False,
         **kwargs,
     ) -> List[Tuple[str, Any]]:
+        assert self.client is not None, "Client is not initialized."
         inputs, progress_name = self.input_transformation(inputs, progress_name)
 
         session_ids, inputs, outputs = self._run(inputs, progress_name=progress_name, **kwargs)
