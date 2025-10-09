@@ -210,7 +210,7 @@ class MultiAgent:
     def _get_pipeline_inputs(
         self, 
         packages: List[Package], 
-        ios: Optional[Dict[str, ModuleIO]],
+        modules: Optional[Dict[str, AgentModule]],
     ) -> Tuple[Dict[str, Any], Dict[str, int]]:
         inputs = {}
         package_indices = {}
@@ -227,22 +227,22 @@ class MultiAgent:
                 package_indices[agent_name] = i  # Record which package provides this input
 
             # Get inputs from package.external_data
-            for agent_name, agent_io in ios.items():
+            for agent_name, module in modules.items():
                 if agent_name in inputs:
                     # Already has this inputs
                     continue
                 if agent_name in package.agent_outputs:
                     # Already has executed this agent
                     continue
-                if agent_io.input_processing is None:
+                if module.io.input_processing is None:
                     # No input processing function
                     continue
-                if agent_io.dependency is not None:
-                    if not self.is_dependency_fulfilled(package, agent_io.dependency):
+                if module.io.dependency is not None:
+                    if not self.is_dependency_fulfilled(package, module.io.dependency):
                         # Dependencies not fulfilled
                         continue
                 # Get agent inputs
-                agent_inputs = agent_io.input_processing(deepcopy(package.agent_outputs), deepcopy(package.external_data))
+                agent_inputs = module.io.input_processing(deepcopy(package.agent_outputs), deepcopy(package.external_data))
                 if agent_inputs is None:
                     print(f"[Warning] Obtain 'None' inputs for agent {agent_name}. This is normal if dependency is not provided for AgentIO.")
                 if len(agent_inputs) == 0:                    
@@ -290,7 +290,7 @@ class MultiAgent:
                 return {}
 
         # Input processing for all agents
-        inputs, package_indices = self._get_pipeline_inputs(self.packages, self.ios)
+        inputs, package_indices = self._get_pipeline_inputs(self.packages, self.modules)
 
         # Execute Agents
         input_outputs = self._run(
