@@ -14,13 +14,11 @@ class MultiAgent:
         self, 
         client: Client,
         modules: Dict[str, AgentModule],
-        progress_names: Optional[Dict[str, str]] = None,
         max_tries: int = 1,
         dismiss_none_output: bool = False,
     ):
         self.client = client
         self.modules = modules
-        self.progress_names = progress_names if progress_names is not None else {}
         self.max_tries = max_tries
         self.dismiss_none_output = dismiss_none_output
         self.engine = ParallaxEngine(
@@ -41,7 +39,6 @@ class MultiAgent:
         # Save MultiAgent config
         config = {
             "modules": list(self.modules.keys()),
-            "progress_names": self.progress_names,
             "max_tries": self.max_tries,
             "dismiss_none_output": self.dismiss_none_output,
         }
@@ -140,16 +137,11 @@ class MultiAgent:
     def _run(
         self, 
         inputs: Dict[str, Any], 
-        progress_names: Optional[Dict[str, str]] = None,
         return_inputs: bool = False,
+        progress_names: Optional[Dict[str, str]] = None,
         **kwargs
     ) -> Dict[str, Any]:
-        # Use default progress names if not provided
-        if progress_names is None:
-            progress_names = deepcopy(self.progress_names)
-        for agent_name in inputs.keys():
-            if agent_name not in progress_names:
-                progress_names[agent_name] = self.progress_names.get(agent_name, None)
+        progress_names = deepcopy(progress_names)
                 
         # Transform inputs for all agents
         for agent_name in inputs.keys():
@@ -294,7 +286,10 @@ class MultiAgent:
 
         # Execute Agents
         input_outputs = self._run(
-            inputs=deepcopy(inputs), return_inputs=True, **kwargs
+            inputs=deepcopy(inputs), 
+            return_inputs=True, 
+            progress_names={agent_name: module.progress_name for agent_name, module in self.modules.items()},
+            **kwargs
         )
 
         # Update packages with outputs
