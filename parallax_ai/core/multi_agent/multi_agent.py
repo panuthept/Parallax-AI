@@ -92,8 +92,8 @@ class MultiAgent:
         jobs = []
         agent_names = []
         for agent_name, agent_inputs in inputs.items():
-            assert agent_name in self.agents, f"Agent {agent_name} not found."
-            agent_jobs = self.agents[agent_name]._create_jobs(
+            assert agent_name in self.modules, f"Agent {agent_name} not found."
+            agent_jobs = self.modules[agent_name].agent._create_jobs(
                 agent_inputs, progress_name=agent_name if progress_names is None else progress_names[agent_name]
             )
             jobs.extend(agent_jobs)
@@ -115,7 +115,7 @@ class MultiAgent:
         # Update conversation memory with assistant outputs
         for job, agent_name in zip(shuffled_jobs, shuffled_agent_names):
             if job.output is not None:
-                job.session_id = self.agents[agent_name].conversation_memory.update_assistant(job.session_id, job.output)
+                job.session_id = self.modules[agent_name].agent.conversation_memory.update_assistant(job.session_id, job.output)
         shuffled_session_ids = [job.session_id for job in shuffled_jobs]
 
         # Unshuffle jobs to the original order
