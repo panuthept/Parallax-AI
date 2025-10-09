@@ -1,8 +1,6 @@
 import json
-import random
 from copy import deepcopy
-from .client import ParallaxClient
-from collections import defaultdict
+from .client import Client
 from .engine import ParallaxEngine, Job
 from ..utilities import type_validation, generate_session_id
 from typing import Optional, Union, Literal, Tuple, List, Dict, Any, get_origin, get_args
@@ -113,7 +111,7 @@ class InputProcessor:
         # Check type of each value
         for key, value in input.items():
             if not type_validation(value, self.input_structure[key]):
-                raise ValueError(f"Type of key '{key}' is not valid: expecting {self.input_structure[key]} but got {type(value)} from the agent named: {self.name}")
+                raise ValueError(f"Type of key '{key}' is not valid: expecting {self.input_structure[key]} but got {type(value)}.")
 
         if self.input_template is None:
             return "\n\n".join([f'{key.replace("_", " ").capitalize()}:\n{value}' for key, value in input.items()])
@@ -206,12 +204,18 @@ class OutputProcessor:
                     outputs = output
                     valid_outputs = []
                     # Check if all keys are in the output
-                    for key in self.output_structure[0]:
-                        for output in outputs:
-                            if key in output:
-                                # Check if all values are valid
-                                type_validation(output[key], self.output_structure[0][key], raise_error=True)
-                                valid_outputs.append(output)
+                    for output in outputs:
+                        is_valid = True
+                        for key in self.output_structure[0]:
+                            if key not in output:
+                                is_valid = False
+                                break
+                            # Check if all values are valid
+                            if not type_validation(output[key], self.output_structure[0][key]):
+                                is_valid = False
+                                break
+                        if is_valid:
+                            valid_outputs.append(output)
                     if len(valid_outputs) == 0:
                         raise ValueError("No valid output found")
                     output = valid_outputs
@@ -251,9 +255,9 @@ class Agent:
         conversational_agent: bool = False,
         min_sessions: int = 100000,
         max_sessions: int = 1000000,
-        max_tries: int = 10,
+        max_tries: int = 1,
         dismiss_none_output: bool = False,
-        client: Optional[ParallaxClient] = None,
+        client: Optional[Client] = None,
         **kwargs,
     ):  
         if input_structure is not None:
@@ -267,6 +271,8 @@ class Agent:
         self.input_template = input_template
         self.system_prompt = system_prompt
         self.conversational_agent = conversational_agent
+        self.max_tries = max_tries
+        self.dismiss_none_output = dismiss_none_output
 
         self.conversation_memory = ConversationMemory(
             min_sessions=min_sessions if conversational_agent else 0,
@@ -279,11 +285,57 @@ class Agent:
         self.output_processor = OutputProcessor(
             output_structure=output_structure,
         )
-        self.client = ParallaxClient(**kwargs) if client is None else client
+        self.client = Client(**kwargs) if client is None else client
         self.engine = ParallaxEngine(
             client=self.client, 
             max_tries=max_tries,
             dismiss_none_output=dismiss_none_output,
+        )
+
+    def save(self, path: str):
+        import os
+        import yaml
+        from ..utilities import save_type_structure
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        config = {
+            "model": self.model,
+            "input_structure": save_type_structure(self.input_structure),
+            "output_structure": save_type_structure(self.output_structure),
+            "input_template": self.input_template,
+            "system_prompt": self.system_prompt,
+            "conversational_agent": self.conversational_agent,
+            "min_sessions": self.conversation_memory.min_sessions,
+            "max_sessions": self.conversation_memory.max_sessions,
+            "max_tries": self.max_tries,
+            "dismiss_none_output": self.dismiss_none_output,
+        }
+        with open(path, "w") as f:
+            # Configure YAML to use literal style for multiline strings
+            yaml.add_representer(str, lambda dumper, data: 
+                dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|') 
+                if '\n' in data else dumper.represent_scalar('tag:yaml.org,2002:str', data))
+            yaml.dump(config, f, allow_unicode=True)
+
+    @classmethod
+    def load(cls, path: str, client: Optional[Client] = None):
+        import yaml
+        from ..utilities import load_type_structure
+        with open(path, "r") as f:
+            config = yaml.safe_load(f)
+        config["input_structure"] = load_type_structure(config.get("input_structure", None))
+        config["output_structure"] = load_type_structure(config.get("output_structure", None))
+        return Agent(
+            model=config.get("model", None),
+            input_structure=config.get("input_structure", None),
+            output_structure=config.get("output_structure", None),
+            input_template=config.get("input_template", None),
+            system_prompt=config.get("system_prompt", None),
+            conversational_agent=config.get("conversational_agent", False),
+            min_sessions=config.get("min_sessions", 100000),
+            max_sessions=config.get("max_sessions", 1000000),
+            max_tries=config.get("max_tries", 1),
+            dismiss_none_output=config.get("dismiss_none_output", False),
+            client=client,
         )
 
     def get_system_prompt(self):
@@ -365,7 +417,7 @@ class Agent:
         inputs: List[Tuple[str, Any]],
         progress_name: Optional[str] = None,
         **kwargs,
-    ) -> Tuple[List[str], List[Any]]:
+    ) -> Tuple[List[str], List[Any], List[Any]]:
         # Create jobs
         jobs = self._create_jobs(inputs, progress_name)
         if len(jobs) == 0:
@@ -373,13 +425,14 @@ class Agent:
         # Process the jobs by the ParallaxEngine with retries
         jobs = self.engine(jobs, **kwargs)
         # Get outputs in the original order
+        inputs = [job.inp for job in jobs]
         outputs = [job.output for job in jobs]
         # Update conversation memory with assistant outputs
         for job in jobs:
             if job.output is not None:
                 job.session_id = self.conversation_memory.update_assistant(job.session_id, job.output)
         session_ids = [job.session_id for job in jobs]
-        return session_ids, outputs
+        return session_ids, inputs, outputs
     
     def input_transformation(self, inputs, progress_name: Optional[str] = None):
         return inputs, progress_name
@@ -391,15 +444,22 @@ class Agent:
         self, 
         inputs: List[Union[Tuple[str, Any], Tuple[str, Any]]],
         progress_name: Optional[str] = None,
+        return_inputs: bool = False,
         **kwargs,
     ) -> List[Tuple[str, Any]]:
         inputs, progress_name = self.input_transformation(inputs, progress_name)
 
-        session_ids, outputs = self._run(inputs, progress_name=progress_name, **kwargs)
+        session_ids, inputs, outputs = self._run(inputs, progress_name=progress_name, **kwargs)
         if self.conversational_agent:
-            outputs = [(session_id, output) for session_id, output in zip(session_ids, outputs)]
+            if return_inputs:
+                outputs = [(session_id, inp, output) for session_id, inp, output in zip(session_ids, inputs, outputs)]
+            else:
+                outputs = [(session_id, output) for session_id, output in zip(session_ids, outputs)]
         else:
-            outputs = [output for output in outputs]
+            if return_inputs:
+                outputs = [(inp, output) for inp, output in zip(inputs, outputs)]
+            else:
+                outputs = [output for output in outputs]
 
         return self.output_transformation(outputs)
 
