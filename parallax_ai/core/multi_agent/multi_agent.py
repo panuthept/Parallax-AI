@@ -244,7 +244,7 @@ class MultiAgent:
                 # Get agent inputs
                 agent_inputs = module.io.input_processing(deepcopy(package.agent_outputs), deepcopy(package.external_data))
                 if agent_inputs is None:
-                    print(f"[Warning] Obtain 'None' inputs for agent {agent_name}. This is normal if dependency is not provided for AgentIO.")
+                    print(f"[Warning] Obtain 'None' inputs for agent {agent_name}. This is possible if dependency is not provided for downstream Agent.")
                 if len(agent_inputs) == 0:                    
                     print(f"[Warning] Obtain empty inputs for agent {agent_name}.")
                 inputs[agent_name] = agent_inputs
@@ -301,10 +301,10 @@ class MultiAgent:
         for agent_name, agent_input_outputs in input_outputs.items():
             package_index = package_indices[agent_name]
             # Process outputs if output_processing is provided
-            if agent_name in self.ios and self.ios[agent_name].output_processing is not None:
-                agent_inputs = agent_input_outputs[1] if self.agents[agent_name].conversational_agent else agent_input_outputs[0]
+            if agent_name in self.modules and self.modules[agent_name].io.output_processing is not None:
+                agent_inputs = agent_input_outputs[1] if self.modules[agent_name].agent.conversational_agent else agent_input_outputs[0]
                 agent_outputs = agent_input_outputs[-1]
-                agent_outputs = self.ios[agent_name].output_processing(
+                agent_outputs = self.modules[agent_name].io.output_processing(
                     deepcopy(agent_inputs),                                 # inputs
                     deepcopy(agent_outputs),                                # outputs
                     deepcopy(self.packages[package_index].external_data)    # data
