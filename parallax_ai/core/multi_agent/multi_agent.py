@@ -13,13 +13,13 @@ from .dataclasses import ModuleIO, Package, Dependency, AgentModule
 
 class MultiAgent:
     def __init__(
-        self, 
-        client: Client,
+        self,
         modules: Dict[str, AgentModule],
+        client: Client = None,
         max_tries: int = 1,
         dismiss_none_output: bool = False,
     ):
-        self.client = client
+        self.client = client if client is not None else Client()
         self.modules = modules
         self._modules = self._flatten_modules(modules)
         self.max_tries = max_tries
