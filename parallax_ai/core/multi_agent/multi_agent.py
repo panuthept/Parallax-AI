@@ -190,7 +190,7 @@ class MultiAgent:
         )
         if inputs is not None:
             for agent_name, agent_inputs in inputs.items():
-                assert agent_name in self.agents, f"Unknown agent name: '{agent_name}' in inputs."
+                assert agent_name in self.modules, f"Unknown agent name: '{agent_name}' in inputs."
                 package.agent_inputs[agent_name] = agent_inputs
         return package
     
