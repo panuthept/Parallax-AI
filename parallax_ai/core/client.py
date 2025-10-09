@@ -113,6 +113,12 @@ class Client:
             self.pool = Pool(processes=local_workers)
             print("Multiprocessing Pool initialized.")
 
+        # Report which function initialize Client
+        import inspect
+        stack = inspect.stack()
+        if len(stack) > 1:
+            print(f"Client initialized from {stack[1].filename}:{stack[1].lineno} in function {stack[1].function}().")
+
     def _preprocess_inputs(self, inputs):
         # inputs: can be 'str', 'list[dict]', 'list[str]', or 'list[list[dict]]'
         if inputs is None or isinstance(inputs, str):
