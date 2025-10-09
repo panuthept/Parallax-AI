@@ -182,11 +182,13 @@ class Module:
 class AgentModule(Module):
     agent: Agent
     io: Optional[Union[ModuleIO, Dict[str, ModuleIO]]]
+    progress_name: Optional[str] = None
 
 @dataclass
 class FunctionModule(Module):
     function: Callable
     io: Optional[Union[ModuleIO, Dict[str, ModuleIO]]]
+    progress_name: Optional[str] = None
 
 
 @dataclass
