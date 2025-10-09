@@ -229,6 +229,7 @@ class MultiAgent:
     ) -> Package:
         package = Package(
             id=tracking_id if tracking_id is not None else uuid4().hex,
+            status="running",
             external_data=external_data, 
         )
         if inputs is not None:
@@ -258,6 +259,8 @@ class MultiAgent:
         inputs = {}
         package_indices = {}
         for i, package in enumerate(packages):   # Prioritize older packages
+            if package is None or package.status in ["finished", "stalled"]:
+                continue
             # Get inputs from package.agent_inputs
             for agent_name, agent_inputs in package.agent_inputs.items():
                 if agent_name in inputs:
@@ -302,22 +305,23 @@ class MultiAgent:
                 package_indices[agent_name] = i # Record which package provides this input
         return inputs, package_indices
     
-    def _clear_packages(self, packages: List[Package], package_indices: Dict[str, int]):
-        removable_package_indices = set()
+    def _update_package_status(self, packages: List[Package], package_indices: Dict[str, int]):
         # (a package is finished if all agents have been executed)
         for i, package in enumerate(packages):
+            if package is None or package.status in ["finished", "stalled"]:
+                continue
             all_agents_executed = True
             for agent_name in self._modules.keys():
                 if agent_name not in package.agent_outputs:
                     all_agents_executed = False
             if all_agents_executed:
-                removable_package_indices.add(i)
+                package.status = "finished"
         # (a package is stalled if no new agents can be executed)
         for i, package in enumerate(packages):
+            if package is None or package.status in ["finished", "stalled"]:
+                continue
             if i not in package_indices.values():
-                removable_package_indices.add(i)
-        # Remove packages
-        packages = [package for i, package in enumerate(packages) if i not in removable_package_indices]
+                package.status = "stalled"
         return packages
     
     def run_single_step(
@@ -325,9 +329,8 @@ class MultiAgent:
         inputs=None,
         tracking_id=None,
         external_data=None,
-        return_tracking_id=False,
         **kwargs,
-    ):
+    ) -> List[Package]:
         """
         Run a single step of the multi-agent pipeline.
         """
@@ -336,9 +339,15 @@ class MultiAgent:
             package = self.init_package(inputs, external_data, tracking_id=tracking_id)
             self.packages.append(package)
         else:
-            if len(self.packages) == 0:
+            if len(self.packages) > 0:
+                self.packages.append(None)
+            else:
                 print("Warning: No packages to process. Please provide inputs or external_data to create a new package.")
-                return {}
+                return []
+            
+        # Remove exceeded packages
+        if len(self.packages) > len(self.modules):
+            self.packages = self.packages[-len(self.modules):]
 
         # Input processing for all agents
         inputs, package_indices = self._get_pipeline_inputs(self.packages, self._modules)
@@ -354,6 +363,7 @@ class MultiAgent:
         # Update packages with outputs
         for agent_name, agent_input_outputs in input_outputs.items():
             package_index = package_indices[agent_name]
+            assert self.packages[package_index] is not None, "Package should not be None."
             # Process outputs if output_processing is provided
             if agent_name in self._modules and self._modules[agent_name].io.output_processing is not None:
                 agent_inputs = agent_input_outputs[1] if self._modules[agent_name].agent.conversational_agent else agent_input_outputs[0]
@@ -365,63 +375,56 @@ class MultiAgent:
                 )
             self.packages[package_index].agent_outputs[agent_name] = agent_outputs
 
-        # Get return all outputs
-        # [NOTE] Do not move this line after clearing packages
-        if return_tracking_id:
-            all_outputs = [(pkg.id, pkg.agent_outputs) for pkg in self.packages]
-        else:
-            all_outputs = [pkg.agent_outputs for pkg in self.packages]
-
         # Remove finished or stalled packages
-        self.packages = self._clear_packages(self.packages, package_indices)
-
-        return all_outputs
+        self.packages = self._update_package_status(self.packages, package_indices)
+        return [deepcopy(package) for package in self.packages if package is not None]
     
-    def flush(self, **kwargs):
+    def flush(self, **kwargs) -> List[Package]:
         """
         Finish all the remaining packages.
         """
-        all_outputs = {}
+        all_packages = {}
         while len(self.packages) > 0:
-            outputs = self.run_single_step(return_tracking_id=True, **kwargs)
-            for id, out in outputs:
-                all_outputs[id] = out
-        return list(all_outputs.values())
+            packages = self.run_single_step(**kwargs)
+            for package in packages:
+                if package is not None:
+                    all_packages[package.id] = package
+        return list(all_packages.values())
     
     def run(
         self,
         inputs=None,
         external_data=None,
         **kwargs,
-    ):
+    ) -> List[Package]:
         """
         Run the given inputs through the multi-agent pipeline until all agents have produced outputs.
         """
         assert inputs is not None or external_data is not None, "Please provide inputs or external_data to run the multi-agent pipeline."
-        outputs = self.run_single_step(inputs=inputs, external_data=external_data, **kwargs)[0]
-        flush_outputs = self.flush(**kwargs)
-        if len(flush_outputs) > 0:
-            outputs = flush_outputs[0]
-        return outputs
+        packages = self.run_single_step(inputs=inputs, external_data=external_data, **kwargs)
+        packages = {package.id: package for package in packages}
+        for package in self.flush(**kwargs):
+            packages[package.id] = package
+        return list(packages.values())
     
-    def run_until(
-        self,
-        condition_fn,
-        inputs=None,
-        external_data=None,
-        max_steps: int = 10,
-        **kwargs,
-    ):
-        """
-        Run the multi-agent pipeline until the condition function is satisfied or max_steps is reached.
-        The condition function takes in a dictionary of agent outputs and returns a boolean.
-        """
-        assert inputs is not None or external_data is not None, "Please provide inputs or external_data to run the multi-agent pipeline."
-        steps = 0
-        outputs = self.run_single_step(inputs=inputs, external_data=external_data, **kwargs)[0]
-        while not condition_fn(outputs) and steps < max_steps:
-            all_outputs = self.run_single_step(**kwargs)
-            if len(all_outputs) > 0:
-                outputs = all_outputs[0]
-            steps += 1
-        return outputs
+    # def run_until(
+    #     self,
+    #     condition_fn,
+    #     inputs=None,
+    #     external_data=None,
+    #     max_steps: int = 10,
+    #     **kwargs,
+    # ) -> List[Package]:
+    #     """
+    #     Run the multi-agent pipeline until the condition function is satisfied or max_steps is reached.
+    #     The condition function takes in a dictionary of agent outputs and returns a boolean.
+    #     """
+    #     assert inputs is not None or external_data is not None, "Please provide inputs or external_data to run the multi-agent pipeline."
+    #     steps = 0
+    #     packages = self.run_single_step(inputs=inputs, external_data=external_data, **kwargs)
+    #     packages = {package.id: package for package in packages}
+    #     while not condition_fn(outputs) and steps < max_steps:
+    #         for package in self.run_single_step(**kwargs):
+    #             packages[package.id] = package
+    #         steps += 1
+    #     return list(packages.values())
