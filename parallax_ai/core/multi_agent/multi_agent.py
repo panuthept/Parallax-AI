@@ -1,3 +1,5 @@
+import os
+import re
 import random
 from uuid import uuid4
 from copy import deepcopy
@@ -55,7 +57,11 @@ class MultiAgent:
 
         # Save IOs
         for agent_name, module in self.modules.items():
-            module.io.save(f"{save_path}/ios/{agent_name}.yaml")
+            if isinstance(module.io, dict):
+                for io_name, io in module.io.items():
+                    io.save(f"{save_path}/ios/{agent_name}.{io_name}.yaml")
+            elif module.io is not None:
+                module.io.save(f"{save_path}/ios/{agent_name}.yaml")
 
         # Save MultiAgent config
         config = {
@@ -83,7 +89,16 @@ class MultiAgent:
         # Load AgentIOs
         ios = {}
         for agent_name in config["ios"]:
-            ios[agent_name] = ModuleIO.load(f"{load_path}/ios/{agent_name}.yaml")
+            # IOs can be either single IO or multiple IOs
+            if os.path.exists(f"{load_path}/ios/{agent_name}.yaml"):
+                ios[agent_name] = ModuleIO.load(f"{load_path}/ios/{agent_name}.yaml")
+            else:
+                for filename in os.listdir(f"{load_path}/ios"):
+                    if filename.startswith(f"{agent_name}.") and filename.endswith(".yaml"):
+                        io_name = filename[len(agent_name)+1:-len(".yaml")]
+                        if agent_name not in ios:
+                            ios[agent_name] = {}
+                        ios[agent_name][io_name] = ModuleIO.load(f"{load_path}/ios/{filename}")
 
         modules = {
             AgentModule(
