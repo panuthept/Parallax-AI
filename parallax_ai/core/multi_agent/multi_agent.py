@@ -256,7 +256,7 @@ class MultiAgent:
         # (a package is finished if all agents have been executed)
         for i, package in enumerate(packages):
             all_agents_executed = True
-            for agent_name in self.agents.keys():
+            for agent_name in self.modules.keys():
                 if agent_name not in package.agent_outputs:
                     all_agents_executed = False
             if all_agents_executed:
