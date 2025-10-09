@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "parallax-ai"
-version = "0.3.7"
-description = "Lightweight parallel AI API calls in Python."
+version = "0.4.0"
+description = "Parallel Multi-Agent Inference."
 readme = "README.md"
 requires-python = ">=3.8"
 license = "Apache-2.0"
