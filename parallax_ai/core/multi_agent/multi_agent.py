@@ -153,8 +153,8 @@ class MultiAgent:
                 
         # Transform inputs for all agents
         for agent_name in inputs.keys():
-            assert agent_name in self.agents, f"Agent {agent_name} not found."
-            inputs[agent_name], progress_names[agent_name] = self.agents[agent_name].input_transformation(inputs[agent_name], progress_names.get(agent_name, None))
+            assert agent_name in self.modules, f"Agent {agent_name} not found."
+            inputs[agent_name], progress_names[agent_name] = self.modules[agent_name].agent.input_transformation(inputs[agent_name], progress_names.get(agent_name, None))
 
         # Run all agents
         agent_names, session_ids, inputs, outputs = self.__run(inputs, progress_names=progress_names, **kwargs)
@@ -162,7 +162,7 @@ class MultiAgent:
         # Get outputs for each agent
         dict_outputs = defaultdict(list)
         for agent_name, session_id, output in zip(agent_names, session_ids, outputs):
-            if self.agents[agent_name].conversational_agent:
+            if self.modules[agent_name].agent.conversational_agent:
                 if return_inputs:
                     dict_outputs[agent_name].append((session_id, inputs, output))
                 else:
@@ -175,7 +175,7 @@ class MultiAgent:
 
         # Transform outputs for all agents
         for agent_name in dict_outputs.keys():
-            dict_outputs[agent_name] = self.agents[agent_name].output_transformation(dict_outputs[agent_name])
+            dict_outputs[agent_name] = self.modules[agent_name].agent.output_transformation(dict_outputs[agent_name])
         return dict_outputs
     
     def init_package(
