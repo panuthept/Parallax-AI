@@ -117,8 +117,6 @@ class AgentIO:
             
         source = func_data.get('source', '')
         func_type = func_data.get('type', '')
-        print(f"SOURCE: {source}")
-        print(f"TYPE: {func_type}")
         
         try:
             local_namespace = {}
