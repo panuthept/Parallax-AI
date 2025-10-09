@@ -3,9 +3,10 @@ import yaml
 import dill
 import types
 import inspect
+from ..agent import Agent
 from uuid import UUID, uuid4
 from dataclasses import dataclass, field
-from typing import Dict, List, Callable, Optional, Any
+from typing import Dict, List, Callable, Union, Optional, Any
 
 
 @dataclass
@@ -15,7 +16,7 @@ class Dependency:
 
 
 @dataclass
-class AgentIO:
+class ModuleIO:
     dependency: Optional[Dependency] = None
     input_processing: Optional[Callable[[list, dict], list]] = None # (outputs, data) -> inputs
     output_processing: Callable[[list, list, dict], list] = None # (inputs, outputs, data) -> processed_outputs
@@ -174,8 +175,23 @@ class AgentIO:
 
 
 @dataclass
+class Module:
+    pass
+
+@dataclass
+class AgentModule(Module):
+    agent: Agent
+    io: Optional[Union[ModuleIO, Dict[str, ModuleIO]]]
+
+@dataclass
+class FunctionModule(Module):
+    function: Callable
+    io: Optional[Union[ModuleIO, Dict[str, ModuleIO]]]
+
+
+@dataclass
 class Package:
     id: str = field(default_factory=lambda: uuid4().hex)
-    agent_inputs: Dict[str, Any] = field(default_factory=dict)    # agent_name -> inputs
-    agent_outputs: Dict[str, Any] = field(default_factory=dict)   # agent_name -> outputs
-    external_data: Dict[str, Any] = field(default_factory=dict)      # data_name -> data_value
+    agent_inputs: Dict[str, Any] = field(default_factory=dict)      # agent_name -> inputs
+    agent_outputs: Dict[str, Any] = field(default_factory=dict)     # agent_name -> outputs
+    external_data: Dict[str, Any] = field(default_factory=dict)     # data_name -> data_value
