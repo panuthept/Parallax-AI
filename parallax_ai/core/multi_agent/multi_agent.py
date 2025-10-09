@@ -19,12 +19,33 @@ class MultiAgent:
     ):
         self.client = client
         self.modules = modules
+        self._modules = self._flatten_modules(modules)
         self.max_tries = max_tries
         self.dismiss_none_output = dismiss_none_output
         self.engine = ParallaxEngine(
             client=self.client, max_tries=max_tries, dismiss_none_output=False
         )
         self.packages: List[Package] = []
+
+    def _flatten_modules(self, modules: Dict[str, AgentModule]) -> Dict[str, AgentModule]:
+        """
+        Breakdown AgentModule with multiple IOs into multiple AgentModules with single IO.
+        Ex. {"agent1": AgentModule(agent=Agent1, io={"task1": IO1, "task2": IO2})}
+            -> {"agent1.task1": AgentModule(agent=Agent1, io=IO1),
+                "agent1.task2": AgentModule(agent=Agent1, io=IO2)}
+        """
+        flatten_modules = {}
+        for agent_name, module in modules.items():
+            if isinstance(module.io, dict):
+                for io_name, io in module.io.items():
+                    flatten_modules[f"{agent_name}.{io_name}"] = AgentModule(
+                        agent=module.agent,
+                        io=io,
+                        progress_name=module.progress_name,
+                    )
+            else:
+                flatten_modules[agent_name] = module
+        return flatten_modules
 
     def save(self, name: str, cache_dir: str = "~/.cache/parallax_ai"):
         save_path = f"{cache_dir}/{name}"
@@ -89,8 +110,8 @@ class MultiAgent:
         jobs = []
         agent_names = []
         for agent_name, agent_inputs in inputs.items():
-            assert agent_name in self.modules, f"Agent {agent_name} not found."
-            agent_jobs = self.modules[agent_name].agent._create_jobs(
+            assert agent_name in self._modules, f"Agent {agent_name} not found."
+            agent_jobs = self._modules[agent_name].agent._create_jobs(
                 agent_inputs, progress_name=agent_name if progress_names is None else progress_names[agent_name]
             )
             jobs.extend(agent_jobs)
@@ -112,7 +133,7 @@ class MultiAgent:
         # Update conversation memory with assistant outputs
         for job, agent_name in zip(shuffled_jobs, shuffled_agent_names):
             if job.output is not None:
-                job.session_id = self.modules[agent_name].agent.conversation_memory.update_assistant(job.session_id, job.output)
+                job.session_id = self._modules[agent_name].agent.conversation_memory.update_assistant(job.session_id, job.output)
         shuffled_session_ids = [job.session_id for job in shuffled_jobs]
 
         # Unshuffle jobs to the original order
@@ -145,8 +166,8 @@ class MultiAgent:
                 
         # Transform inputs for all agents
         for agent_name in inputs.keys():
-            assert agent_name in self.modules, f"Agent {agent_name} not found."
-            inputs[agent_name], progress_names[agent_name] = self.modules[agent_name].agent.input_transformation(inputs[agent_name], progress_names.get(agent_name, None))
+            assert agent_name in self._modules, f"Agent {agent_name} not found."
+            inputs[agent_name], progress_names[agent_name] = self._modules[agent_name].agent.input_transformation(inputs[agent_name], progress_names.get(agent_name, None))
 
         # Run all agents
         agent_names, session_ids, inputs, outputs = self.__run(inputs, progress_names=progress_names, **kwargs)
@@ -154,7 +175,7 @@ class MultiAgent:
         # Get outputs for each agent
         dict_outputs = defaultdict(list)
         for agent_name, session_id, output in zip(agent_names, session_ids, outputs):
-            if self.modules[agent_name].agent.conversational_agent:
+            if self._modules[agent_name].agent.conversational_agent:
                 if return_inputs:
                     dict_outputs[agent_name].append((session_id, inputs, output))
                 else:
@@ -167,7 +188,7 @@ class MultiAgent:
 
         # Transform outputs for all agents
         for agent_name in dict_outputs.keys():
-            dict_outputs[agent_name] = self.modules[agent_name].agent.output_transformation(dict_outputs[agent_name])
+            dict_outputs[agent_name] = self._modules[agent_name].agent.output_transformation(dict_outputs[agent_name])
         return dict_outputs
     
     def init_package(
@@ -182,7 +203,7 @@ class MultiAgent:
         )
         if inputs is not None:
             for agent_name, agent_inputs in inputs.items():
-                assert agent_name in self.modules, f"Unknown agent name: '{agent_name}' in inputs."
+                assert agent_name in self._modules, f"Unknown agent name: '{agent_name}' in inputs."
                 package.agent_inputs[agent_name] = agent_inputs
         return package
     
@@ -248,7 +269,7 @@ class MultiAgent:
         # (a package is finished if all agents have been executed)
         for i, package in enumerate(packages):
             all_agents_executed = True
-            for agent_name in self.modules.keys():
+            for agent_name in self._modules.keys():
                 if agent_name not in package.agent_outputs:
                     all_agents_executed = False
             if all_agents_executed:
@@ -282,13 +303,13 @@ class MultiAgent:
                 return {}
 
         # Input processing for all agents
-        inputs, package_indices = self._get_pipeline_inputs(self.packages, self.modules)
+        inputs, package_indices = self._get_pipeline_inputs(self.packages, self._modules)
 
         # Execute Agents
         input_outputs = self._run(
             inputs=deepcopy(inputs), 
             return_inputs=True, 
-            progress_names={agent_name: module.progress_name for agent_name, module in self.modules.items()},
+            progress_names={agent_name: module.progress_name for agent_name, module in self._modules.items()},
             **kwargs
         )
 
@@ -296,10 +317,10 @@ class MultiAgent:
         for agent_name, agent_input_outputs in input_outputs.items():
             package_index = package_indices[agent_name]
             # Process outputs if output_processing is provided
-            if agent_name in self.modules and self.modules[agent_name].io.output_processing is not None:
-                agent_inputs = agent_input_outputs[1] if self.modules[agent_name].agent.conversational_agent else agent_input_outputs[0]
+            if agent_name in self._modules and self._modules[agent_name].io.output_processing is not None:
+                agent_inputs = agent_input_outputs[1] if self._modules[agent_name].agent.conversational_agent else agent_input_outputs[0]
                 agent_outputs = agent_input_outputs[-1]
-                agent_outputs = self.modules[agent_name].io.output_processing(
+                agent_outputs = self._modules[agent_name].io.output_processing(
                     deepcopy(agent_inputs),                                 # inputs
                     deepcopy(agent_outputs),                                # outputs
                     deepcopy(self.packages[package_index].external_data)    # data
