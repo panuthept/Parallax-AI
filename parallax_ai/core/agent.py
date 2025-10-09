@@ -317,7 +317,7 @@ class Agent:
             yaml.dump(config, f, allow_unicode=True)
 
     @classmethod
-    def load(cls, path: str):
+    def load(cls, path: str, client: Optional[Client] = None):
         import yaml
         from ..utilities import load_type_structure
         with open(path, "r") as f:
@@ -335,6 +335,7 @@ class Agent:
             max_sessions=config.get("max_sessions", 1000000),
             max_tries=config.get("max_tries", 1),
             dismiss_none_output=config.get("dismiss_none_output", False),
+            client=client,
         )
 
     def get_system_prompt(self):

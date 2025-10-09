@@ -37,6 +37,53 @@ class MultiAgent:
         
         self.packages: List[Package] = []
 
+    def save(self, path: str):
+        # Save Agents
+        for agent_name, agent in self.agents.items():
+            agent.save(f"{path}/agents/{agent_name}.yaml")
+
+        # Save AgentIOs
+        for agent_name, agent_io in self.agent_ios.items():
+            agent_io.save(f"{path}/agent_ios/{agent_name}.yaml")
+
+        # Save MultiAgent config
+        config = {
+            "agents": list(self.agents.keys()),
+            "agent_ios": list(self.agent_ios.keys()),
+            "progress_names": self.progress_names,
+            "max_tries": self.max_tries,
+            "dismiss_none_output": self.dismiss_none_output,
+        }
+        with open(f"{path}/multi_agent.yaml", "w") as f:
+            import yaml
+            yaml.dump(config, f)
+
+    @classmethod
+    def load(cls, path: str, client: Optional[Client] = None):
+        # Load MultiAgent config
+        with open(f"{path}/multi_agent.yaml", "r") as f:
+            import yaml
+            config = yaml.safe_load(f)
+        
+        # Load Agents
+        agents = {}
+        for agent_name in config["agents"]:
+            agents[agent_name] = Agent.load(f"{path}/agents/{agent_name}.yaml", client=client)
+        
+        # Load AgentIOs
+        agent_ios = {}
+        for agent_name in config["agent_ios"]:
+            agent_ios[agent_name] = AgentIO.load(f"{path}/agent_ios/{agent_name}.yaml")
+        
+        return cls(
+            agents=agents,
+            agent_ios=agent_ios,
+            progress_names=config.get("progress_names", None),
+            max_tries=config.get("max_tries", 1),
+            dismiss_none_output=config.get("dismiss_none_output", False),
+            client=client,
+        )
+
     def __run(
         self, 
         inputs: List[Tuple[str, Any]],
