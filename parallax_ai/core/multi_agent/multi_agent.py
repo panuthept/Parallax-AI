@@ -31,12 +31,12 @@ class MultiAgent:
     def save(self, name: str, cache_dir: str = "~/.cache/parallax_ai"):
         save_path = f"{cache_dir}/{name}"
         # Save Modules
-        for agent_name, agent in self.modules.items():
-            agent.save(f"{save_path}/agents/{agent_name}.yaml")
+        for agent_name, module in self.modules.items():
+            module.agent.save(f"{save_path}/agents/{agent_name}.yaml")
 
         # Save IOs
-        for agent_name, agent_io in self.modules.items():
-            agent_io.save(f"{save_path}/ios/{agent_name}.yaml")
+        for agent_name, module in self.modules.items():
+            module.io.save(f"{save_path}/ios/{agent_name}.yaml")
 
         # Save MultiAgent config
         config = {
