@@ -19,7 +19,7 @@ class MultiAgent:
         max_tries: int = 1,
         dismiss_none_output: bool = False,
     ):
-        self.client = client if client is not None else Client()
+        self.client = client
         self.modules = modules
         self._modules = self._flatten_modules(modules)
         self.max_tries = max_tries
@@ -63,6 +63,15 @@ class MultiAgent:
             elif module.io is not None:
                 module.io.save(f"{save_path}/ios/{agent_name}.yaml")
 
+        # Save progress names
+        progress_names = {}
+        for agent_name, module in self.modules.items():
+            if module.progress_name is not None:
+                progress_names[agent_name] = module.progress_name
+        with open(f"{save_path}/progress_names.yaml", "w") as f:
+            import yaml
+            yaml.dump(progress_names, f)
+
         # Save MultiAgent config
         config = {
             "modules": list(self.modules.keys()),
@@ -83,12 +92,12 @@ class MultiAgent:
         
         # Load Agents
         agents = {}
-        for agent_name in config["agents"]:
+        for agent_name in config["modules"]:
             agents[agent_name] = Agent.load(f"{load_path}/agents/{agent_name}.yaml", client=client)
         
         # Load AgentIOs
         ios = {}
-        for agent_name in config["ios"]:
+        for agent_name in config["modules"]:
             # IOs can be either single IO or multiple IOs
             if os.path.exists(f"{load_path}/ios/{agent_name}.yaml"):
                 ios[agent_name] = ModuleIO.load(f"{load_path}/ios/{agent_name}.yaml")
@@ -100,16 +109,23 @@ class MultiAgent:
                             ios[agent_name] = {}
                         ios[agent_name][io_name] = ModuleIO.load(f"{load_path}/ios/{filename}")
 
+        # Load progress names
+        progress_names = {}
+        if os.path.exists(f"{load_path}/progress_names.yaml"):
+            with open(f"{load_path}/progress_names.yaml", "r") as f:
+                import yaml
+                progress_names = yaml.safe_load(f)
+
         modules = {
-            AgentModule(
+            agent_name: AgentModule(
                 agent=agents[agent_name],
                 io=ios.get(agent_name, None),
+                progress_name=progress_names.get(agent_name, None),
             ) for agent_name in config["modules"]
         }
         
         return cls(
             modules=modules,
-            progress_names=config.get("progress_names", None),
             max_tries=config.get("max_tries", 1),
             dismiss_none_output=config.get("dismiss_none_output", False),
             client=client,
