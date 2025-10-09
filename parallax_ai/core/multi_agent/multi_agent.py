@@ -1,5 +1,4 @@
 import os
-import re
 import random
 from uuid import uuid4
 from copy import deepcopy
@@ -281,12 +280,20 @@ class MultiAgent:
                 if module.io.input_processing is None:
                     # No input processing function
                     continue
+                # Check dependencies and get relevant data
+                relevance_agent_outputs = deepcopy(package.agent_outputs)
+                relevance_external_data = deepcopy(package.external_data)
                 if module.io.dependency is not None:
                     if not self.is_dependency_fulfilled(package, module.io.dependency):
                         # Dependencies not fulfilled
                         continue
+                    # Filter only relevant agent outputs and external data
+                    if module.io.dependency.agent_outputs is not None:
+                        relevance_agent_outputs = {k: v for k, v in relevance_agent_outputs.items() if k in module.io.dependency.agent_outputs}
+                    if module.io.dependency.external_data is not None:
+                        relevance_external_data = {k: v for k, v in relevance_external_data.items() if k in module.io.dependency.external_data}
                 # Get agent inputs
-                agent_inputs = module.io.input_processing(deepcopy(package.agent_outputs), deepcopy(package.external_data))
+                agent_inputs = module.io.input_processing(relevance_agent_outputs, relevance_external_data)
                 if agent_inputs is None:
                     print(f"[Warning] Obtain 'None' inputs for agent {agent_name}. This is possible if dependency is not provided for downstream Agent.")
                 if len(agent_inputs) == 0:                    
