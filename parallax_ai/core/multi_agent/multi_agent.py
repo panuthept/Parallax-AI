@@ -229,7 +229,6 @@ class MultiAgent:
     ) -> Package:
         package = Package(
             id=tracking_id if tracking_id is not None else uuid4().hex,
-            status="running",
             external_data=external_data, 
         )
         if inputs is not None:
@@ -259,7 +258,7 @@ class MultiAgent:
         inputs = {}
         package_indices = {}
         for i, package in enumerate(packages):   # Prioritize older packages
-            if package is None or package.status in ["finished", "stalled"]:
+            if package is None or package.is_completed:
                 continue
             # Get inputs from package.agent_inputs
             for agent_name, agent_inputs in package.agent_inputs.items():
@@ -308,20 +307,20 @@ class MultiAgent:
     def _update_package_status(self, packages: List[Package], package_indices: Dict[str, int]):
         # (a package is finished if all agents have been executed)
         for i, package in enumerate(packages):
-            if package is None or package.status in ["finished", "stalled"]:
+            if package is None or package.is_completed:
                 continue
             all_agents_executed = True
             for agent_name in self._modules.keys():
                 if agent_name not in package.agent_outputs:
                     all_agents_executed = False
             if all_agents_executed:
-                package.status = "finished"
+                package.is_completed = True
         # (a package is stalled if no new agents can be executed)
         for i, package in enumerate(packages):
-            if package is None or package.status in ["finished", "stalled"]:
+            if package is None or package.is_completed:
                 continue
             if i not in package_indices.values():
-                package.status = "stalled"
+                package.is_completed = True
         return packages
     
     def run_single_step(

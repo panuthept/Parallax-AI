@@ -1,4 +1,3 @@
-
 import yaml
 import dill
 import types
@@ -194,7 +193,7 @@ class FunctionModule(Module):
 @dataclass
 class Package:
     id: str = field(default_factory=lambda: uuid4().hex)
-    status: str = None
+    is_completed: bool = False
     agent_inputs: Dict[str, Any] = field(default_factory=dict)      # agent_name -> inputs
     agent_outputs: Dict[str, Any] = field(default_factory=dict)     # agent_name -> outputs
     external_data: Dict[str, Any] = field(default_factory=dict)     # data_name -> data_value
