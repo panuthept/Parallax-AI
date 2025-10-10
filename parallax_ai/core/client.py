@@ -1,4 +1,6 @@
 import ray
+import json
+import requests
 import numpy as np
 from tqdm import tqdm
 from openai import OpenAI
@@ -7,7 +9,8 @@ from multiprocessing import Pool
 from typing import Optional, Union, List, Dict
 
 
-def openai_completions(
+def completions_wrapper(
+    func, 
     inputs,
     api_key,
     base_url,
@@ -19,28 +22,45 @@ def openai_completions(
 
     if input is None:
         return index, None
-
-    client = OpenAI(api_key=api_key, base_url=base_url)
-
+    
     try:
-        if isinstance(input, str):
-            response = client.completions.create(
-                model=model,
-                prompt=input,
-                **kwargs
-            )
-        elif isinstance(input, list) and isinstance(input[0], dict):
-            response = client.chat.completions.create(
-                model=model,
-                messages=input,
-                **kwargs
-            )
-        else:
-            raise ValueError(f"Unknown input format:\n{input}")
+        response = func(
+            input=input,
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            **kwargs,
+        )
         return index, response
     except Exception as e:
         print(e)
         return index, None
+
+
+def openai_completions(
+    input,
+    api_key,
+    base_url,
+    model,
+    **kwargs,
+):
+    client = OpenAI(api_key=api_key, base_url=base_url)
+
+    if isinstance(input, str):
+        response = client.completions.create(
+            model=model,
+            prompt=input,
+            **kwargs
+        )
+    elif isinstance(input, list) and isinstance(input[0], dict):
+        response = client.chat.completions.create(
+            model=model,
+            messages=input,
+            **kwargs
+        )
+    else:
+        raise ValueError(f"Unknown input format:\n{input}")
+    return response
 
 
 # def batched_openai_completions(
@@ -54,12 +74,12 @@ def openai_completions(
 #     return [openai_completions(inputs, api_key, base_url, model, **kwargs) for inputs in batch_inputs]
 
 
-def wrapped_openai_completions(
-    inputs,
-    **kwargs,
-):
-    index, input, api_key, base_url, model = inputs
-    return openai_completions((index, input), api_key, base_url, model, **kwargs)
+# def wrapped_openai_completions(
+#     inputs,
+#     **kwargs,
+# ):
+#     index, input, api_key, base_url, model = inputs
+#     return openai_completions((index, input), api_key, base_url, model, **kwargs)
 
 
 class Client:
@@ -67,6 +87,7 @@ class Client:
         self, 
         api_key: str = "EMPTY",
         base_url: Optional[Union[List[str],str]] = None,
+        completions_func: Optional[callable] = None,
         model_remote_address: Optional[Dict[str, List[dict]]] = None,
         ray_remote_address: Optional[str] = None,
         ray_local_workers: Optional[int] = None,
@@ -92,6 +113,7 @@ class Client:
         else:
             model_remote_address = {"any": [{"api_key": api_key, "base_url": url} for url in base_url]}
 
+        self.completions_func = openai_completions if completions_func is None else completions_func
         self.model_remote_address = model_remote_address
         self.proportions = proportions
         self.chunk_size = chunk_size
@@ -148,6 +170,7 @@ class Client:
     ):
         assert len(models) == len(inputs), f"Length of models ({len(models)}) should be equal to length of inputs ({len(inputs)})."
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
+        kwargs["func"] = self.completions_func
         inputs = self._preprocess_inputs(inputs)
         
         indices = list(range(len(inputs)))
@@ -164,7 +187,7 @@ class Client:
             batched_models = models[start_index: start_index + self.chunk_size]
 
             if ray.is_initialized():
-                partial_func = partial(openai_completions, **kwargs)
+                partial_func = partial(completions_wrapper, **kwargs)
 
                 @ray.remote
                 def remote_openai_completions(inputs, api_key, base_url, model):
@@ -187,21 +210,21 @@ class Client:
                         yield (index, output)
             elif self.pool is not None:
                 # Prepare partial function for multiprocessing
-                partial_func = partial(wrapped_openai_completions, **kwargs)
+                partial_func = partial(completions_wrapper, **kwargs)
                 # Prepare inputs for multiprocessing
                 batched_inputs = [
-                    (batched_indices[i], batched_inputs[i], batched_model_addresses[i]["api_key"], batched_model_addresses[i]["base_url"], batched_models[i]) 
+                    ((batched_indices[i], batched_inputs[i]), batched_model_addresses[i]["api_key"], batched_model_addresses[i]["base_url"], batched_models[i]) 
                     for i in range(len(batched_inputs))
                 ]
                 for index, output in self.pool.imap_unordered(partial_func, batched_inputs):
                     yield (index, output)
             else:
                 for i in range(len(batched_inputs)):
-                    yield openai_completions(
-                        (batched_indices[i], batched_inputs[i]), 
-                        batched_model_addresses[i]["api_key"], 
-                        batched_model_addresses[i]["base_url"], 
-                        batched_models[i], 
+                    yield completions_wrapper(
+                        inputs=(batched_indices[i], batched_inputs[i]), 
+                        api_key=batched_model_addresses[i]["api_key"], 
+                        base_url=batched_model_addresses[i]["base_url"], 
+                        model=batched_models[i], 
                         **kwargs
                     )
 
@@ -238,11 +261,55 @@ class Client:
 
 
 if __name__ == "__main__":
+    def custom_completions(
+        input,
+        api_key,
+        base_url,
+        model,
+        **kwargs,
+    ):
+        url = f"{base_url}/chat/completions"
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+        data = {
+            "messages": input,
+            "model": model,
+            **kwargs,
+            "cache": {
+                "no-cache": True
+            }
+        }
+        response = requests.post(url, headers=headers, data=json.dumps(data)).json()
+        return response
+
     client = Client(
-        base_url="http://localhost:8888/v1",
+        ray_remote_address=8,
+        completions_func=custom_completions,
+        api_key="xxx",
+        base_url="xxx",
     )
-    inputs = ["Sing me a song."] * 1000
-    outputs = client.run(
-        inputs=inputs,
-        model="gemma3:1b-it-qat",
+    response = client.run(
+        inputs=[[{"role": "user", "content": "Hello!"}]] * 100,
+        model="xxx",
+        logprobs=True,
+        top_logprobs=5,
     )
+    print(response)
+    # inputs = ["Sing me a song."] * 1000
+    # outputs = client.run(
+    #     inputs=inputs,
+    #     model="gemma3:1b-it-qat",
+    # )
+
+    # response = completions(
+    #     inputs=(0, [{"role": "user", "content": "Hello!"}]),
+    #     api_key="sk-NgDAhFUD0Y2PfBCKiOSsYA",
+    #     base_url="https://dev.api.sea-lion-inference.com/v1",
+    #     model="aisingapore/SEA-Guard-V2",
+    #     logprobs=True,
+    #     top_logprobs=5,
+    # )
+    # print(response)
