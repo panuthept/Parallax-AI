@@ -15,8 +15,8 @@ class MultiAgent:
         self,
         modules: Dict[str, AgentModule],
         client: Client = None,
-        max_tries: int = 1,
-        dismiss_none_output: bool = False,
+        max_tries: int = 5,
+        dismiss_none_output: bool = True,
     ):
         self.client = client
         self.modules = modules
