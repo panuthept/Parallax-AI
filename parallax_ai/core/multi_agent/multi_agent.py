@@ -138,6 +138,7 @@ class MultiAgent:
     ) -> Tuple[List[str], List[Any], List[str], List[str]]:
         # Create jobs for all agents
         jobs = []
+        ori_inputs = []
         agent_names = []
         for agent_name, agent_inputs in inputs.items():
             assert agent_name in self._modules, f"Agent {agent_name} not found."
@@ -145,6 +146,7 @@ class MultiAgent:
                 agent_inputs, progress_name=agent_name if progress_names is None else progress_names[agent_name]
             )
             jobs.extend(agent_jobs)
+            ori_inputs.extend(agent_inputs)
             agent_names.extend(agent_name for _ in range(len(agent_jobs)))
         if len(jobs) == 0:
             return [], [], [], []
@@ -153,13 +155,15 @@ class MultiAgent:
         indices = list(range(len(jobs)))
         random.shuffle(indices)
         shuffled_jobs = [jobs[i] for i in indices]
+        shuffled_inputs = [ori_inputs[i] for i in indices]
         shuffled_agent_names = [agent_names[i] for i in indices]
 
         # Process the jobs by the ParallaxEngine with retries
         shuffled_jobs = self.engine(shuffled_jobs, **kwargs)
         # Get outputs in the original order
-        shuffled_inputs = [job.inp for job in shuffled_jobs]
+        # shuffled_inputs = [job.inp for job in shuffled_jobs]
         shuffled_outputs = [job.output for job in shuffled_jobs]
+
         # Update conversation memory with assistant outputs
         for job, agent_name in zip(shuffled_jobs, shuffled_agent_names):
             if job.output is not None:
@@ -188,7 +192,6 @@ class MultiAgent:
     def _run(
         self, 
         inputs: Dict[str, Any], 
-        return_inputs: bool = False,
         progress_names: Optional[Dict[str, str]] = None,
         **kwargs
     ) -> Dict[str, Any]:
@@ -197,29 +200,23 @@ class MultiAgent:
         # Transform inputs for all agents
         for agent_name in inputs.keys():
             assert agent_name in self._modules, f"Agent {agent_name} not found."
-            inputs[agent_name], progress_names[agent_name] = self._modules[agent_name].agent.input_transformation(inputs[agent_name], progress_names.get(agent_name, None))
+            inputs[agent_name] = self._modules[agent_name].agent.input_transformation(inputs[agent_name])
 
         # Run all agents
         agent_names, session_ids, inputs, outputs = self.__run(inputs, progress_names=progress_names, **kwargs)
         
         # Get outputs for each agent
-        dict_outputs = defaultdict(list)
-        for agent_name, session_id, output in zip(agent_names, session_ids, outputs):
+        agent_outputs = defaultdict(list)
+        for agent_name, session_id, inp, out in zip(agent_names, session_ids, inputs, outputs):
             if self._modules[agent_name].agent.conversational_agent:
-                if return_inputs:
-                    dict_outputs[agent_name].append((session_id, inputs, output))
-                else:
-                    dict_outputs[agent_name].append((session_id, output))
+                agent_outputs[agent_name].append((session_id, inp, out))
             else:
-                if return_inputs:
-                    dict_outputs[agent_name].append((inputs, output))
-                else:
-                    dict_outputs[agent_name].append(output)
+                agent_outputs[agent_name].append((inp, out))
 
         # Transform outputs for all agents
-        for agent_name in dict_outputs.keys():
-            dict_outputs[agent_name] = self._modules[agent_name].agent.output_transformation(dict_outputs[agent_name])
-        return dict_outputs
+        for agent_name, outputs in agent_outputs.items():
+            agent_outputs[agent_name] = self._modules[agent_name].agent.output_transformation(outputs)
+        return agent_outputs
     
     def init_package(
         self, 
@@ -271,7 +268,7 @@ class MultiAgent:
                 inputs[agent_name] = agent_inputs
                 package_indices[agent_name] = i  # Record which package provides this input
 
-            # Get inputs from package.external_data
+            # Get inputs from package.external_data and package.agent_outputs
             for agent_name, module in modules.items():
                 if agent_name in inputs:
                     # Already has this inputs
@@ -347,6 +344,7 @@ class MultiAgent:
         # Remove exceeded packages
         if len(self.packages) > len(self.modules):
             self.packages = self.packages[-len(self.modules):]
+        print(f"Processing {len(self.packages)} packages...")
 
         # Input processing for all agents
         inputs, package_indices = self._get_pipeline_inputs(self.packages, self._modules)
@@ -354,7 +352,6 @@ class MultiAgent:
         # Execute Agents
         input_outputs = self._run(
             inputs=deepcopy(inputs), 
-            return_inputs=True, 
             progress_names={agent_name: module.progress_name for agent_name, module in self._modules.items()},
             **kwargs
         )
@@ -362,11 +359,20 @@ class MultiAgent:
         # Update packages with outputs
         for agent_name, agent_input_outputs in input_outputs.items():
             package_index = package_indices[agent_name]
+            # Get inputs and outputs
+            agent_inputs = []
+            agent_outputs = []
+            for agent_input_output in agent_input_outputs:
+                if self._modules[agent_name].agent.conversational_agent:
+                    agent_inputs.append(agent_input_output[1])
+                    agent_outputs.append(agent_input_output[2])
+                else:
+                    agent_inputs.append(agent_input_output[0])
+                    agent_outputs.append(agent_input_output[1])
+
             assert self.packages[package_index] is not None, "Package should not be None."
             # Process outputs if output_processing is provided
             if agent_name in self._modules and self._modules[agent_name].io.output_processing is not None:
-                agent_inputs = agent_input_outputs[1] if self._modules[agent_name].agent.conversational_agent else agent_input_outputs[0]
-                agent_outputs = agent_input_outputs[-1]
                 agent_outputs = self._modules[agent_name].io.output_processing(
                     deepcopy(agent_inputs),                                 # inputs
                     deepcopy(agent_outputs),                                # outputs
