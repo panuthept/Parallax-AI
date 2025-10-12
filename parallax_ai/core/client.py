@@ -10,15 +10,12 @@ from typing import Optional, Union, List, Dict
 
 
 def completions_wrapper(
-    func, 
     inputs,
-    api_key,
-    base_url,
-    model,
+    func, 
     **kwargs,
 ):
-    assert isinstance(inputs, tuple) and len(inputs) == 2, "inputs should be a tuple of (index, input)."
-    index, input = inputs
+    assert isinstance(inputs, tuple) and len(inputs) == 5, "inputs should be a tuple of (index, input, api_key, base_url, model)."
+    index, input, api_key, base_url, model = inputs
 
     if input is None:
         return index, None
@@ -190,12 +187,13 @@ class Client:
                 partial_func = partial(completions_wrapper, **kwargs)
 
                 @ray.remote
-                def remote_openai_completions(inputs, api_key, base_url, model):
-                    return partial_func(inputs=inputs, api_key=api_key, base_url=base_url, model=model)
+                def remote_openai_completions(index, inp, api_key, base_url, model):
+                    return partial_func(inputs=(index, inp, api_key, base_url, model))
 
                 running_tasks = [
                     remote_openai_completions.remote(
-                        inputs=(batched_indices[i], batched_inputs[i]),
+                        index=batched_indices[i],
+                        inp=batched_inputs[i],
                         api_key=batched_model_addresses[i]["api_key"],
                         base_url=batched_model_addresses[i]["base_url"],
                         model=batched_models[i],
@@ -213,7 +211,7 @@ class Client:
                 partial_func = partial(completions_wrapper, **kwargs)
                 # Prepare inputs for multiprocessing
                 batched_inputs = [
-                    ((batched_indices[i], batched_inputs[i]), batched_model_addresses[i]["api_key"], batched_model_addresses[i]["base_url"], batched_models[i]) 
+                    (batched_indices[i], batched_inputs[i], batched_model_addresses[i]["api_key"], batched_model_addresses[i]["base_url"], batched_models[i]) 
                     for i in range(len(batched_inputs))
                 ]
                 for index, output in self.pool.imap_unordered(partial_func, batched_inputs):
@@ -221,7 +219,8 @@ class Client:
             else:
                 for i in range(len(batched_inputs)):
                     yield completions_wrapper(
-                        inputs=(batched_indices[i], batched_inputs[i]), 
+                        index=batched_indices[i],
+                        inp=batched_inputs[i], 
                         api_key=batched_model_addresses[i]["api_key"], 
                         base_url=batched_model_addresses[i]["base_url"], 
                         model=batched_models[i], 
