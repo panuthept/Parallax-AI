@@ -434,8 +434,8 @@ class Agent:
         session_ids = [job.session_id for job in jobs]
         return session_ids, inputs, outputs
     
-    def input_transformation(self, inputs, progress_name: Optional[str] = None):
-        return inputs, progress_name
+    def input_transformation(self, inputs):
+        return inputs
     
     def output_transformation(self, outputs):
         return outputs
@@ -448,7 +448,7 @@ class Agent:
         **kwargs,
     ) -> List[Tuple[str, Any]]:
         assert self.client is not None, "Client is not initialized."
-        inputs, progress_name = self.input_transformation(inputs, progress_name)
+        inputs = self.input_transformation(inputs)
 
         session_ids, inputs, outputs = self._run(inputs, progress_name=progress_name, **kwargs)
         if self.conversational_agent:
