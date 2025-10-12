@@ -334,17 +334,9 @@ class MultiAgent:
         if inputs is not None or external_data is not None:
             package = self.init_package(inputs, external_data, tracking_id=tracking_id)
             self.packages.append(package)
-        else:
-            if len(self.packages) > 0:
-                self.packages.append(None)
-            else:
-                print("Warning: No packages to process. Please provide inputs or external_data to create a new package.")
-                return []
-            
-        # Remove exceeded packages
-        if len(self.packages) > len(self.modules):
-            self.packages = self.packages[-len(self.modules):]
-        print(f"Processing {len(self.packages)} packages...")
+        elif len(self.packages) == 0:
+            print("Warning: No packages to process. Please provide inputs or external_data to create a new package.")
+            return []
 
         # Input processing for all agents
         inputs, package_indices = self._get_pipeline_inputs(self.packages, self._modules)
@@ -380,9 +372,13 @@ class MultiAgent:
                 )
             self.packages[package_index].agent_outputs[agent_name] = agent_outputs
 
-        # Remove finished or stalled packages
+        # Update package status
         self.packages = self._update_package_status(self.packages, package_indices)
-        return [deepcopy(package) for package in self.packages if package is not None]
+        # Get return packages
+        return_packages = [deepcopy(package) for package in self.packages if package is not None]
+        # Remove finished or stalled packages
+        self.packages = [package for package in self.packages if not package.is_completed]
+        return return_packages
     
     def flush(self, **kwargs) -> List[Package]:
         """
