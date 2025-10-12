@@ -38,7 +38,7 @@ class ClassificationAgent(Agent):
 
         assert self.conversational_agent is False, "Currently ClassificationAgent does not support conversational mode."
 
-    def input_transformation(self, inputs, progress_name = None):
+    def input_transformation(self, inputs):
         if not isinstance(inputs, list):
             inputs = [inputs]
 
@@ -46,15 +46,27 @@ class ClassificationAgent(Agent):
         for input in inputs:
             input = deepcopy(input)
             duplicated_inputs.extend([input] * self.n)
-        return duplicated_inputs, progress_name
+        return duplicated_inputs
     
-    def output_transformation(self, deplicated_outputs):
+    def output_transformation(self, duplicated_outputs):
         outputs = []
-        for i in range(len(deplicated_outputs) // self.n):
-            inp = deplicated_outputs[i * self.n][0] if isinstance(deplicated_outputs[i * self.n], tuple) else None
+        for i in range(len(duplicated_outputs) // self.n):
+            # Handle cases where the model returns multiple items in a tuple
+            # (inp, output), (session_id, output) or (session_id, inp, output)
+            d1, d2 = None, None
+            if isinstance(duplicated_outputs[i * self.n], tuple):
+                if len(duplicated_outputs[i * self.n]) == 2:
+                    d1 = duplicated_outputs[i * self.n][0]
+                elif len(duplicated_outputs[i * self.n]) == 3:
+                    d1 = duplicated_outputs[i * self.n][0]
+                    d2 = duplicated_outputs[i * self.n][1]
+                else:
+                    raise ValueError("Unexpected output format.")
+
             output_label = None
             for j in range(self.n):
-                output = deplicated_outputs[i * self.n + j][-1] if isinstance(deplicated_outputs[i * self.n + j], tuple) else deplicated_outputs[i * self.n + j]
+                # Output is always the last element if it's a tuple
+                output = duplicated_outputs[i * self.n + j][-1] if isinstance(duplicated_outputs[i * self.n + j], tuple) else duplicated_outputs[i * self.n + j]
                 if output is None:
                     continue
                 for output_key in self.output_keys:
@@ -72,8 +84,10 @@ class ClassificationAgent(Agent):
                         output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
                     else:
                         output_label[output_key] = None
-            if inp is not None:
-                outputs.append((inp, output_label))
+            if d1 is not None and d2 is not None:
+                outputs.append((d1, d2, output_label))
+            elif d1 is not None:
+                outputs.append((d1, output_label))
             else:
                 outputs.append(output_label)
         return outputs
