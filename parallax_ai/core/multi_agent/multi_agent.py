@@ -7,7 +7,7 @@ from ..client import Client
 from ..engine import ParallaxEngine
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
-from .dataclasses import ModuleIO, Package, Dependency, AgentModule
+from .dataclasses import ModuleIO, Package, Instance, Dependency, AgentModule
 
 
 class MultiAgent:
@@ -223,19 +223,37 @@ class MultiAgent:
     
     def init_package(
         self, 
-        inputs: Optional[Dict[str, Any]] = None, 
-        external_data: Optional[Dict[str, Any]] = None,
-        tracking_id: Optional[str] = None,
+        inputs: List[Dict], 
+        tracking_ids: Optional[List[str]] = None,
+        external_data: Optional[List[Dict]] = None,
     ) -> Package:
-        package = Package(
-            id=tracking_id if tracking_id is not None else uuid4().hex,
-            external_data=external_data, 
-        )
-        if inputs is not None:
-            for agent_name, agent_inputs in inputs.items():
+        if not isinstance(inputs, list):
+            inputs = [inputs]
+        if tracking_ids is not None:
+            if not isinstance(tracking_ids, list):
+                tracking_ids = [tracking_ids]
+            assert len(tracking_ids) == len(inputs), "Length of tracking_ids must match length of inputs."
+        if external_data is not None:
+            if not isinstance(external_data, list):
+                external_data = [external_data]
+            assert len(external_data) == len(inputs), "Length of external_data must match length of inputs."
+
+        instances: List[Instance] = []
+        for i, inp in enumerate(inputs):
+            for agent_name in inp.keys():
                 assert agent_name in self._modules, f"Unknown agent name: '{agent_name}' in inputs."
-                package.agent_inputs[agent_name] = agent_inputs
-        return package
+
+            tracking_id = tracking_ids[i] if tracking_ids is not None else uuid4().hex
+            data = external_data[i] if external_data is not None else {}
+
+            instance = Instance(
+                id=tracking_id,
+                agent_inputs=inp,
+                external_data=data,
+                is_completed=False,
+            )
+            instances.append(instance)
+        return Package(instances=instances)
     
     def is_dependency_fulfilled(self, package: Package, dependency: Dependency) -> bool:
         # Check agent_outputs dependencies
@@ -325,9 +343,9 @@ class MultiAgent:
     
     def run_single_step(
         self,
-        inputs=None,
-        tracking_id=None,
-        external_data=None,
+        inputs: List[Dict] = None,
+        tracking_ids: List[str] = None,
+        external_data: List[Dict] = None,
         **kwargs,
     ) -> List[Package]:
         """
@@ -335,7 +353,7 @@ class MultiAgent:
         """
         # Create new package (if inputs or external_data are provided)
         if inputs is not None or external_data is not None:
-            package = self.init_package(inputs, external_data, tracking_id=tracking_id)
+            package = self.init_package(inputs, external_data, tracking_ids=tracking_ids)
             self.packages.append(package)
         else:
             if len(self.packages) > 0:
