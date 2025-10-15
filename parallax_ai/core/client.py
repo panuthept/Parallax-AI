@@ -86,6 +86,7 @@ class Client:
         base_url: Optional[Union[List[str],str]] = None,
         completions_func: Optional[callable] = None,
         model_remote_address: Optional[Dict[str, List[dict]]] = None,
+        model_remote_address_path: Optional[str] = None,
         ray_remote_address: Optional[str] = None,
         ray_local_workers: Optional[int] = None,
         local_workers: Optional[int] = None,
@@ -107,6 +108,9 @@ class Client:
                     model_remote_address[k] = [vs]
                 for v in model_remote_address[k]:
                     assert isinstance(v, dict) and "api_key" in v and "base_url" in v, f"Each value in model_remote_address should be a dict with 'api_key' and 'base_url', but got {v}"
+        elif model_remote_address_path is not None:
+            with open(model_remote_address_path, "r") as f:
+                model_remote_address = json.load(f)
         else:
             model_remote_address = {"any": [{"api_key": api_key, "base_url": url} for url in base_url]}
 
