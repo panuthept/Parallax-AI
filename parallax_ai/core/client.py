@@ -251,6 +251,7 @@ class Client:
 
             if len(remaining_indices) > 0:
                 print(f"Retrying {len(remaining_indices)} failed requests after waiting for {wait_time} seconds...")
+                print(f"Failed model URLs: {failed_base_urls}")
                 time.sleep(wait_time)  # Wait before retrying
                 # update indices and inputs for the next round
                 indices = list(remaining_indices)
