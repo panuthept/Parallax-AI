@@ -240,11 +240,7 @@ class Client:
                 else:
                     for i in range(len(batched_inputs)):
                         index, output, success = completions_wrapper(
-                            index=batched_indices[i],
-                            inp=batched_inputs[i], 
-                            api_key=batched_model_addresses[i]["api_key"], 
-                            base_url=batched_model_addresses[i]["base_url"], 
-                            model=batched_models[i], 
+                            inputs=(batched_indices[i], batched_inputs[i], batched_model_addresses[i]["api_key"], batched_model_addresses[i]["base_url"], batched_models[i]),
                             **kwargs
                         )
                         if success:
@@ -295,39 +291,36 @@ class Client:
 
 
 if __name__ == "__main__":
-    def custom_completions(
-        input,
-        api_key,
-        base_url,
-        model,
-        **kwargs,
-    ):
-        url = f"{base_url}/chat/completions"
-        headers = {
-            "accept": "application/json",
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
-        data = {
-            "messages": input,
-            "model": model,
-            **kwargs,
-            "cache": {
-                "no-cache": True
-            }
-        }
-        response = requests.post(url, headers=headers, data=json.dumps(data)).json()
-        return response
+    # def custom_completions(
+    #     input,
+    #     api_key,
+    #     base_url,
+    #     model,
+    #     **kwargs,
+    # ):
+    #     url = f"{base_url}/chat/completions"
+    #     headers = {
+    #         "accept": "application/json",
+    #         "Content-Type": "application/json",
+    #         "Authorization": f"Bearer {api_key}",
+    #     }
+    #     data = {
+    #         "messages": input,
+    #         "model": model,
+    #         **kwargs,
+    #         "cache": {
+    #             "no-cache": True
+    #         }
+    #     }
+    #     response = requests.post(url, headers=headers, data=json.dumps(data)).json()
+    #     return response
 
     client = Client(
-        ray_remote_address=8,
-        completions_func=custom_completions,
-        api_key="xxx",
-        base_url="xxx",
+        local_workers=8,
     )
     response = client.run(
-        inputs=[[{"role": "user", "content": "Hello!"}]] * 100,
-        model="xxx",
+        inputs=[[{"role": "user", "content": "Hello!"}]] * 10,
+        model="aisingapore/SEA-Guard-V2",
         logprobs=True,
         top_logprobs=5,
     )
