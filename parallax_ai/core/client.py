@@ -1,4 +1,5 @@
 import ray
+import time
 import json
 import requests
 import numpy as np
@@ -18,7 +19,7 @@ def completions_wrapper(
     index, input, api_key, base_url, model = inputs
 
     if input is None:
-        return index, None
+        return index, None, True
     
     try:
         response = func(
@@ -28,10 +29,10 @@ def completions_wrapper(
             model=model,
             **kwargs,
         )
-        return index, response
+        return index, response, True
     except Exception as e:
         print(e)
-        return index, None
+        return index, None, False
 
 
 def openai_completions(
@@ -90,7 +91,6 @@ class Client:
         ray_remote_address: Optional[str] = None,
         ray_local_workers: Optional[int] = None,
         local_workers: Optional[int] = None,
-        proportions: Optional[List[float]] = None,
         chunk_size: Optional[int] = 6000,   # Maximum requests to send in each batch
         max_tokens: int = 2048,
         **kwargs,
@@ -116,7 +116,6 @@ class Client:
 
         self.completions_func = openai_completions if completions_func is None else completions_func
         self.model_remote_address = model_remote_address
-        self.proportions = proportions
         self.chunk_size = chunk_size
         self.max_tokens = max_tokens
 
@@ -176,60 +175,90 @@ class Client:
         
         indices = list(range(len(inputs)))
 
-        model_addresses = []
-        for model in models:
-            cand_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
-            model_addresses.append(np.random.choice(cand_addresses, size=1, p=self.proportions)[0])
+        failed_base_urls = set()
+        remaining_indices = set(indices)
+        while len(remaining_indices) > 0:
+            model_addresses = []
+            for model in models:
+                cand_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
+                # Try to avoid using the failed base_urls
+                filtered_addresses = [addr for addr in cand_addresses if addr["base_url"] not in failed_base_urls]
+                if len(filtered_addresses) > 0:
+                    model_addresses.append(np.random.choice(filtered_addresses, size=1)[0])
+                else:
+                    model_addresses.append(np.random.choice(cand_addresses, size=1)[0])
+                    failed_base_urls = set()  # Reset failed_base_urls if all addresses are failed
 
-        for start_index in range(0, len(inputs), self.chunk_size):
-            batched_indices = indices[start_index: start_index + self.chunk_size]
-            batched_inputs = inputs[start_index: start_index + self.chunk_size]
-            batched_model_addresses = model_addresses[start_index: start_index + self.chunk_size]
-            batched_models = models[start_index: start_index + self.chunk_size]
+            for start_index in range(0, len(inputs), self.chunk_size):
+                batched_indices = indices[start_index: start_index + self.chunk_size]
+                batched_inputs = inputs[start_index: start_index + self.chunk_size]
+                batched_model_addresses = model_addresses[start_index: start_index + self.chunk_size]
+                batched_models = models[start_index: start_index + self.chunk_size]
 
-            if ray.is_initialized():
-                partial_func = partial(completions_wrapper, **kwargs)
+                if ray.is_initialized():
+                    partial_func = partial(completions_wrapper, **kwargs)
 
-                @ray.remote
-                def remote_openai_completions(index, inp, api_key, base_url, model):
-                    return partial_func(inputs=(index, inp, api_key, base_url, model))
+                    @ray.remote
+                    def remote_openai_completions(index, inp, api_key, base_url, model):
+                        return partial_func(inputs=(index, inp, api_key, base_url, model))
 
-                running_tasks = [
-                    remote_openai_completions.remote(
-                        index=batched_indices[i],
-                        inp=batched_inputs[i],
-                        api_key=batched_model_addresses[i]["api_key"],
-                        base_url=batched_model_addresses[i]["base_url"],
-                        model=batched_models[i],
-                    )
-                    for i in range(len(batched_inputs))
-                ]
-                
-                while running_tasks:
-                    done_tasks, running_tasks = ray.wait(running_tasks, num_returns=1)
-                    for task in done_tasks:
-                        index, output = ray.get(task)
-                        yield (index, output)
-            elif self.pool is not None:
-                # Prepare partial function for multiprocessing
-                partial_func = partial(completions_wrapper, **kwargs)
-                # Prepare inputs for multiprocessing
-                batched_inputs = [
-                    (batched_indices[i], batched_inputs[i], batched_model_addresses[i]["api_key"], batched_model_addresses[i]["base_url"], batched_models[i]) 
-                    for i in range(len(batched_inputs))
-                ]
-                for index, output in self.pool.imap_unordered(partial_func, batched_inputs):
-                    yield (index, output)
-            else:
-                for i in range(len(batched_inputs)):
-                    yield completions_wrapper(
-                        index=batched_indices[i],
-                        inp=batched_inputs[i], 
-                        api_key=batched_model_addresses[i]["api_key"], 
-                        base_url=batched_model_addresses[i]["base_url"], 
-                        model=batched_models[i], 
-                        **kwargs
-                    )
+                    running_tasks = [
+                        remote_openai_completions.remote(
+                            index=batched_indices[i],
+                            inp=batched_inputs[i],
+                            api_key=batched_model_addresses[i]["api_key"],
+                            base_url=batched_model_addresses[i]["base_url"],
+                            model=batched_models[i],
+                        )
+                        for i in range(len(batched_inputs))
+                    ]
+                    
+                    while running_tasks:
+                        done_tasks, running_tasks = ray.wait(running_tasks, num_returns=1)
+                        for task in done_tasks:
+                            index, output, success = ray.get(task)
+                            if success:
+                                remaining_indices.discard(index)
+                                yield (index, output)
+                            else:
+                                failed_base_urls.add(batched_model_addresses[batched_indices.index(index)]["base_url"])
+                elif self.pool is not None:
+                    # Prepare partial function for multiprocessing
+                    partial_func = partial(completions_wrapper, **kwargs)
+                    # Prepare inputs for multiprocessing
+                    batched_inputs = [
+                        (batched_indices[i], batched_inputs[i], batched_model_addresses[i]["api_key"], batched_model_addresses[i]["base_url"], batched_models[i]) 
+                        for i in range(len(batched_inputs))
+                    ]
+                    for index, output, success in self.pool.imap_unordered(partial_func, batched_inputs):
+                        if success:
+                            remaining_indices.discard(index)
+                            yield (index, output)
+                        else:
+                            failed_base_urls.add(batched_model_addresses[batched_indices.index(index)]["base_url"])
+                else:
+                    for i in range(len(batched_inputs)):
+                        index, output, success = completions_wrapper(
+                            index=batched_indices[i],
+                            inp=batched_inputs[i], 
+                            api_key=batched_model_addresses[i]["api_key"], 
+                            base_url=batched_model_addresses[i]["base_url"], 
+                            model=batched_models[i], 
+                            **kwargs
+                        )
+                        if success:
+                            remaining_indices.discard(index)
+                            yield (index, output)
+                        else:
+                            failed_base_urls.add(batched_model_addresses[batched_indices.index(index)]["base_url"])
+                            
+            if len(remaining_indices) > 0:
+                print(f"Retrying {len(remaining_indices)} failed requests after waiting for 3 seconds...")
+                time.sleep(3)  # Wait before retrying
+                # update indices and inputs for the next round
+                indices = list(remaining_indices)
+                inputs = [inputs[i] for i in indices]
+                models = [models[i] for i in indices]
 
     def run(
         self,
