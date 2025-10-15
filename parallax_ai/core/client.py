@@ -175,6 +175,7 @@ class Client:
         
         indices = list(range(len(inputs)))
 
+        wait_time = 2
         failed_base_urls = set()
         remaining_indices = set(indices)
         while len(remaining_indices) > 0:
@@ -251,14 +252,15 @@ class Client:
                             yield (index, output)
                         else:
                             failed_base_urls.add(batched_model_addresses[batched_indices.index(index)]["base_url"])
-                            
+
             if len(remaining_indices) > 0:
-                print(f"Retrying {len(remaining_indices)} failed requests after waiting for 3 seconds...")
-                time.sleep(3)  # Wait before retrying
+                print(f"Retrying {len(remaining_indices)} failed requests after waiting for {wait_time} seconds...")
+                time.sleep(wait_time)  # Wait before retrying
                 # update indices and inputs for the next round
                 indices = list(remaining_indices)
                 inputs = [inputs[i] for i in indices]
                 models = [models[i] for i in indices]
+                wait_time = min(wait_time * 2, 600)  # Exponential backoff with a max wait time
 
     def run(
         self,
