@@ -276,7 +276,7 @@ class MultiAgent:
                 if agent_name in package.agent_outputs:
                     # Already has executed this agent
                     continue
-                if module.io.input_processing is None:
+                if module.io is None or module.io.input_processing is None:
                     # No input processing function
                     continue
                 # Check dependencies and get relevant data
