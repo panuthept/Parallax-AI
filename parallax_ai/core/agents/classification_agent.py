@@ -54,10 +54,12 @@ class ClassificationAgent(Agent):
             # Handle cases where the model returns multiple items in a tuple
             # (inp, output), (session_id, output) or (session_id, inp, output)
             d1, d2 = None, None
+            output_tuple_size = 1
             if isinstance(duplicated_outputs[i * self.n], tuple):
-                if len(duplicated_outputs[i * self.n]) == 2:
+                output_tuple_size = len(duplicated_outputs[i * self.n])
+                if output_tuple_size == 2:
                     d1 = duplicated_outputs[i * self.n][0]
-                elif len(duplicated_outputs[i * self.n]) == 3:
+                elif output_tuple_size == 3:
                     d1 = duplicated_outputs[i * self.n][0]
                     d2 = duplicated_outputs[i * self.n][1]
                 else:
@@ -84,9 +86,10 @@ class ClassificationAgent(Agent):
                         output_label[output_key] = {k: v / total for k, v in output_label[output_key].items()}
                     else:
                         output_label[output_key] = None
-            if d1 is not None and d2 is not None:
+                        
+            if output_tuple_size == 3:
                 outputs.append((d1, d2, output_label))
-            elif d1 is not None:
+            elif output_tuple_size == 2:
                 outputs.append((d1, output_label))
             else:
                 outputs.append(output_label)
