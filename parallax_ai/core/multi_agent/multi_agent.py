@@ -364,7 +364,7 @@ class MultiAgent:
 
             assert self.packages[package_index] is not None, "Package should not be None."
             # Process outputs if output_processing is provided
-            if agent_name in self._modules and self._modules[agent_name].io.output_processing is not None:
+            if agent_name in self._modules and self._modules[agent_name].io is not None and self._modules[agent_name].io.output_processing is not None:
                 agent_outputs = self._modules[agent_name].io.output_processing(
                     deepcopy(agent_inputs),                                 # inputs
                     deepcopy(agent_outputs),                                # outputs
