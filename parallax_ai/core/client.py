@@ -108,14 +108,12 @@ class Client:
                     model_remote_address[k] = [vs]
                 for v in model_remote_address[k]:
                     assert isinstance(v, dict) and "api_key" in v and "base_url" in v, f"Each value in model_remote_address should be a dict with 'api_key' and 'base_url', but got {v}"
-        elif model_remote_address_path is not None:
-            with open(model_remote_address_path, "r") as f:
-                model_remote_address = json.load(f)
         else:
             model_remote_address = {"any": [{"api_key": api_key, "base_url": url} for url in base_url]}
 
         self.completions_func = openai_completions if completions_func is None else completions_func
         self.model_remote_address = model_remote_address
+        self.model_remote_address_path = model_remote_address_path
         self.chunk_size = chunk_size
         self.max_tokens = max_tokens
 
@@ -175,13 +173,20 @@ class Client:
         
         indices = list(range(len(inputs)))
 
+        # Get model_remote_address from file if provided (this allows real-time update of model addresses)
+        if self.model_remote_address_path is not None:
+            with open(self.model_remote_address_path, "r") as f:
+                model_remote_address = json.load(f)
+        else:
+            model_remote_address = self.model_remote_address
+
         wait_time = 2
         failed_base_urls = set()
         remaining_indices = set(indices)
         while len(remaining_indices) > 0:
             model_addresses = []
             for model in models:
-                cand_addresses = self.model_remote_address.get("any", []) + self.model_remote_address.get(model, [])
+                cand_addresses = model_remote_address.get("any", []) + model_remote_address.get(model, [])
                 # Try to avoid using the failed base_urls
                 filtered_addresses = [addr for addr in cand_addresses if addr["base_url"] not in failed_base_urls]
                 if len(filtered_addresses) > 0:
