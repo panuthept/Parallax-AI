@@ -180,7 +180,7 @@ class Module:
 @dataclass
 class AgentModule(Module):
     agent: Agent
-    io: Optional[Union[ModuleIO, Dict[str, ModuleIO]]]
+    io: Optional[Union[ModuleIO, Dict[str, ModuleIO]]] = None
     progress_name: Optional[str] = None
 
 @dataclass
