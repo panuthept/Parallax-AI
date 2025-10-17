@@ -204,9 +204,9 @@ class MultiAgent:
             agent_outputs[agent_name] = self._modules[agent_name].agent.output_transformation(outputs)
         return agent_outputs
     
-    def is_dependency_fulfilled(self, contents: Dict[str, Any], dependency: List[str]) -> bool:
+    def is_dependency_fulfilled(self, contents: Dict[str, Any], dependencies: List[str]) -> bool:
         fullfilled = True
-        for dep in dependency:
+        for dep in dependencies:
             if dep not in contents:
                 fullfilled = False
                 break
@@ -233,13 +233,13 @@ class MultiAgent:
                         inputs[agent_name].append(deepcopy(content_node.contents))
                         indexing[agent_name].append((instance.id, content_node.id))
                     else:
-                        # Check if dependency is fullfilled andfFilter only relevant contents based on dependency
+                        # Check if dependencies is fullfilled andfFilter only relevant contents based on dependencies
                         agent_input = deepcopy(content_node.contents)
-                        if module.io.dependency is not None:
-                            if not self.is_dependency_fulfilled(content_node.contents, module.io.dependency):
+                        if module.io.dependencies is not None:
+                            if not self.is_dependency_fulfilled(content_node.contents, module.io.dependencies):
                                 continue
                             # Filter only relevant contents
-                            agent_input = {k: v for k, v in agent_input.items() if k in module.io.dependency}
+                            agent_input = {k: v for k, v in agent_input.items() if k in module.io.dependencies}
                         # Process inputs if input_processing is provided
                         if module.io.input_processing is not None:
                             agent_input = module.io.input_processing(agent_input)

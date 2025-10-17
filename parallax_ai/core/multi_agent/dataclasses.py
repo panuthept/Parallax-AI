@@ -11,7 +11,7 @@ from typing import Dict, List, Callable, Union, Optional, Any
 
 @dataclass
 class ModuleIO:
-    dependency: Optional[List[str]] = None
+    dependencies: Optional[List[str]] = None
     input_processing: Optional[Callable[[list, dict], list]] = None # (outputs, data) -> inputs
     output_processing: Callable[[list, list, dict], list] = None # (inputs, outputs, data) -> processed_outputs
     
@@ -61,7 +61,7 @@ class ModuleIO:
         try:
             # Serialize all components
             data = {
-                'dependency': self.dependency,
+                'dependencies': self.dependencies,
                 'input_processing': self._serialize_function(self.input_processing, 'input_processing'),
                 'output_processing': self._serialize_function(self.output_processing, 'output_processing')
             }
@@ -132,12 +132,12 @@ class ModuleIO:
                 data = yaml.safe_load(f)
                 
             # Deserialize all components
-            dependency = data.get('dependency', None)
+            dependencies = data.get('dependencies', None)
             input_processing = cls._deserialize_function(data.get('input_processing'), 'input_processing')
             output_processing = cls._deserialize_function(data.get('output_processing'), 'output_processing')
             
             return cls(
-                dependency=dependency,
+                dependencies=dependencies,
                 input_processing=input_processing,
                 output_processing=output_processing
             )
