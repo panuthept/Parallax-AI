@@ -191,13 +191,12 @@ class Instance:
         # Aggregate contents from all content nodes
         contents = {}
         for node in self.content_nodes.values():
+            if node.contents is None:
+                continue
             for content_key, content_value in node.contents.items():
                 if content_key not in contents:
-                    contents[content_key] = content_value
+                    contents[content_key] = [content_value]
                 else:
-                    # If key already exists, convert to list
-                    if not isinstance(contents[content_key], list):
-                        contents[content_key] = [contents[content_key]]
                     contents[content_key].append(content_value)
         return contents
     

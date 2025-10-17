@@ -263,41 +263,34 @@ class MultiAgent:
             for agent_input, agent_output, (instance_id, node_id) in zip(inputs[agent_name], outputs[agent_name], indexing[agent_name]):
                 if self._modules[agent_name].agent.conversational_agent:
                     agent_output = agent_output[1]
-                assert instance_id in self.instances[instance_id], "Instance ID not found."
+                assert instance_id in self.instances, "Instance ID not found."
                 assert node_id in self.instances[instance_id].content_nodes, "Content Node ID not found."
                 # Update instance contents with agent outputs
-                if agent_output is None:
-                    self.instances[instance_id].add_content_node(
-                        parent_node_id=node_id,
-                        agent_name=agent_name,
-                        contents=None,
+                # Process outputs if output_processing is provided
+                if agent_output is not None and self._modules[agent_name].io is not None and self._modules[agent_name].io.output_processing is not None:
+                    agent_output = self._modules[agent_name].io.output_processing(
+                        deepcopy(agent_input),
+                        deepcopy(agent_output),
                     )
-                else:
-                    # Process outputs if output_processing is provided
-                    if self._modules[agent_name].io is not None and self._modules[agent_name].io.output_processing is not None:
-                        agent_output = self._modules[agent_name].io.output_processing(
-                            deepcopy(agent_input),
-                            deepcopy(agent_output),
-                        )
-                        if isinstance(agent_output, GeneratorType):
-                            for out in agent_output:
-                                self.instances[instance_id].add_content_node(
-                                    parent_node_id=node_id,
-                                    agent_name=agent_name,
-                                    contents=deepcopy(out),
-                                )
-                        else:
+                    if isinstance(agent_output, GeneratorType):
+                        for out in agent_output:
                             self.instances[instance_id].add_content_node(
                                 parent_node_id=node_id,
                                 agent_name=agent_name,
-                                contents=deepcopy(agent_output),
+                                contents={agent_name: deepcopy(out)},
                             )
                     else:
                         self.instances[instance_id].add_content_node(
                             parent_node_id=node_id,
                             agent_name=agent_name,
-                            contents=deepcopy(agent_output),
+                            contents={agent_name: deepcopy(agent_output)},
                         )
+                else:
+                    self.instances[instance_id].add_content_node(
+                        parent_node_id=node_id,
+                        agent_name=agent_name,
+                        contents={agent_name: deepcopy(agent_output)},
+                    )
     
     def run_single_step(
         self,
@@ -336,7 +329,7 @@ class MultiAgent:
         for instance in self.instances.values():
             return_contents.append(instance.contents)
         # Remove finished or stalled instances
-        self.instances = {i: instance for i, instance in self.instances.items() if not instance.is_completed(list(self._modules.key()))}
+        self.instances = {i: instance for i, instance in self.instances.items() if not instance.is_completed(list(self._modules.keys()))}
         return return_contents
     
     def flush(self, verbose: bool = True, **kwargs) -> List[Dict[str, Any]]:
