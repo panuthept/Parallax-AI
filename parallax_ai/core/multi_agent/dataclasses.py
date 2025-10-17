@@ -2,21 +2,16 @@ import yaml
 import dill
 import types
 import inspect
+from uuid import uuid4
+from copy import deepcopy
 from ..agent import Agent
-from uuid import UUID, uuid4
 from dataclasses import dataclass, field
 from typing import Dict, List, Callable, Union, Optional, Any
 
 
 @dataclass
-class Dependency:
-    external_data: Optional[List[str]] = None
-    agent_outputs: Optional[List[str]] = None
-
-
-@dataclass
 class ModuleIO:
-    dependency: Optional[Dependency] = None
+    dependency: Optional[List[str]] = None
     input_processing: Optional[Callable[[list, dict], list]] = None # (outputs, data) -> inputs
     output_processing: Callable[[list, list, dict], list] = None # (inputs, outputs, data) -> processed_outputs
     
@@ -50,16 +45,6 @@ class ModuleIO:
             print(f"Warning: Could not serialize {field_name} function: {e}")
             return None
     
-    def _serialize_dependency(self):
-        """Serialize dependency to a dictionary."""
-        if self.dependency is None:
-            return None
-            
-        return {
-            'external_data': self.dependency.external_data,
-            'agent_outputs': self.dependency.agent_outputs
-        }
-    
     def _setup_yaml_multiline_representer(self):
         """Configure YAML to use literal style for multiline strings."""
         yaml.add_representer(str, lambda dumper, data: 
@@ -76,7 +61,7 @@ class ModuleIO:
         try:
             # Serialize all components
             data = {
-                'dependency': self._serialize_dependency(),
+                'dependency': self.dependency,
                 'input_processing': self._serialize_function(self.input_processing, 'input_processing'),
                 'output_processing': self._serialize_function(self.output_processing, 'output_processing')
             }
@@ -91,18 +76,6 @@ class ModuleIO:
                 
         except Exception as e:
             raise ValueError(f"Failed to save AgentIO to {path}: {e}")
-
-    @classmethod
-    def _deserialize_dependency(cls, data):
-        """Deserialize dependency from dictionary."""
-        dependency_data = data.get('dependency')
-        if dependency_data is None:
-            return None
-            
-        return Dependency(
-            external_data=dependency_data.get('external_data'),
-            agent_outputs=dependency_data.get('agent_outputs')
-        )
     
     @classmethod
     def _deserialize_function(cls, func_data, field_name):
@@ -159,7 +132,7 @@ class ModuleIO:
                 data = yaml.safe_load(f)
                 
             # Deserialize all components
-            dependency = cls._deserialize_dependency(data)
+            dependency = data.get('dependency', None)
             input_processing = cls._deserialize_function(data.get('input_processing'), 'input_processing')
             output_processing = cls._deserialize_function(data.get('output_processing'), 'output_processing')
             
@@ -189,11 +162,52 @@ class FunctionModule(Module):
     io: Optional[Union[ModuleIO, Dict[str, ModuleIO]]]
     progress_name: Optional[str] = None
 
+@dataclass
+class ContentNode:
+    id: str = field(default_factory=lambda: uuid4().hex)
+    producer: Optional[str] = None
+    child_nodes: Dict[str, List['ContentNode']] = field(default_factory=dict) # agent_name -> List[ContentNode]
+    contents: Dict[str, Any] = field(default_factory=dict)  # data_name -> data
 
 @dataclass
-class Package:
+class Instance:
     id: str = field(default_factory=lambda: uuid4().hex)
-    is_completed: bool = False
-    agent_inputs: Dict[str, Any] = field(default_factory=dict)      # agent_name -> inputs
-    agent_outputs: Dict[str, Any] = field(default_factory=dict)     # agent_name -> outputs
-    external_data: Dict[str, Any] = field(default_factory=dict)     # data_name -> data_value
+    content_nodes: Dict[str, ContentNode] = field(default_factory=dict)  # node_id -> ContentNode
+
+    def __init__(self, contents):
+        self.id = uuid4().hex
+        root_node = ContentNode(producer="root", contents=deepcopy(contents))
+        self.content_nodes = {root_node.id: root_node}
+
+    def add_content_node(self, parent_node_id: str, agent_name: str, contents: Dict[str, Any]):
+        new_node = ContentNode(producer=agent_name, contents=deepcopy(contents))
+        if agent_name not in self.content_nodes[parent_node_id].child_nodes:
+            self.content_nodes[parent_node_id].child_nodes[agent_name] = []
+        self.content_nodes[parent_node_id].child_nodes[agent_name].append(new_node)
+        self.content_nodes[new_node.id] = new_node
+
+    @property
+    def contents(self) -> Dict[str, Any]:
+        # Aggregate contents from all content nodes
+        contents = {}
+        for node in self.content_nodes.values():
+            for content_key, content_value in node.contents.items():
+                if content_key not in contents:
+                    contents[content_key] = content_value
+                else:
+                    # If key already exists, convert to list
+                    if not isinstance(contents[content_key], list):
+                        contents[content_key] = [contents[content_key]]
+                    contents[content_key].append(content_value)
+        return contents
+    
+    def is_completed(self, agent_names: List[str]) -> bool:
+        # Check if all agents have produced outputs in this instance
+        for agent_name in agent_names:
+            agent_produced = any(
+                node.producer == agent_name 
+                for node in self.content_nodes.values()
+            )
+            if not agent_produced:
+                return False
+        return True

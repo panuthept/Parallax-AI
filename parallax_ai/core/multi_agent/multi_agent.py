@@ -1,13 +1,13 @@
 import os
 import random
-from uuid import uuid4
 from copy import deepcopy
 from ..agent import Agent
 from ..client import Client
+from types import GeneratorType
 from ..engine import ParallaxEngine
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
-from .dataclasses import ModuleIO, Package, Dependency, AgentModule
+from .dataclasses import ModuleIO, AgentModule, Instance
 
 
 class MultiAgent:
@@ -16,7 +16,7 @@ class MultiAgent:
         modules: Dict[str, AgentModule],
         client: Client = None,
         max_tries: int = 5,
-        dismiss_none_output: bool = True,
+        dismiss_none_output: bool = True,   # Not implemented yet
     ):
         self.client = client
         self.modules = modules
@@ -26,7 +26,7 @@ class MultiAgent:
         self.engine = ParallaxEngine(
             client=self.client, max_tries=max_tries, dismiss_none_output=False
         )
-        self.packages: List[Package] = []
+        self.instances: Dict[str, Instance] = {}
 
     def _flatten_modules(self, modules: Dict[str, AgentModule]) -> Dict[str, AgentModule]:
         """
@@ -138,7 +138,6 @@ class MultiAgent:
     ) -> Tuple[List[str], List[Any], List[str], List[str]]:
         # Create jobs for all agents
         jobs = []
-        ori_inputs = []
         agent_names = []
         for agent_name, agent_inputs in inputs.items():
             assert agent_name in self._modules, f"Agent {agent_name} not found."
@@ -146,22 +145,18 @@ class MultiAgent:
                 agent_inputs, progress_name=agent_name if progress_names is None else progress_names[agent_name]
             )
             jobs.extend(agent_jobs)
-            ori_inputs.extend(agent_inputs)
             agent_names.extend(agent_name for _ in range(len(agent_jobs)))
         if len(jobs) == 0:
-            return [], [], [], []
+            return [], [], []
 
         # Shuffle jobs to mix different agents' jobs
         indices = list(range(len(jobs)))
         random.shuffle(indices)
         shuffled_jobs = [jobs[i] for i in indices]
-        shuffled_inputs = [ori_inputs[i] for i in indices]
         shuffled_agent_names = [agent_names[i] for i in indices]
 
         # Process the jobs by the ParallaxEngine with retries
         shuffled_jobs = self.engine(shuffled_jobs, **kwargs)
-        # Get outputs in the original order
-        # shuffled_inputs = [job.inp for job in shuffled_jobs]
         shuffled_outputs = [job.output for job in shuffled_jobs]
 
         # Update conversation memory with assistant outputs
@@ -171,23 +166,14 @@ class MultiAgent:
         shuffled_session_ids = [job.session_id for job in shuffled_jobs]
 
         # Unshuffle jobs to the original order
-        inputs = [None for _ in range(len(jobs))]
         outputs = [None for _ in range(len(jobs))]
         session_ids = [None for _ in range(len(jobs))]
         agent_names = [None for _ in range(len(jobs))]
         for i, index in enumerate(indices):
-            inputs[index] = shuffled_inputs[i]
             outputs[index] = shuffled_outputs[i]
             session_ids[index] = shuffled_session_ids[i]
             agent_names[index] = shuffled_agent_names[i]
-
-        # Dismiss None outputs (if dismiss_none_output is True)
-        if self.dismiss_none_output:
-            session_ids = [sid for sid, out in zip(session_ids, outputs) if out is not None]
-            agent_names = [an for an, out in zip(agent_names, outputs) if out is not None]
-            inputs = [inp for inp, out in zip(inputs, outputs) if out is not None]
-            outputs = [out for out in outputs if out is not None]
-        return agent_names, session_ids, inputs, outputs
+        return agent_names, session_ids, outputs
 
     def _run(
         self, 
@@ -203,229 +189,176 @@ class MultiAgent:
             inputs[agent_name] = self._modules[agent_name].agent.input_transformation(inputs[agent_name])
 
         # Run all agents
-        agent_names, session_ids, inputs, outputs = self.__run(inputs, progress_names=progress_names, **kwargs)
+        agent_names, session_ids, outputs = self.__run(inputs, progress_names=progress_names, **kwargs)
         
         # Get outputs for each agent
         agent_outputs = defaultdict(list)
-        for agent_name, session_id, inp, out in zip(agent_names, session_ids, inputs, outputs):
+        for agent_name, session_id, out in zip(agent_names, session_ids, outputs):
             if self._modules[agent_name].agent.conversational_agent:
-                agent_outputs[agent_name].append((session_id, inp, out))
+                agent_outputs[agent_name].append((session_id, out))
             else:
-                agent_outputs[agent_name].append((inp, out))
+                agent_outputs[agent_name].append(out)
 
         # Transform outputs for all agents
         for agent_name, outputs in agent_outputs.items():
             agent_outputs[agent_name] = self._modules[agent_name].agent.output_transformation(outputs)
         return agent_outputs
     
-    def init_package(
-        self, 
-        inputs: Optional[Dict[str, Any]] = None, 
-        external_data: Optional[Dict[str, Any]] = None,
-        tracking_id: Optional[str] = None,
-    ) -> Package:
-        package = Package(
-            id=tracking_id if tracking_id is not None else uuid4().hex,
-            external_data=external_data, 
-        )
-        if inputs is not None:
-            for agent_name, agent_inputs in inputs.items():
-                assert agent_name in self._modules, f"Unknown agent name: '{agent_name}' in inputs."
-                package.agent_inputs[agent_name] = agent_inputs
-        return package
+    def is_dependency_fulfilled(self, contents: Dict[str, Any], dependency: List[str]) -> bool:
+        fullfilled = True
+        for dep in dependency:
+            if dep not in contents:
+                fullfilled = False
+                break
+        return fullfilled
     
-    def is_dependency_fulfilled(self, package: Package, dependency: Dependency) -> bool:
-        # Check agent_outputs dependencies
-        if dependency.agent_outputs is not None:
-            for output_name in dependency.agent_outputs:
-                if output_name not in package.agent_outputs:
-                    return False
-        # Check external_data dependencies
-        if dependency.external_data is not None:
-            for data_name in dependency.external_data:
-                if data_name not in package.external_data:
-                    return False
-        return True
-    
-    def _get_pipeline_inputs(
-        self, 
-        packages: List[Package], 
-        modules: Optional[Dict[str, AgentModule]],
-    ) -> Tuple[Dict[str, Any], Dict[str, int]]:
-        inputs = {}
-        package_indices = {}
-        for i, package in enumerate(packages):   # Prioritize older packages
-            if package is None or package.is_completed:
-                continue
-            # Get inputs from package.agent_inputs
-            for agent_name, agent_inputs in package.agent_inputs.items():
-                if agent_name in inputs:
-                    # Already has this inputs
-                    continue
-                if agent_name in package.agent_outputs:
-                    # Already has executed this agent
-                    continue
-                inputs[agent_name] = agent_inputs
-                package_indices[agent_name] = i  # Record which package provides this input
-
-            # Get inputs from package.external_data and package.agent_outputs
-            for agent_name, module in modules.items():
-                if agent_name in inputs:
-                    # Already has this inputs
-                    continue
-                if agent_name in package.agent_outputs:
-                    # Already has executed this agent
-                    continue
-                if module.io is None or module.io.input_processing is None:
-                    # No input processing function
-                    continue
-                # Check dependencies and get relevant data
-                relevance_agent_outputs = deepcopy(package.agent_outputs)
-                relevance_external_data = deepcopy(package.external_data)
-                if module.io.dependency is not None:
-                    if not self.is_dependency_fulfilled(package, module.io.dependency):
-                        # Dependencies not fulfilled
+    def _get_pipeline_inputs(self):
+        inputs = defaultdict(list)
+        indexing = defaultdict(list)
+        for agent_name, module in self._modules.items():
+            for instance in self.instances.values():
+                for content_node in instance.content_nodes.values():
+                    # Node will be skipped under two conditions:
+                    # 1. This agent has already been executed in this node
+                    # 2. Dependencies are not fulfilled
+                    # 3. Content node has no contents (happens when previous agent output is None)
+                    if content_node.contents is None or len(content_node.contents) == 0:
                         continue
-                    # Filter only relevant agent outputs and external data
-                    if module.io.dependency.agent_outputs is not None:
-                        relevance_agent_outputs = {k: v for k, v in relevance_agent_outputs.items() if k in module.io.dependency.agent_outputs}
-                    if module.io.dependency.external_data is not None:
-                        relevance_external_data = {k: v for k, v in relevance_external_data.items() if k in module.io.dependency.external_data}
-                # Get agent inputs
-                agent_inputs = module.io.input_processing(relevance_agent_outputs, relevance_external_data)
-                if agent_inputs is None:
-                    print(f"[Warning] Obtain 'None' inputs for agent {agent_name}. This is possible if dependency is not provided for downstream Agent.")
-                if len(agent_inputs) == 0:                    
-                    print(f"[Warning] Obtain empty inputs for agent {agent_name}.")
-                inputs[agent_name] = agent_inputs
-                package_indices[agent_name] = i # Record which package provides this input
-        return inputs, package_indices
+                    # Check if this agent has already been executed in this node
+                    if agent_name in content_node.child_nodes:
+                        continue
+                    # Check if dependencies are fulfilled
+                    if module.io is None:
+                        # If IO is not defined, pass everything in the node's contents as inputs
+                        inputs[agent_name].append(deepcopy(content_node.contents))
+                        indexing[agent_name].append((instance.id, content_node.id))
+                    else:
+                        # Check if dependency is fullfilled andfFilter only relevant contents based on dependency
+                        agent_input = deepcopy(content_node.contents)
+                        if module.io.dependency is not None:
+                            if not self.is_dependency_fulfilled(content_node.contents, module.io.dependency):
+                                continue
+                            # Filter only relevant contents
+                            agent_input = {k: v for k, v in agent_input.items() if k in module.io.dependency}
+                        # Process inputs if input_processing is provided
+                        if module.io.input_processing is not None:
+                            agent_input = module.io.input_processing(agent_input)
+                            if isinstance(agent_input, GeneratorType):
+                                for inp in agent_input:
+                                    inputs[agent_name].append(inp)
+                                    indexing[agent_name].append((instance.id, content_node.id))
+                            else:
+                                inputs[agent_name].append(agent_input)
+                                indexing[agent_name].append((instance.id, content_node.id))
+                        else:
+                            # Get agent inputs
+                            inputs[agent_name].append(agent_input)
+                            indexing[agent_name].append((instance.id, content_node.id))
+        return inputs, indexing
     
-    def _update_package_status(self, packages: List[Package], package_indices: Dict[str, int]):
-        # (a package is finished if all agents have been executed)
-        for i, package in enumerate(packages):
-            if package is None or package.is_completed:
-                continue
-            all_agents_executed = True
-            for agent_name in self._modules.keys():
-                if agent_name not in package.agent_outputs:
-                    all_agents_executed = False
-            if all_agents_executed:
-                package.is_completed = True
-        # (a package is stalled if no new agents can be executed)
-        for i, package in enumerate(packages):
-            if package is None or package.is_completed:
-                continue
-            if i not in package_indices.values():
-                package.is_completed = True
-        return packages
+    def _update_instances_with_outputs(self, inputs, outputs, indexing):
+        for agent_name in outputs:
+            assert len(inputs[agent_name]) == len(outputs[agent_name]), f"Number of inputs and outputs for agent {agent_name} do not match."
+            # NOTE: This implementation assumes that each agent produces outputs for each input in order.
+            for agent_input, agent_output, (instance_id, node_id) in zip(inputs[agent_name], outputs[agent_name], indexing[agent_name]):
+                if self._modules[agent_name].agent.conversational_agent:
+                    agent_output = agent_output[1]
+                assert instance_id in self.instances[instance_id], "Instance ID not found."
+                assert node_id in self.instances[instance_id].content_nodes, "Content Node ID not found."
+                # Update instance contents with agent outputs
+                if agent_output is None:
+                    self.instances[instance_id].add_content_node(
+                        parent_node_id=node_id,
+                        agent_name=agent_name,
+                        contents=None,
+                    )
+                else:
+                    # Process outputs if output_processing is provided
+                    if self._modules[agent_name].io is not None and self._modules[agent_name].io.output_processing is not None:
+                        agent_output = self._modules[agent_name].io.output_processing(
+                            deepcopy(agent_input),
+                            deepcopy(agent_output),
+                        )
+                        if isinstance(agent_output, GeneratorType):
+                            for out in agent_output:
+                                self.instances[instance_id].add_content_node(
+                                    parent_node_id=node_id,
+                                    agent_name=agent_name,
+                                    contents=deepcopy(out),
+                                )
+                        else:
+                            self.instances[instance_id].add_content_node(
+                                parent_node_id=node_id,
+                                agent_name=agent_name,
+                                contents=deepcopy(agent_output),
+                            )
+                    else:
+                        self.instances[instance_id].add_content_node(
+                            parent_node_id=node_id,
+                            agent_name=agent_name,
+                            contents=deepcopy(agent_output),
+                        )
     
     def run_single_step(
         self,
-        inputs=None,
-        tracking_id=None,
-        external_data=None,
+        inputs = None,
+        verbose: bool = True,
         **kwargs,
-    ) -> List[Package]:
+    ) -> List[Dict[str, Any]]:
         """
         Run a single step of the multi-agent pipeline.
         """
-        # Create new package (if inputs or external_data are provided)
-        if inputs is not None or external_data is not None:
-            package = self.init_package(inputs, external_data, tracking_id=tracking_id)
-            self.packages.append(package)
-        elif len(self.packages) == 0:
+        # Create new package (if inputs is provided)
+        if inputs is not None:
+            for inp in inputs:
+                assert isinstance(inp, dict), "Each input should be a dictionary of agent_name -> inputs."
+                instance = Instance(inp)
+                self.instances[instance.id] = instance
+        elif len(self.instances) == 0:
             print("Warning: No packages to process. Please provide inputs or external_data to create a new package.")
             return []
 
-        # Input processing for all agents
-        inputs, package_indices = self._get_pipeline_inputs(self.packages, self._modules)
+        # Get inputs for all agents
+        inputs, indexing = self._get_pipeline_inputs()
 
         # Execute Agents
-        input_outputs = self._run(
+        outputs = self._run(
             inputs=deepcopy(inputs), 
-            progress_names={agent_name: module.progress_name for agent_name, module in self._modules.items()},
+            progress_names={agent_name: module.progress_name for agent_name, module in self._modules.items()} if verbose else None,
             **kwargs
         )
 
-        # Update packages with outputs
-        for agent_name, agent_input_outputs in input_outputs.items():
-            package_index = package_indices[agent_name]
-            # Get inputs and outputs
-            agent_inputs = []
-            agent_outputs = []
-            for agent_input_output in agent_input_outputs:
-                if self._modules[agent_name].agent.conversational_agent:
-                    agent_inputs.append(agent_input_output[1])
-                    agent_outputs.append(agent_input_output[2])
-                else:
-                    agent_inputs.append(agent_input_output[0])
-                    agent_outputs.append(agent_input_output[1])
+        # Update instances with outputs
+        self._update_instances_with_outputs(inputs, outputs, indexing)
 
-            assert self.packages[package_index] is not None, "Package should not be None."
-            # Process outputs if output_processing is provided
-            if agent_name in self._modules and self._modules[agent_name].io is not None and self._modules[agent_name].io.output_processing is not None:
-                agent_outputs = self._modules[agent_name].io.output_processing(
-                    deepcopy(agent_inputs),                                 # inputs
-                    deepcopy(agent_outputs),                                # outputs
-                    deepcopy(self.packages[package_index].external_data)    # data
-                )
-            self.packages[package_index].agent_outputs[agent_name] = agent_outputs
-
-        # Update package status
-        self.packages = self._update_package_status(self.packages, package_indices)
-        # Get return packages
-        return_packages = [deepcopy(package) for package in self.packages if package is not None]
-        # Remove finished or stalled packages
-        self.packages = [package for package in self.packages if not package.is_completed]
-        return return_packages
+        # Return done instances' contents
+        return_contents = []
+        for instance in self.instances.values():
+            return_contents.append(instance.contents)
+        # Remove finished or stalled instances
+        self.instances = {i: instance for i, instance in self.instances.items() if not instance.is_completed(list(self._modules.key()))}
+        return return_contents
     
-    def flush(self, **kwargs) -> List[Package]:
+    def flush(self, verbose: bool = True, **kwargs) -> List[Dict[str, Any]]:
         """
         Finish all the remaining packages.
         """
-        all_packages = {}
-        while len(self.packages) > 0:
-            packages = self.run_single_step(**kwargs)
-            for package in packages:
-                if package is not None:
-                    all_packages[package.id] = package
-        return list(all_packages.values())
+        return_contents = []
+        while len(self.instances) > 0:
+            contents = self.run_single_step(verbose=verbose, **kwargs)
+            if len(contents) > 0:
+                return_contents.extend(contents)
+        return return_contents
     
     def run(
         self,
-        inputs=None,
-        external_data=None,
+        inputs,
+        verbose: bool = True,
         **kwargs,
-    ) -> List[Package]:
+    ) -> List[Dict[str, Any]]:
         """
         Run the given inputs through the multi-agent pipeline until all agents have produced outputs.
         """
-        assert inputs is not None or external_data is not None, "Please provide inputs or external_data to run the multi-agent pipeline."
-        packages = self.run_single_step(inputs=inputs, external_data=external_data, **kwargs)
-        packages = {package.id: package for package in packages}
-        for package in self.flush(**kwargs):
-            packages[package.id] = package
-        return list(packages.values())
-    
-    # def run_until(
-    #     self,
-    #     condition_fn,
-    #     inputs=None,
-    #     external_data=None,
-    #     max_steps: int = 10,
-    #     **kwargs,
-    # ) -> List[Package]:
-    #     """
-    #     Run the multi-agent pipeline until the condition function is satisfied or max_steps is reached.
-    #     The condition function takes in a dictionary of agent outputs and returns a boolean.
-    #     """
-    #     assert inputs is not None or external_data is not None, "Please provide inputs or external_data to run the multi-agent pipeline."
-    #     steps = 0
-    #     packages = self.run_single_step(inputs=inputs, external_data=external_data, **kwargs)
-    #     packages = {package.id: package for package in packages}
-    #     while not condition_fn(outputs) and steps < max_steps:
-    #         for package in self.run_single_step(**kwargs):
-    #             packages[package.id] = package
-    #         steps += 1
-    #     return list(packages.values())
+        return_contents = self.run_single_step(inputs=inputs, verbose=verbose, **kwargs)
+        return_contents.extend(self.flush(verbose=verbose, **kwargs))
+        return return_contents

@@ -1,7 +1,6 @@
 from ..agent import Agent
 from copy import deepcopy
-from dataclasses_jsonschema import JsonSchemaMixin
-from typing import Union, Any, List, Optional, get_args
+from typing import Union, List, Optional, get_args
 
 
 class ClassificationAgent(Agent):
@@ -53,15 +52,12 @@ class ClassificationAgent(Agent):
         for i in range(len(duplicated_outputs) // self.n):
             # Handle cases where the model returns multiple items in a tuple
             # (inp, output), (session_id, output) or (session_id, inp, output)
-            d1, d2 = None, None
+            session_id = None
             output_tuple_size = 1
             if isinstance(duplicated_outputs[i * self.n], tuple):
                 output_tuple_size = len(duplicated_outputs[i * self.n])
                 if output_tuple_size == 2:
-                    d1 = duplicated_outputs[i * self.n][0]
-                elif output_tuple_size == 3:
-                    d1 = duplicated_outputs[i * self.n][0]
-                    d2 = duplicated_outputs[i * self.n][1]
+                    session_id = duplicated_outputs[i * self.n][0]
                 else:
                     raise ValueError("Unexpected output format.")
 
@@ -87,10 +83,8 @@ class ClassificationAgent(Agent):
                     else:
                         output_label[output_key] = None
                         
-            if output_tuple_size == 3:
-                outputs.append((d1, d2, output_label))
-            elif output_tuple_size == 2:
-                outputs.append((d1, output_label))
+            if output_tuple_size == 2:
+                outputs.append((session_id, output_label))
             else:
                 outputs.append(output_label)
         return outputs
