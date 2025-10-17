@@ -169,9 +169,17 @@ class Client:
         assert len(models) == len(inputs), f"Length of models ({len(models)}) should be equal to length of inputs ({len(inputs)})."
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
         kwargs["func"] = self.completions_func
-        inputs = self._preprocess_inputs(inputs)
-        
-        indices = list(range(len(inputs)))
+
+        # Yield None inputs here to avoid wasting bandwidth
+        _inputs = []
+        indices = []
+        for index, inp in enumerate(self._preprocess_inputs(inputs)):
+            if inp is None:
+                yield (index, None)
+            else:
+                _inputs.append(inp)
+                indices.append(index)
+        inputs = _inputs
 
         # Get model_remote_address from file if provided (this allows real-time update of model addresses)
         if self.model_remote_address_path is not None:
