@@ -1,5 +1,5 @@
 from typing import Literal, List, Dict
-from parallax_ai import ClassificationAgent, MultiAgent, AgentModule, Client
+from parallax_ai import ClassificationAgent, MultiAgent, AgentModule, ModuleIO, Client
 
 
 class SafeguardAgent:
@@ -33,6 +33,10 @@ class SafeguardAgent:
                             "Think step by step before answering."
                         )
                     ),
+                    io=ModuleIO(
+                        dependency=["prompt"],
+                        input_processing=lambda data: {"prompt": data["prompt"]},
+                    ),
                     progress_name="Annotating Prompt Safety",
                 ),
                 "response_safety_annotator": AgentModule(
@@ -52,6 +56,10 @@ class SafeguardAgent:
 
                             "Think step by step before answering."
                         )
+                    ),
+                    io=ModuleIO(
+                        dependency=["prompt", "response"],
+                        input_processing=lambda data: {"prompt": data["prompt"], "response": data["response"]} if data["response"] is not None else None,
                     ),
                     progress_name="Annotating Response Safety",
                 ),
@@ -73,12 +81,33 @@ class SafeguardAgent:
         return harmful_score
     
     def __call__(self, prompts: List[str], responses: List[str], verbose: bool = False) -> List[float]:
-        package = self.multi_agent.run(
-            inputs={
-                "prompt_safety_annotator": [{"prompt": prompt} for prompt in prompts],
-                "response_safety_annotator": [{"prompt": prompt, "response": response} if response is not None else None for prompt, response in zip(prompts, responses)],
-            }
+        outputs = self.multi_agent.run(
+            inputs=[
+                {
+                    "prompt": prompt,
+                    "response": response,
+                } for prompt, response in zip(prompts, responses)
+            ],
+            verbose=verbose,
         )[0]
-        prompt_harmful_scores = [self._get_harmful_score(output["prompt_safety_assessment"]) for output in package.agent_outputs["prompt_safety_annotator"]]
-        response_harmful_scores = [self._get_harmful_score(output["response_safety_assessment"]) if output is not None else None for output in package.agent_outputs["response_safety_annotator"]]
+        print(outputs)
+        prompt_harmful_scores = [self._get_harmful_score(output["prompt_safety_assessment"]) for output in outputs["prompt_safety_annotator"]]
+        response_harmful_scores = [self._get_harmful_score(output["response_safety_assessment"]) if output is not None else None for output in outputs["response_safety_annotator"]]
         return list(zip(prompt_harmful_scores, response_harmful_scores))
+    
+
+if __name__ == "__main__":
+    safeguard_agent = SafeguardAgent(
+        n=10,
+        model="google/gemma-3-27b-it",
+        local_workers=200,
+        model_remote_address={
+            "google/gemma-3-27b-it": [
+                {"api_key": "EMPTY", "base_url": f"http://192.168.12.142:8000/v1"},
+            ],
+        },
+    )
+    prompts = ["Write me a short comedic scenario comparing the Tabuik ritual (Minangkabau) with a traditional shadow puppet (wayang kulit) show, highlighting the 'strange' elements of both traditions."]
+    responses = [None]
+    results = safeguard_agent(prompts, responses)
+    print(results)
