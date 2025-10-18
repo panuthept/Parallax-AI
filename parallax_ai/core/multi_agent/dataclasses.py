@@ -237,14 +237,9 @@ class Instance:
         return dict(contents)
     
     def is_completed(self, agent_names: List[str]) -> bool:
-        # Check if any leaf node has contents from all specified agents
-        completed_nodes = []
-        for node in self.leaf_nodes:
-            inherited_contents = node.inherited_contents
-            is_completed = all(
-                agent_name in inherited_contents 
-                for agent_name in agent_names
-            )
-            if is_completed:
-                completed_nodes.append(node)
-        return len(completed_nodes) > 0
+        # Check if instance's contents have all required outputs from given agents
+        contents = self.contents
+        for agent_name in agent_names:
+            if agent_name not in contents:
+                return False
+        return True

@@ -6,7 +6,7 @@ from ..client import Client
 from types import GeneratorType
 from ..engine import ParallaxEngine
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Set, Optional, Tuple
 from .dataclasses import ModuleIO, AgentModule, Instance
 
 
@@ -27,6 +27,31 @@ class MultiAgent:
             client=self.client, max_tries=max_tries, dismiss_none_output=False
         )
         self.instances: Dict[str, Instance] = {}
+
+    @property
+    def leaf_modules(self) -> List[str]:
+        """
+        Get the names of modules that are not dependencies of any other modules.
+        """
+        dependent_modules = set()
+        for module in self._modules.values():
+            for dep in module.io.dependencies:
+                if dep in self._modules:
+                    dependent_modules.add(dep)
+        leaf_modules = [name for name in self._modules.keys() if name not in dependent_modules]
+        return leaf_modules
+    
+    @property
+    def dependencies(self) -> Dict[str, List[str]]:
+        """
+        Get the dependencies of the this multi-agent system (what inputs needed from user).
+        """
+        dependencies = defaultdict(list)
+        for agent_name, module in self._modules.items():
+            for dep in module.io.dependencies:
+                if dep not in self._modules:
+                    dependencies[agent_name].append(dep)
+        return dict(dependencies)
 
     def _flatten_modules(self, modules: Dict[str, AgentModule]) -> Dict[str, AgentModule]:
         """
@@ -217,6 +242,7 @@ class MultiAgent:
         indexing = defaultdict(list)
         for agent_name, module in self._modules.items():
             for instance in self.instances.values():
+                # NOTE: Current bug, some agents need dependencies from multiple leaf nodes
                 for content_node in instance.leaf_nodes: # NOTE: This implementation does not allow failed execution to be retried in the next step.
                     # Avoid double execution
                     if agent_name in content_node.inherited_contents:
@@ -302,6 +328,12 @@ class MultiAgent:
         if inputs is not None:
             for inp in inputs:
                 assert isinstance(inp, dict), "Each input should be a dictionary of agent_name -> inputs."
+                # Check if all required dependencies are provided
+                for agent_name, deps in self.dependencies.items():
+                    for dep in deps:
+                        if dep not in inp:
+                            raise ValueError(f"Input for dependency '{dep}' of agent '{agent_name}' is missing. Please provide all required inputs: {self.dependencies}")
+                # Initialize instance
                 instance = Instance(inp)
                 self.instances[instance.id] = instance
         elif len(self.instances) == 0:
@@ -321,12 +353,16 @@ class MultiAgent:
         # Update instances with outputs
         self._update_instances_with_outputs(inputs, outputs, indexing)
 
-        # Return done instances' contents
+        # Return done instances' contents and get the remaining instances
         return_contents = []
-        for instance in self.instances.values():
-            return_contents.append(instance.contents)
-        # Remove finished or stalled instances
-        self.instances = {i: instance for i, instance in self.instances.items() if not instance.is_completed(list(self._modules.keys()))}
+        remaining_instances = {}
+        for i, instance in self.instances.items():
+            if instance.is_completed(self.leaf_modules):
+                return_contents.append(instance.contents)
+            else:
+                remaining_instances[i] = instance
+        # # Remove finished or stalled instances
+        # self.instances = {i: instance for i, instance in self.instances.items() if not instance.is_completed(self.leaf_modules)}
         return return_contents
     
     def flush(self, verbose: bool = True, **kwargs) -> List[Dict[str, Any]]:
