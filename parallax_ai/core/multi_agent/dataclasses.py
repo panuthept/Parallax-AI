@@ -5,13 +5,14 @@ import inspect
 from uuid import uuid4
 from copy import deepcopy
 from ..agent import Agent
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Callable, Union, Optional, Any
 
 
 @dataclass
 class ModuleIO:
-    dependencies: Optional[List[str]] = None
+    dependencies: List[str]
     input_processing: Optional[Callable[[list, dict], list]] = None # (outputs, data) -> inputs
     output_processing: Callable[[list, list, dict], list] = None # (inputs, outputs, data) -> processed_outputs
     
@@ -153,7 +154,7 @@ class Module:
 @dataclass
 class AgentModule(Module):
     agent: Agent
-    io: Optional[Union[ModuleIO, Dict[str, ModuleIO]]] = None
+    io: Union[ModuleIO, Dict[str, ModuleIO]]
     progress_name: Optional[str] = None
 
 @dataclass
@@ -165,9 +166,30 @@ class FunctionModule(Module):
 @dataclass
 class ContentNode:
     id: str = field(default_factory=lambda: uuid4().hex)
-    producer: Optional[str] = None
+    parent_nodes: Dict[str, List['ContentNode']] = field(default_factory=dict) # agent_name -> List[ContentNode]
     child_nodes: Dict[str, List['ContentNode']] = field(default_factory=dict) # agent_name -> List[ContentNode]
     contents: Dict[str, Any] = field(default_factory=dict)  # data_name -> data
+
+    @property
+    def is_leaf(self) -> bool:
+        return len(self.child_nodes) == 0
+    
+    @property
+    def inherited_contents(self) -> Dict[str, Any]:
+        # Aggregate contents from this node and all its ancestors
+        contents = {}
+        nodes_to_visit = [self]
+        while nodes_to_visit:
+            current_node = nodes_to_visit.pop()
+            for content_key, content_value in current_node.contents.items():
+                if content_key not in contents:
+                    contents[content_key] = content_value
+                else:
+                    print(f"Warning: Duplicate content key '{content_key}'. This can happen when agent name is duplicated with the input names.")
+            # Add parent nodes to visit
+            for parent_list in current_node.parent_nodes.values():
+                nodes_to_visit.extend(parent_list)
+        return deepcopy(contents)
 
 @dataclass
 class Instance:
@@ -176,37 +198,53 @@ class Instance:
 
     def __init__(self, contents):
         self.id = uuid4().hex
-        root_node = ContentNode(producer="root", contents=deepcopy(contents))
+        root_node = ContentNode(contents=deepcopy(contents))
         self.content_nodes = {root_node.id: root_node}
 
     def add_content_node(self, parent_node_id: str, agent_name: str, contents: Dict[str, Any]):
-        new_node = ContentNode(producer=agent_name, contents=deepcopy(contents))
-        if agent_name not in self.content_nodes[parent_node_id].child_nodes:
-            self.content_nodes[parent_node_id].child_nodes[agent_name] = []
-        self.content_nodes[parent_node_id].child_nodes[agent_name].append(new_node)
+        assert parent_node_id in self.content_nodes, f"Parent node ID {parent_node_id} does not exist in this instance."
+        # Get parent node
+        parent_node = self.content_nodes[parent_node_id]
+        # Create new content node
+        new_node = ContentNode(contents=deepcopy(contents))
         self.content_nodes[new_node.id] = new_node
+        # Link parent->child relationship
+        if agent_name not in parent_node.child_nodes:
+            parent_node.child_nodes[agent_name] = []
+        parent_node.child_nodes[agent_name].append(new_node)
+        # Link child->parent relationship
+        if agent_name not in new_node.parent_nodes:
+            new_node.parent_nodes[agent_name] = []
+        new_node.parent_nodes[agent_name].append(parent_node)
+
+    @property
+    def leaf_nodes(self) -> List[ContentNode]:
+        # Find all leaf nodes (nodes without children)
+        leaf_nodes = []
+        for node in self.content_nodes.values():
+            if node.is_leaf:
+                leaf_nodes.append(node)
+        return leaf_nodes
 
     @property
     def contents(self) -> Dict[str, Any]:
         # Aggregate contents from all content nodes
-        contents = {}
+        contents = defaultdict(list)
         for node in self.content_nodes.values():
-            if node.contents is None:
-                continue
             for content_key, content_value in node.contents.items():
-                if content_key not in contents:
-                    contents[content_key] = [content_value]
-                else:
-                    contents[content_key].append(content_value)
-        return contents
+                contents[content_key].append(content_value)
+        # Convert defaultdict to regular dict
+        return dict(contents)
     
     def is_completed(self, agent_names: List[str]) -> bool:
-        # Check if all agents have produced outputs in this instance
-        for agent_name in agent_names:
-            agent_produced = any(
-                node.producer == agent_name 
-                for node in self.content_nodes.values()
+        # Check if any leaf node has contents from all specified agents
+        completed_nodes = []
+        for node in self.leaf_nodes:
+            inherited_contents = node.inherited_contents
+            is_completed = all(
+                agent_name in inherited_contents 
+                for agent_name in agent_names
             )
-            if not agent_produced:
-                return False
-        return True
+            if is_completed:
+                completed_nodes.append(node)
+        return len(completed_nodes) > 0

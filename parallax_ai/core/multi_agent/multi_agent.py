@@ -217,43 +217,34 @@ class MultiAgent:
         indexing = defaultdict(list)
         for agent_name, module in self._modules.items():
             for instance in self.instances.values():
-                for content_node in instance.content_nodes.values():
-                    # Node will be skipped under two conditions:
-                    # 1. This agent has already been executed in this node
-                    # 2. Dependencies are not fulfilled
-                    # 3. Content node has no contents (happens when previous agent output is None)
-                    if content_node.contents is None or len(content_node.contents) == 0:
+                for content_node in instance.leaf_nodes: # NOTE: This implementation does not allow failed execution to be retried in the next step.
+                    # Avoid double execution
+                    if agent_name in content_node.inherited_contents:
                         continue
-                    # Check if this agent has already been executed in this node
-                    if agent_name in content_node.child_nodes:
-                        continue
+                    # Get available contents (inherited + current)
+                    available_contents = deepcopy(content_node.inherited_contents)
                     # Check if dependencies are fulfilled
-                    if module.io is None:
-                        # If IO is not defined, pass everything in the node's contents as inputs
-                        inputs[agent_name].append(deepcopy(content_node.contents))
+                    if not self.is_dependency_fulfilled(available_contents, module.io.dependencies):
+                        continue
+                    # Get agent inputs
+                    agent_input = {k: v for k, v in available_contents.items() if k in module.io.dependencies}
+                    if any([value is None for value in agent_input.values()]):
+                        # If any of the required inputs is None, skip processing
+                        inputs[agent_name].append(None)
                         indexing[agent_name].append((instance.id, content_node.id))
-                    else:
-                        # Check if dependencies is fullfilled andfFilter only relevant contents based on dependencies
-                        agent_input = deepcopy(content_node.contents)
-                        if module.io.dependencies is not None:
-                            if not self.is_dependency_fulfilled(content_node.contents, module.io.dependencies):
-                                continue
-                            # Filter only relevant contents
-                            agent_input = {k: v for k, v in agent_input.items() if k in module.io.dependencies}
+                    elif module.io.input_processing is not None:
                         # Process inputs if input_processing is provided
-                        if module.io.input_processing is not None:
-                            agent_input = module.io.input_processing(agent_input)
-                            if isinstance(agent_input, GeneratorType):
-                                for inp in agent_input:
-                                    inputs[agent_name].append(inp)
-                                    indexing[agent_name].append((instance.id, content_node.id))
-                            else:
-                                inputs[agent_name].append(agent_input)
+                        agent_input = module.io.input_processing(agent_input)
+                        if isinstance(agent_input, GeneratorType):
+                            for inp in agent_input:
+                                inputs[agent_name].append(inp)
                                 indexing[agent_name].append((instance.id, content_node.id))
                         else:
-                            # Get agent inputs
                             inputs[agent_name].append(agent_input)
                             indexing[agent_name].append((instance.id, content_node.id))
+                    else:
+                        inputs[agent_name].append(agent_input)
+                        indexing[agent_name].append((instance.id, content_node.id))
         return inputs, indexing
     
     def _update_instances_with_outputs(self, inputs, outputs, indexing):
@@ -267,7 +258,13 @@ class MultiAgent:
                 assert node_id in self.instances[instance_id].content_nodes, "Content Node ID not found."
                 # Update instance contents with agent outputs
                 # Process outputs if output_processing is provided
-                if agent_output is not None and self._modules[agent_name].io is not None and self._modules[agent_name].io.output_processing is not None:
+                if agent_output is None:
+                    self.instances[instance_id].add_content_node(
+                        parent_node_id=node_id,
+                        agent_name=agent_name,
+                        contents={agent_name: None},
+                    )
+                elif self._modules[agent_name].io.output_processing is not None:
                     agent_output = self._modules[agent_name].io.output_processing(
                         deepcopy(agent_input),
                         deepcopy(agent_output),
