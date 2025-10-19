@@ -58,7 +58,7 @@ class SafeguardAgent:
                     ),
                     io=ModuleIO(
                         dependencies=["prompt", "response"],
-                        input_processing=lambda data: data if data["response"] is not None else None,
+                        input_processing=lambda deps: {"prompt": deps["prompt"], "response": deps["response"]} if deps["response"] is not None else None,
                     ),
                     progress_name="Annotating Response Safety",
                 ),
