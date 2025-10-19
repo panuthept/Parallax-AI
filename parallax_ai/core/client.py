@@ -166,6 +166,7 @@ class Client:
 
         wait_time = 2
         failed_base_urls = set()
+        prev_remaining_count = len(remaining_true_indices)
         set_remaining_true_indices = set(remaining_true_indices)
         while len(remaining_true_indices) > 0:
             # Get remaining inputs and models
@@ -248,7 +249,9 @@ class Client:
                 print(f"Found {len(remaining_true_indices)} failed requests, retrying again after {wait_time} seconds...")
                 print(f"List of failed URLs: {failed_base_urls}")
                 time.sleep(wait_time)  # Wait before retrying
-                wait_time = min(wait_time * 2, 600)  # Exponential backoff with a max wait time
+                if len(remaining_true_indices) >= prev_remaining_count:
+                    wait_time = min(wait_time * 2, 600)  # Exponential backoff with a max wait time
+                prev_remaining_count = len(remaining_true_indices)
 
     def run(
         self,
