@@ -1,2 +1,2 @@
 from .multi_agent import MultiAgent
-from .dataclasses import ModuleIO, AgentModule, FunctionModule, ContentNode, Instance
+from .dataclasses import ModuleIO, AgentModule, FunctionModule, Instance

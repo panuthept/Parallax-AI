@@ -6,7 +6,7 @@ from ..client import Client
 from types import GeneratorType
 from ..engine import ParallaxEngine
 from collections import defaultdict
-from typing import Any, Dict, List, Set, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from .dataclasses import ModuleIO, AgentModule, Instance
 
 
@@ -15,8 +15,8 @@ class MultiAgent:
         self,
         modules: Dict[str, AgentModule],
         client: Client = None,
-        max_tries: int = 5,
-        dismiss_none_output: bool = True,   # Not implemented yet
+        max_tries: int = 10,
+        dismiss_none_output: bool = True,
     ):
         self.client = client
         self.modules = modules
@@ -229,91 +229,74 @@ class MultiAgent:
             agent_outputs[agent_name] = self._modules[agent_name].agent.output_transformation(outputs)
         return agent_outputs
     
-    def is_dependency_fulfilled(self, contents: Dict[str, Any], dependencies: List[str]) -> bool:
-        fullfilled = True
+    @staticmethod
+    def check_and_acquire_dependencies(contents: Dict[str, Any], dependencies: List[Any]) -> Dict[str, Any]:
+        acquired_contents = {}
         for dep in dependencies:
-            if dep not in contents:
-                fullfilled = False
-                break
-        return fullfilled
+            if dep in contents:
+                acquired_contents[dep] = contents[dep]
+            else:
+                return None
+        return acquired_contents
     
     def _get_pipeline_inputs(self):
         inputs = defaultdict(list)
         indexing = defaultdict(list)
         for agent_name, module in self._modules.items():
             for instance in self.instances.values():
-                # NOTE: Current bug, some agents need dependencies from multiple leaf nodes
-                for content_node in instance.leaf_nodes: # NOTE: This implementation does not allow failed execution to be retried in the next step.
-                    # Avoid double execution
-                    if agent_name in content_node.inherited_contents:
-                        continue
-                    # Get available contents (inherited + current)
-                    available_contents = deepcopy(content_node.inherited_contents)
-                    # Check if dependencies are fulfilled
-                    if not self.is_dependency_fulfilled(available_contents, module.io.dependencies):
-                        continue
-                    # Get agent inputs
-                    agent_input = {k: v for k, v in available_contents.items() if k in module.io.dependencies}
-                    if any([value is None for value in agent_input.values()]):
-                        # If any of the required inputs is None, skip processing
-                        inputs[agent_name].append(None)
-                        indexing[agent_name].append((instance.id, content_node.id))
-                    elif module.io.input_processing is not None:
-                        # Process inputs if input_processing is provided
-                        agent_input = module.io.input_processing(agent_input)
-                        if isinstance(agent_input, GeneratorType):
-                            for inp in agent_input:
-                                inputs[agent_name].append(inp)
-                                indexing[agent_name].append((instance.id, content_node.id))
-                        else:
-                            inputs[agent_name].append(agent_input)
-                            indexing[agent_name].append((instance.id, content_node.id))
+                # Skip if this instance already has output for this agent
+                if agent_name in instance.contents:
+                    continue
+
+                # Check and acquire dependencies
+                dependencies = self.check_and_acquire_dependencies(instance.contents, module.io.dependencies)
+                if dependencies is None:
+                    continue
+
+                # NOTE: How to skip 'None' inputs?
+                if module.io.input_processing is not None:
+                    agent_input = module.io.input_processing(dependencies)
+                    if isinstance(agent_input, GeneratorType) or isinstance(agent_input, list):
+                        for inp in agent_input:
+                            inputs[agent_name].append(inp)
+                            indexing[agent_name].append(instance.id)
                     else:
                         inputs[agent_name].append(agent_input)
-                        indexing[agent_name].append((instance.id, content_node.id))
-        return inputs, indexing
+                        indexing[agent_name].append(instance.id)
+                else:
+                    inputs[agent_name].append(dependencies)
+                    indexing[agent_name].append(instance.id)
+        return dict(inputs), dict(indexing)
     
     def _update_instances_with_outputs(self, inputs, outputs, indexing):
         for agent_name in outputs:
             assert len(inputs[agent_name]) == len(outputs[agent_name]), f"Number of inputs and outputs for agent {agent_name} do not match."
-            # NOTE: This implementation assumes that each agent produces outputs for each input in order.
-            for agent_input, agent_output, (instance_id, node_id) in zip(inputs[agent_name], outputs[agent_name], indexing[agent_name]):
+            agent_inputs = defaultdict(list)
+            agent_outputs = defaultdict(list)
+            for agent_input, agent_output, instance_id in zip(inputs[agent_name], outputs[agent_name], indexing[agent_name]):
                 if self._modules[agent_name].agent.conversational_agent:
                     agent_output = agent_output[1]
                 assert instance_id in self.instances, "Instance ID not found."
-                assert node_id in self.instances[instance_id].content_nodes, "Content Node ID not found."
-                # Update instance contents with agent outputs
-                # Process outputs if output_processing is provided
-                if agent_output is None:
-                    self.instances[instance_id].add_content_node(
-                        parent_node_id=node_id,
-                        agent_name=agent_name,
-                        contents={agent_name: None},
-                    )
-                elif self._modules[agent_name].io.output_processing is not None:
+                if self.dismiss_none_output and agent_output is None:
+                    continue
+                agent_inputs[instance_id].append(agent_input)
+                agent_outputs[instance_id].append(agent_output)
+            # Update instance contents with agent outputs
+            for instance_id in agent_outputs:
+                agent_input = agent_inputs[instance_id]
+                agent_output = agent_outputs[instance_id]
+                if self._modules[agent_name].io.output_processing is not None:
+                    # Process outputs if output_processing is provided
                     agent_output = self._modules[agent_name].io.output_processing(
                         deepcopy(agent_input),
                         deepcopy(agent_output),
                     )
                     if isinstance(agent_output, GeneratorType):
-                        for out in agent_output:
-                            self.instances[instance_id].add_content_node(
-                                parent_node_id=node_id,
-                                agent_name=agent_name,
-                                contents={agent_name: deepcopy(out)},
-                            )
+                        self.instances[instance_id].contents[agent_name] = deepcopy(list(agent_output))
                     else:
-                        self.instances[instance_id].add_content_node(
-                            parent_node_id=node_id,
-                            agent_name=agent_name,
-                            contents={agent_name: deepcopy(agent_output)},
-                        )
+                        self.instances[instance_id].contents[agent_name] = deepcopy(agent_output)
                 else:
-                    self.instances[instance_id].add_content_node(
-                        parent_node_id=node_id,
-                        agent_name=agent_name,
-                        contents={agent_name: deepcopy(agent_output)},
-                    )
+                    self.instances[instance_id].contents[agent_name] = deepcopy(agent_output)
     
     def run_single_step(
         self,
@@ -334,7 +317,7 @@ class MultiAgent:
                         if dep not in inp:
                             raise ValueError(f"Input for dependency '{dep}' of agent '{agent_name}' is missing. Please provide all required inputs: {self.dependencies}")
                 # Initialize instance
-                instance = Instance(inp)
+                instance = Instance(contents=inp)
                 self.instances[instance.id] = instance
         elif len(self.instances) == 0:
             print("Warning: No packages to process. Please provide inputs or external_data to create a new package.")
@@ -361,8 +344,8 @@ class MultiAgent:
                 return_contents.append(instance.contents)
             else:
                 remaining_instances[i] = instance
-        # # Remove finished or stalled instances
-        # self.instances = {i: instance for i, instance in self.instances.items() if not instance.is_completed(self.leaf_modules)}
+        # Remove finished or stalled instances
+        self.instances = remaining_instances
         return return_contents
     
     def flush(self, verbose: bool = True, **kwargs) -> List[Dict[str, Any]]:
