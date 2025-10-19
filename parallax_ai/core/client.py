@@ -31,9 +31,7 @@ def completions_wrapper(
         )
         return index, response, True
     except Exception as e:
-        # print(e)
         return index, None, False
-
 
 def openai_completions(
     input,
@@ -59,26 +57,6 @@ def openai_completions(
     else:
         raise ValueError(f"Unknown input format:\n{input}")
     return response
-
-
-# def batched_openai_completions(
-#     batch_inputs,
-#     api_key,
-#     base_url,
-#     model,
-#     **kwargs,
-# ):
-#     """ Preventing too fine-grained parallelization """
-#     return [openai_completions(inputs, api_key, base_url, model, **kwargs) for inputs in batch_inputs]
-
-
-# def wrapped_openai_completions(
-#     inputs,
-#     **kwargs,
-# ):
-#     index, input, api_key, base_url, model = inputs
-#     return openai_completions((index, input), api_key, base_url, model, **kwargs)
-
 
 class Client:
     def __init__(
@@ -170,16 +148,14 @@ class Client:
         kwargs["max_tokens"] = kwargs.get("max_tokens", self.max_tokens)
         kwargs["func"] = self.completions_func
 
+        inputs = self._preprocess_inputs(inputs)
         # Yield None inputs here to avoid wasting bandwidth
-        _inputs = []
-        indices = []
-        for index, inp in enumerate(self._preprocess_inputs(inputs)):
+        remaining_true_indices = []
+        for i, inp in enumerate(inputs):
             if inp is None:
-                yield (index, None)
+                yield (i, None)
             else:
-                _inputs.append(inp)
-                indices.append(index)
-        inputs = _inputs
+                remaining_true_indices.append(i)
 
         # Get model_remote_address from file if provided (this allows real-time update of model addresses)
         if self.model_remote_address_path is not None:
@@ -190,10 +166,14 @@ class Client:
 
         wait_time = 2
         failed_base_urls = set()
-        remaining_indices = set(indices)
-        while len(remaining_indices) > 0:
+        set_remaining_true_indices = set(remaining_true_indices)
+        while len(remaining_true_indices) > 0:
+            # Get remaining inputs and models
+            remaining_inputs = [inputs[i] for i in remaining_true_indices]
+            remaining_models = [models[i] for i in remaining_true_indices]
+
             model_addresses = []
-            for model in models:
+            for model in remaining_models:
                 cand_addresses = model_remote_address.get("any", []) + model_remote_address.get(model, [])
                 # Try to avoid using the failed base_urls
                 filtered_addresses = [addr for addr in cand_addresses if addr["base_url"] not in failed_base_urls]
@@ -203,11 +183,11 @@ class Client:
                     model_addresses.append(np.random.choice(cand_addresses, size=1)[0])
                     failed_base_urls = set()  # Reset failed_base_urls if all addresses are failed
 
-            for start_index in range(0, len(inputs), self.chunk_size):
-                batched_indices = indices[start_index: start_index + self.chunk_size]
-                batched_inputs = inputs[start_index: start_index + self.chunk_size]
+            for start_index in range(0, len(remaining_inputs), self.chunk_size):
+                batched_indices = remaining_true_indices[start_index: start_index + self.chunk_size]
+                batched_inputs = remaining_inputs[start_index: start_index + self.chunk_size]
                 batched_model_addresses = model_addresses[start_index: start_index + self.chunk_size]
-                batched_models = models[start_index: start_index + self.chunk_size]
+                batched_models = remaining_models[start_index: start_index + self.chunk_size]
 
                 if ray.is_initialized():
                     partial_func = partial(completions_wrapper, **kwargs)
@@ -232,7 +212,7 @@ class Client:
                         for task in done_tasks:
                             index, output, success = ray.get(task)
                             if success:
-                                remaining_indices.discard(index)
+                                set_remaining_true_indices.discard(index)
                                 yield (index, output)
                             else:
                                 failed_base_urls.add(batched_model_addresses[batched_indices.index(index)]["base_url"])
@@ -246,7 +226,7 @@ class Client:
                     ]
                     for index, output, success in self.pool.imap_unordered(partial_func, batched_inputs):
                         if success:
-                            remaining_indices.discard(index)
+                            set_remaining_true_indices.discard(index)
                             yield (index, output)
                         else:
                             failed_base_urls.add(batched_model_addresses[batched_indices.index(index)]["base_url"])
@@ -257,19 +237,17 @@ class Client:
                             **kwargs
                         )
                         if success:
-                            remaining_indices.discard(index)
+                            set_remaining_true_indices.discard(index)
                             yield (index, output)
                         else:
                             failed_base_urls.add(batched_model_addresses[batched_indices.index(index)]["base_url"])
 
-            if len(remaining_indices) > 0:
-                print(f"Retrying {len(remaining_indices)} failed requests after waiting for {wait_time} seconds...")
-                print(f"Failed model URLs: {failed_base_urls}")
+            # # update remaining indices for the next round
+            remaining_true_indices = list(set_remaining_true_indices)
+            if len(remaining_true_indices) > 0:
+                print(f"Found {len(remaining_true_indices)} failed requests, retrying again after {wait_time} seconds...")
+                print(f"List of failed URLs: {failed_base_urls}")
                 time.sleep(wait_time)  # Wait before retrying
-                # update indices and inputs for the next round
-                indices = list(remaining_indices)
-                inputs = [inputs[i] for i in indices]
-                models = [models[i] for i in indices]
                 wait_time = min(wait_time * 2, 600)  # Exponential backoff with a max wait time
 
     def run(
