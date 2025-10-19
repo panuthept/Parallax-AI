@@ -31,7 +31,7 @@ def completions_wrapper(
         )
         return index, response, True
     except Exception as e:
-        print(e)
+        # print(e)
         return index, None, False
 
 
