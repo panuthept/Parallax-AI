@@ -88,11 +88,16 @@ class SafeguardAgent:
                 } for prompt, response in zip(prompts, responses)
             ],
             verbose=verbose,
-        )[0]
-        print(outputs)
-        prompt_harmful_scores = [self._get_harmful_score(output["prompt_safety_assessment"]) for output in outputs["prompt_safety_annotator"]]
-        response_harmful_scores = [self._get_harmful_score(output["response_safety_assessment"]) if output is not None else None for output in outputs["response_safety_annotator"]]
-        return list(zip(prompt_harmful_scores, response_harmful_scores))
+        )
+        prompt_harmful_scores = []
+        response_harmful_scores = []
+        for output in outputs:
+            prompt_harmful_scores.append(self._get_harmful_score(output["prompt_safety_annotator"][0]["prompt_safety_assessment"]))
+            if output["response_safety_annotator"][0] is None:
+                response_harmful_scores.append(None)
+            else:
+                response_harmful_scores.append(self._get_harmful_score(output["response_safety_annotator"][0]["response_safety_assessment"]))
+        return [{"prompt_harmful_score": p, "response_harmful_score": r} for p, r in zip(prompt_harmful_scores, response_harmful_scores)]
     
 
 if __name__ == "__main__":

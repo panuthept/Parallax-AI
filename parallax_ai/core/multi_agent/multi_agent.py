@@ -167,7 +167,7 @@ class MultiAgent:
         for agent_name, agent_inputs in inputs.items():
             assert agent_name in self._modules, f"Agent {agent_name} not found."
             agent_jobs = self._modules[agent_name].agent._create_jobs(
-                agent_inputs, progress_name=agent_name if progress_names is None else progress_names[agent_name]
+                agent_inputs, progress_name=progress_names[agent_name] if progress_names is not None else None
             )
             jobs.extend(agent_jobs)
             agent_names.extend(agent_name for _ in range(len(agent_jobs)))
