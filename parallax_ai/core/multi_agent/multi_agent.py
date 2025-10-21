@@ -280,9 +280,6 @@ class MultiAgent:
                 if self._modules[agent_name].agent.conversational_agent:
                     agent_output = agent_output[1]
                 assert instance_id in self.instances, "Instance ID not found."
-                # NOTE: Remove this implementation as it may cause double execution issues
-                # if self.dismiss_none_output and agent_output is None:
-                #     continue
                 agent_inputs[instance_id].append(agent_input)
                 agent_outputs[instance_id].append(agent_output)
             # Update instance contents with agent outputs
