@@ -16,13 +16,13 @@ class MultiAgent:
         modules: Dict[str, AgentModule],
         client: Client = None,
         max_tries: int = 10,
-        dismiss_none_output: bool = True,
+        dismiss_none_output: bool = True,   # If True, None outputs from agents will be removed from outputs
     ):
         self.client = client
         self.modules = modules
         self._modules = self._flatten_modules(modules)
         self.max_tries = max_tries
-        self.dismiss_none_output = dismiss_none_output  # If True, None outputs from agents will be removed from outputs
+        self.dismiss_none_output = dismiss_none_output
         self.engine = ParallaxEngine(
             client=self.client, max_tries=max_tries, dismiss_none_output=False
         )
