@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "parallax-ai"
-version = "0.4.0"
+version = "0.4.1"
 description = "Parallel Multi-Agent Inference."
 readme = "README.md"
 requires-python = "<=3.11"
@@ -17,7 +17,6 @@ dependencies = [
     "dill",
     "numpy",
     "openai",
-    "dataclasses-jsonschema",
     "typing-validation",
 ]
 
