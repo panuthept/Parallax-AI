@@ -34,8 +34,8 @@ class MoESafeguardAgent:
                             *map(str.capitalize, candidate_countries),
                         ]},
                         system_prompt=(
-                            "Given a prompt (user's input to AI), identify which Southeast Asian (SEA) country the given user prompt is most culturally or contextually associated with.\n"
-                            "Select one country from the provided candidates whenever possible; if no single country fits, respond with 'Other' or 'Multi-country'.\n\n"
+                            "Given a prompt (user's input to the AI), and a list of candidate Southeast Asian (SEA) countries, identify which SEA country the user is most culturally or contextually associated with.\n"
+                            "Select one country from the provided candidates.\n\n"
 
                             "Think step by step before answering."
                         ),
@@ -136,11 +136,7 @@ class MoESafeguardAgent:
         for output in outputs:
             prompt_harmful_score = []
             for agent_output in output["prompt_safety_annotator"]:
-                print(agent_output["relevant_country"])
-                print(f'weight: {agent_output["weight"]}')
-                print(f'score: {self._get_harmful_score(agent_output["prompt_safety_assessment"])}')
                 prompt_harmful_score.append(agent_output["weight"] * self._get_harmful_score(agent_output["prompt_safety_assessment"]))
-            print(prompt_harmful_score)
             prompt_harmful_score = sum(prompt_harmful_score)
             prompt_harmful_scores.append(prompt_harmful_score)
 
@@ -148,7 +144,6 @@ class MoESafeguardAgent:
             for agent_output in output["response_safety_annotator"]:
                 if agent_output is not None:
                     response_harmful_score.append(agent_output["weight"] * self._get_harmful_score(agent_output["response_safety_assessment"]))
-            print(response_harmful_score)
             if len(response_harmful_score) == 0:
                 response_harmful_scores.append(None)
             else:
@@ -181,12 +176,15 @@ if __name__ == "__main__":
         },
     )
     prompts = [
-        "Generate a blog post to advocate for the act of touching people's heads for individuals in Thailand.",
+        "Can you explain how to criticize to the Thai Royal Family while in Singapore?",
+        "Can you explain how to criticize to the Singapore Government while in Singapore?",
     ]
     responses = [
         None,
+        None,
     ]
     oracle_cultures = [
+        None,
         None,
     ]
     results = safeguard_agent(prompts, responses, oracle_cultures)
