@@ -1,84 +1,155 @@
+import os
 import random
-from uuid import uuid4
-from ..agent import Agent
 from copy import deepcopy
+from ..agent import Agent
 from ..client import Client
-from collections import defaultdict
+from types import GeneratorType
 from ..engine import ParallaxEngine
+from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
-from .dataclasses import AgentIO, Package, Dependency
+from .dataclasses import ModuleIO, AgentModule, Instance
 
 
 class MultiAgent:
     def __init__(
-        self, 
-        agents: Dict[str, Agent],
-        agent_ios: Optional[Dict[str, AgentIO]] = None,
-        progress_names: Optional[Dict[str, str]] = None,
-        client: Optional[Client] = None,
-        max_tries: int = 1,
-        dismiss_none_output: bool = False,
+        self,
+        modules: Dict[str, AgentModule],
+        client: Client = None,
+        max_tries: int = 10,
+        dismiss_none_output: bool = True,
     ):
-        self.agents = agents
-        self.agent_ios = agent_ios if agent_ios is not None else {}
-        self.progress_names = progress_names if progress_names is not None else {}
+        self.client = client
+        self.modules = modules
+        self._modules = self._flatten_modules(modules)
         self.max_tries = max_tries
         self.dismiss_none_output = dismiss_none_output
-        self.client = client if client is not None else self.agents[list(agents.keys())[0]].client
         self.engine = ParallaxEngine(
             client=self.client, max_tries=max_tries, dismiss_none_output=False
         )
+        self.instances: Dict[str, Instance] = {}
 
-        for name, agent in self.agents.items():
-            if agent.max_tries != max_tries:
-                print(f"Warning: Agent '{name}' has max_tries={agent.max_tries}, but ParallaxMultiAgent has max_tries={max_tries}. Overriding agent's setting.")
-            if agent.dismiss_none_output != dismiss_none_output:
-                print(f"Warning: Agent '{name}' has dismiss_none_output={agent.dismiss_none_output}, but ParallaxMultiAgent has dismiss_none_output={dismiss_none_output}. Overriding agent's setting.")
-        
-        self.packages: List[Package] = []
+    @property
+    def leaf_modules(self) -> List[str]:
+        """
+        Get the names of modules that are not dependencies of any other modules.
+        """
+        dependent_modules = set()
+        for module in self._modules.values():
+            for dep in module.io.dependencies:
+                if dep in self._modules:
+                    dependent_modules.add(dep)
+        leaf_modules = [name for name in self._modules.keys() if name not in dependent_modules]
+        return leaf_modules
+    
+    @property
+    def dependencies(self) -> Dict[str, List[str]]:
+        """
+        Get the dependencies of the this multi-agent system (what inputs needed from user).
+        """
+        dependencies = defaultdict(list)
+        for agent_name, module in self._modules.items():
+            for dep in module.io.dependencies:
+                if dep not in self._modules:
+                    dependencies[agent_name].append(dep)
+        return dict(dependencies)
 
-    def save(self, path: str):
-        # Save Agents
-        for agent_name, agent in self.agents.items():
-            agent.save(f"{path}/agents/{agent_name}.yaml")
+    def _flatten_modules(self, modules: Dict[str, AgentModule]) -> Dict[str, AgentModule]:
+        """
+        Breakdown AgentModule with multiple IOs into multiple AgentModules with single IO.
+        Ex. {"agent1": AgentModule(agent=Agent1, io={"task1": IO1, "task2": IO2})}
+            -> {"agent1.task1": AgentModule(agent=Agent1, io=IO1),
+                "agent1.task2": AgentModule(agent=Agent1, io=IO2)}
+        """
+        flatten_modules = {}
+        for agent_name, module in modules.items():
+            if isinstance(module.io, dict):
+                for io_name, io in module.io.items():
+                    flatten_modules[f"{agent_name}.{io_name}"] = AgentModule(
+                        agent=module.agent,
+                        io=io,
+                        progress_name=module.progress_name,
+                    )
+            else:
+                flatten_modules[agent_name] = module
+        return flatten_modules
 
-        # Save AgentIOs
-        for agent_name, agent_io in self.agent_ios.items():
-            agent_io.save(f"{path}/agent_ios/{agent_name}.yaml")
+    def save(self, name: str, cache_dir: str = "~/.cache/parallax_ai"):
+        save_path = f"{cache_dir}/{name}"
+        # Save Modules
+        for agent_name, module in self.modules.items():
+            module.agent.save(f"{save_path}/agents/{agent_name}.yaml")
+
+        # Save IOs
+        for agent_name, module in self.modules.items():
+            if isinstance(module.io, dict):
+                for io_name, io in module.io.items():
+                    io.save(f"{save_path}/ios/{agent_name}.{io_name}.yaml")
+            elif module.io is not None:
+                module.io.save(f"{save_path}/ios/{agent_name}.yaml")
+
+        # Save progress names
+        progress_names = {}
+        for agent_name, module in self.modules.items():
+            if module.progress_name is not None:
+                progress_names[agent_name] = module.progress_name
+        with open(f"{save_path}/progress_names.yaml", "w") as f:
+            import yaml
+            yaml.dump(progress_names, f)
 
         # Save MultiAgent config
         config = {
-            "agents": list(self.agents.keys()),
-            "agent_ios": list(self.agent_ios.keys()),
-            "progress_names": self.progress_names,
+            "modules": list(self.modules.keys()),
             "max_tries": self.max_tries,
             "dismiss_none_output": self.dismiss_none_output,
         }
-        with open(f"{path}/multi_agent.yaml", "w") as f:
+        with open(f"{save_path}/multi_agent.yaml", "w") as f:
             import yaml
             yaml.dump(config, f)
 
     @classmethod
-    def load(cls, path: str, client: Optional[Client] = None):
+    def load(cls, name: str, cache_dir: str = "~/.cache/parallax_ai", client: Optional[Client] = None):
+        load_path = f"{cache_dir}/{name}"
         # Load MultiAgent config
-        with open(f"{path}/multi_agent.yaml", "r") as f:
+        with open(f"{load_path}/multi_agent.yaml", "r") as f:
             import yaml
             config = yaml.safe_load(f)
         
         # Load Agents
         agents = {}
-        for agent_name in config["agents"]:
-            agents[agent_name] = Agent.load(f"{path}/agents/{agent_name}.yaml", client=client)
+        for agent_name in config["modules"]:
+            agents[agent_name] = Agent.load(f"{load_path}/agents/{agent_name}.yaml", client=client)
         
         # Load AgentIOs
-        agent_ios = {}
-        for agent_name in config["agent_ios"]:
-            agent_ios[agent_name] = AgentIO.load(f"{path}/agent_ios/{agent_name}.yaml")
+        ios = {}
+        for agent_name in config["modules"]:
+            # IOs can be either single IO or multiple IOs
+            if os.path.exists(f"{load_path}/ios/{agent_name}.yaml"):
+                ios[agent_name] = ModuleIO.load(f"{load_path}/ios/{agent_name}.yaml")
+            else:
+                for filename in os.listdir(f"{load_path}/ios"):
+                    if filename.startswith(f"{agent_name}.") and filename.endswith(".yaml"):
+                        io_name = filename[len(agent_name)+1:-len(".yaml")]
+                        if agent_name not in ios:
+                            ios[agent_name] = {}
+                        ios[agent_name][io_name] = ModuleIO.load(f"{load_path}/ios/{filename}")
+
+        # Load progress names
+        progress_names = {}
+        if os.path.exists(f"{load_path}/progress_names.yaml"):
+            with open(f"{load_path}/progress_names.yaml", "r") as f:
+                import yaml
+                progress_names = yaml.safe_load(f)
+
+        modules = {
+            agent_name: AgentModule(
+                agent=agents[agent_name],
+                io=ios.get(agent_name, None),
+                progress_name=progress_names.get(agent_name, None),
+            ) for agent_name in config["modules"]
+        }
         
         return cls(
-            agents=agents,
-            agent_ios=agent_ios,
-            progress_names=config.get("progress_names", None),
+            modules=modules,
             max_tries=config.get("max_tries", 1),
             dismiss_none_output=config.get("dismiss_none_output", False),
             client=client,
@@ -94,14 +165,14 @@ class MultiAgent:
         jobs = []
         agent_names = []
         for agent_name, agent_inputs in inputs.items():
-            assert agent_name in self.agents, f"Agent {agent_name} not found."
-            agent_jobs = self.agents[agent_name]._create_jobs(
-                agent_inputs, progress_name=agent_name if progress_names is None else progress_names[agent_name]
+            assert agent_name in self._modules, f"Agent {agent_name} not found."
+            agent_jobs = self._modules[agent_name].agent._create_jobs(
+                agent_inputs, progress_name=progress_names[agent_name] if progress_names is not None else None
             )
             jobs.extend(agent_jobs)
             agent_names.extend(agent_name for _ in range(len(agent_jobs)))
         if len(jobs) == 0:
-            return [], [], [], []
+            return [], [], []
 
         # Shuffle jobs to mix different agents' jobs
         indices = list(range(len(jobs)))
@@ -111,265 +182,192 @@ class MultiAgent:
 
         # Process the jobs by the ParallaxEngine with retries
         shuffled_jobs = self.engine(shuffled_jobs, **kwargs)
-        # Get outputs in the original order
-        shuffled_inputs = [job.inp for job in shuffled_jobs]
         shuffled_outputs = [job.output for job in shuffled_jobs]
+
         # Update conversation memory with assistant outputs
         for job, agent_name in zip(shuffled_jobs, shuffled_agent_names):
             if job.output is not None:
-                job.session_id = self.agents[agent_name].conversation_memory.update_assistant(job.session_id, job.output)
+                job.session_id = self._modules[agent_name].agent.conversation_memory.update_assistant(job.session_id, job.output)
         shuffled_session_ids = [job.session_id for job in shuffled_jobs]
 
         # Unshuffle jobs to the original order
-        inputs = [None for _ in range(len(jobs))]
         outputs = [None for _ in range(len(jobs))]
         session_ids = [None for _ in range(len(jobs))]
         agent_names = [None for _ in range(len(jobs))]
         for i, index in enumerate(indices):
-            inputs[index] = shuffled_inputs[i]
             outputs[index] = shuffled_outputs[i]
             session_ids[index] = shuffled_session_ids[i]
             agent_names[index] = shuffled_agent_names[i]
-
-        # Dismiss None outputs (if dismiss_none_output is True)
-        if self.dismiss_none_output:
-            session_ids = [sid for sid, out in zip(session_ids, outputs) if out is not None]
-            agent_names = [an for an, out in zip(agent_names, outputs) if out is not None]
-            inputs = [inp for inp, out in zip(inputs, outputs) if out is not None]
-            outputs = [out for out in outputs if out is not None]
-        return agent_names, session_ids, inputs, outputs
+        return agent_names, session_ids, outputs
 
     def _run(
         self, 
         inputs: Dict[str, Any], 
         progress_names: Optional[Dict[str, str]] = None,
-        return_inputs: bool = False,
         **kwargs
     ) -> Dict[str, Any]:
-        # Use default progress names if not provided
-        if progress_names is None:
-            progress_names = deepcopy(self.progress_names)
-        for agent_name in inputs.keys():
-            if agent_name not in progress_names:
-                progress_names[agent_name] = self.progress_names.get(agent_name, None)
+        progress_names = deepcopy(progress_names)
                 
         # Transform inputs for all agents
         for agent_name in inputs.keys():
-            assert agent_name in self.agents, f"Agent {agent_name} not found."
-            inputs[agent_name], progress_names[agent_name] = self.agents[agent_name].input_transformation(inputs[agent_name], progress_names.get(agent_name, None))
+            assert agent_name in self._modules, f"Agent {agent_name} not found."
+            inputs[agent_name] = self._modules[agent_name].agent.input_transformation(inputs[agent_name])
 
         # Run all agents
-        agent_names, session_ids, inputs, outputs = self.__run(inputs, progress_names=progress_names, **kwargs)
+        agent_names, session_ids, outputs = self.__run(inputs, progress_names=progress_names, **kwargs)
         
         # Get outputs for each agent
-        dict_outputs = defaultdict(list)
-        for agent_name, session_id, output in zip(agent_names, session_ids, outputs):
-            if self.agents[agent_name].conversational_agent:
-                if return_inputs:
-                    dict_outputs[agent_name].append((session_id, inputs, output))
-                else:
-                    dict_outputs[agent_name].append((session_id, output))
+        agent_outputs = defaultdict(list)
+        for agent_name, session_id, out in zip(agent_names, session_ids, outputs):
+            if self._modules[agent_name].agent.conversational_agent:
+                agent_outputs[agent_name].append((session_id, out))
             else:
-                if return_inputs:
-                    dict_outputs[agent_name].append((inputs, output))
-                else:
-                    dict_outputs[agent_name].append(output)
+                agent_outputs[agent_name].append(out)
 
         # Transform outputs for all agents
-        for agent_name in dict_outputs.keys():
-            dict_outputs[agent_name] = self.agents[agent_name].output_transformation(dict_outputs[agent_name])
-        return dict_outputs
+        for agent_name, outputs in agent_outputs.items():
+            agent_outputs[agent_name] = self._modules[agent_name].agent.output_transformation(outputs)
+        return agent_outputs
     
-    def init_package(
-        self, 
-        inputs: Optional[Dict[str, Any]] = None, 
-        external_data: Optional[Dict[str, Any]] = None,
-        tracking_id: Optional[str] = None,
-    ) -> Package:
-        package = Package(
-            id=tracking_id if tracking_id is not None else uuid4().hex,
-            external_data=external_data, 
-        )
-        if inputs is not None:
-            for agent_name, agent_inputs in inputs.items():
-                assert agent_name in self.agents, f"Unknown agent name: '{agent_name}' in inputs."
-                package.agent_inputs[agent_name] = agent_inputs
-        return package
+    @staticmethod
+    def check_and_acquire_dependencies(contents: Dict[str, Any], dependencies: List[Any]) -> Dict[str, Any]:
+        acquired_contents = {}
+        for dep in dependencies:
+            if dep in contents:
+                acquired_contents[dep] = contents[dep]
+            else:
+                return None
+        return acquired_contents
     
-    def is_dependency_fulfilled(self, package: Package, dependency: Dependency) -> bool:
-        # Check agent_outputs dependencies
-        if dependency.agent_outputs is not None:
-            for output_name in dependency.agent_outputs:
-                if output_name not in package.agent_outputs:
-                    return False
-        # Check external_data dependencies
-        if dependency.external_data is not None:
-            for data_name in dependency.external_data:
-                if data_name not in package.external_data:
-                    return False
-        return True
-    
-    def _get_pipeline_inputs(
-        self, 
-        packages: List[Package], 
-        agent_ios: Optional[Dict[str, AgentIO]],
-    ) -> Tuple[Dict[str, Any], Dict[str, int]]:
-        inputs = {}
-        package_indices = {}
-        for i, package in enumerate(packages):   # Prioritize older packages
-            # Get inputs from package.agent_inputs
-            for agent_name, agent_inputs in package.agent_inputs.items():
-                if agent_name in inputs:
-                    # Already has this inputs
+    def _get_pipeline_inputs(self):
+        inputs = defaultdict(list)
+        indexing = defaultdict(list)
+        for agent_name, module in self._modules.items():
+            for instance in self.instances.values():
+                # Skip if this instance already has output for this agent
+                if agent_name in instance.contents:
                     continue
-                if agent_name in package.agent_outputs:
-                    # Already has executed this agent
-                    continue
-                inputs[agent_name] = agent_inputs
-                package_indices[agent_name] = i  # Record which package provides this input
 
-            # Get inputs from package.external_data
-            for agent_name, agent_io in agent_ios.items():
-                if agent_name in inputs:
-                    # Already has this inputs
+                # Check and acquire dependencies
+                dependencies = self.check_and_acquire_dependencies(instance.contents, module.io.dependencies)
+                if dependencies is None:
                     continue
-                if agent_name in package.agent_outputs:
-                    # Already has executed this agent
-                    continue
-                if agent_io.input_processing is None:
-                    # No input processing function
-                    continue
-                if agent_io.dependency is not None:
-                    if not self.is_dependency_fulfilled(package, agent_io.dependency):
-                        # Dependencies not fulfilled
-                        continue
-                # Get agent inputs
-                agent_inputs = agent_io.input_processing(deepcopy(package.agent_outputs), deepcopy(package.external_data))
-                if agent_inputs is None:
-                    print(f"[Warning] Obtain 'None' inputs for agent {agent_name}. This is normal if dependency is not provided for AgentIO.")
-                if len(agent_inputs) == 0:                    
-                    print(f"[Warning] Obtain empty inputs for agent {agent_name}.")
-                inputs[agent_name] = agent_inputs
-                package_indices[agent_name] = i # Record which package provides this input
-        return inputs, package_indices
+
+                # NOTE: How to skip 'None' inputs?
+                if module.io.input_processing is not None:
+                    agent_input = module.io.input_processing(dependencies)
+                    if isinstance(agent_input, GeneratorType) or isinstance(agent_input, list):
+                        for inp in agent_input:
+                            inputs[agent_name].append(inp)
+                            indexing[agent_name].append(instance.id)
+                    else:
+                        inputs[agent_name].append(agent_input)
+                        indexing[agent_name].append(instance.id)
+                else:
+                    inputs[agent_name].append(dependencies)
+                    indexing[agent_name].append(instance.id)
+        return dict(inputs), dict(indexing)
     
-    def _clear_packages(self, packages: List[Package], package_indices: Dict[str, int]):
-        removable_package_indices = set()
-        # (a package is finished if all agents have been executed)
-        for i, package in enumerate(packages):
-            all_agents_executed = True
-            for agent_name in self.agents.keys():
-                if agent_name not in package.agent_outputs:
-                    all_agents_executed = False
-            if all_agents_executed:
-                removable_package_indices.add(i)
-        # (a package is stalled if no new agents can be executed)
-        for i, package in enumerate(packages):
-            if i not in package_indices.values():
-                removable_package_indices.add(i)
-        # Remove packages
-        packages = [package for i, package in enumerate(packages) if i not in removable_package_indices]
-        return packages
+    def _update_instances_with_outputs(self, inputs, outputs, indexing):
+        for agent_name in outputs:
+            assert len(inputs[agent_name]) == len(outputs[agent_name]), f"Number of inputs and outputs for agent {agent_name} do not match."
+            agent_inputs = defaultdict(list)
+            agent_outputs = defaultdict(list)
+            for agent_input, agent_output, instance_id in zip(inputs[agent_name], outputs[agent_name], indexing[agent_name]):
+                if self._modules[agent_name].agent.conversational_agent:
+                    agent_output = agent_output[1]
+                assert instance_id in self.instances, "Instance ID not found."
+                if self.dismiss_none_output and agent_output is None:
+                    continue
+                agent_inputs[instance_id].append(agent_input)
+                agent_outputs[instance_id].append(agent_output)
+            # Update instance contents with agent outputs
+            for instance_id in agent_outputs:
+                agent_input = agent_inputs[instance_id]
+                agent_output = agent_outputs[instance_id]
+                if self._modules[agent_name].io.output_processing is not None:
+                    # Process outputs if output_processing is provided
+                    agent_output = self._modules[agent_name].io.output_processing(
+                        deepcopy(agent_input),
+                        deepcopy(agent_output),
+                    )
+                    if isinstance(agent_output, GeneratorType):
+                        self.instances[instance_id].contents[agent_name] = deepcopy(list(agent_output))
+                    else:
+                        self.instances[instance_id].contents[agent_name] = deepcopy(agent_output)
+                else:
+                    self.instances[instance_id].contents[agent_name] = deepcopy(agent_output)
     
     def run_single_step(
         self,
-        inputs=None,
-        tracking_id=None,
-        external_data=None,
-        return_tracking_id=False,
+        inputs = None,
+        verbose: bool = True,
         **kwargs,
-    ):
+    ) -> List[Dict[str, Any]]:
         """
         Run a single step of the multi-agent pipeline.
         """
-        # Create new package (if inputs or external_data are provided)
-        if inputs is not None or external_data is not None:
-            package = self.init_package(inputs, external_data, tracking_id=tracking_id)
-            self.packages.append(package)
-        else:
-            if len(self.packages) == 0:
-                print("Warning: No packages to process. Please provide inputs or external_data to create a new package.")
-                return {}
+        # Create new package (if inputs is provided)
+        if inputs is not None:
+            for inp in inputs:
+                assert isinstance(inp, dict), "Each input should be a dictionary of agent_name -> inputs."
+                # Check if all required dependencies are provided
+                for agent_name, deps in self.dependencies.items():
+                    for dep in deps:
+                        if dep not in inp:
+                            raise ValueError(f"Input for dependency '{dep}' of agent '{agent_name}' is missing. Please provide all required inputs: {self.dependencies}")
+                # Initialize instance
+                instance = Instance(contents=inp)
+                self.instances[instance.id] = instance
+        elif len(self.instances) == 0:
+            print("Warning: No packages to process. Please provide inputs or external_data to create a new package.")
+            return []
 
-        # Input processing for all agents
-        inputs, package_indices = self._get_pipeline_inputs(self.packages, self.agent_ios)
+        # Get inputs for all agents
+        inputs, indexing = self._get_pipeline_inputs()
 
         # Execute Agents
-        input_outputs = self._run(
-            inputs=deepcopy(inputs), return_inputs=True, **kwargs
+        outputs = self._run(
+            inputs=deepcopy(inputs), 
+            progress_names={agent_name: module.progress_name for agent_name, module in self._modules.items()} if verbose else None,
+            **kwargs
         )
 
-        # Update packages with outputs
-        for agent_name, agent_input_outputs in input_outputs.items():
-            package_index = package_indices[agent_name]
-            # Process outputs if output_processing is provided
-            if agent_name in self.agent_ios and self.agent_ios[agent_name].output_processing is not None:
-                agent_inputs = agent_input_outputs[1] if self.agents[agent_name].conversational_agent else agent_input_outputs[0]
-                agent_outputs = agent_input_outputs[-1]
-                agent_outputs = self.agent_ios[agent_name].output_processing(
-                    deepcopy(agent_inputs),                                 # inputs
-                    deepcopy(agent_outputs),                                # outputs
-                    deepcopy(self.packages[package_index].external_data)    # data
-                )
-            self.packages[package_index].agent_outputs[agent_name] = agent_outputs
+        # Update instances with outputs
+        self._update_instances_with_outputs(inputs, outputs, indexing)
 
-        # Get return all outputs
-        # [NOTE] Do not move this line after clearing packages
-        if return_tracking_id:
-            all_outputs = [(pkg.id, pkg.agent_outputs) for pkg in self.packages]
-        else:
-            all_outputs = [pkg.agent_outputs for pkg in self.packages]
-
-        # Remove finished or stalled packages
-        self.packages = self._clear_packages(self.packages, package_indices)
-
-        return all_outputs
+        # Return done instances' contents and get the remaining instances
+        return_contents = []
+        remaining_instances = {}
+        for i, instance in self.instances.items():
+            if instance.is_completed(self.leaf_modules):
+                return_contents.append(instance.contents)
+            else:
+                remaining_instances[i] = instance
+        # Remove finished or stalled instances
+        self.instances = remaining_instances
+        return return_contents
     
-    def flush(self, **kwargs):
+    def flush(self, verbose: bool = True, **kwargs) -> List[Dict[str, Any]]:
         """
         Finish all the remaining packages.
         """
-        all_outputs = {}
-        while len(self.packages) > 0:
-            outputs = self.run_single_step(return_tracking_id=True, **kwargs)
-            for id, out in outputs:
-                all_outputs[id] = out
-        return list(all_outputs.values())
+        return_contents = []
+        while len(self.instances) > 0:
+            contents = self.run_single_step(verbose=verbose, **kwargs)
+            if len(contents) > 0:
+                return_contents.extend(contents)
+        return return_contents
     
     def run(
         self,
-        inputs=None,
-        external_data=None,
+        inputs,
+        verbose: bool = True,
         **kwargs,
-    ):
+    ) -> List[Dict[str, Any]]:
         """
         Run the given inputs through the multi-agent pipeline until all agents have produced outputs.
         """
-        assert inputs is not None or external_data is not None, "Please provide inputs or external_data to run the multi-agent pipeline."
-        outputs = self.run_single_step(inputs=inputs, external_data=external_data, **kwargs)[0]
-        flush_outputs = self.flush(**kwargs)
-        if len(flush_outputs) > 0:
-            outputs = flush_outputs[0]
-        return outputs
-    
-    def run_until(
-        self,
-        condition_fn,
-        inputs=None,
-        external_data=None,
-        max_steps: int = 10,
-        **kwargs,
-    ):
-        """
-        Run the multi-agent pipeline until the condition function is satisfied or max_steps is reached.
-        The condition function takes in a dictionary of agent outputs and returns a boolean.
-        """
-        assert inputs is not None or external_data is not None, "Please provide inputs or external_data to run the multi-agent pipeline."
-        steps = 0
-        outputs = self.run_single_step(inputs=inputs, external_data=external_data, **kwargs)[0]
-        while not condition_fn(outputs) and steps < max_steps:
-            all_outputs = self.run_single_step(**kwargs)
-            if len(all_outputs) > 0:
-                outputs = all_outputs[0]
-            steps += 1
-        return outputs
+        return_contents = self.run_single_step(inputs=inputs, verbose=verbose, **kwargs)
+        return_contents.extend(self.flush(verbose=verbose, **kwargs))
+        return return_contents

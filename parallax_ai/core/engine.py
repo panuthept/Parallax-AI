@@ -32,6 +32,7 @@ class ParallaxEngine:
         jobs: List[Job],
         **kwargs,
     ):
+        assert self.client is not None, "Client is not initialized."
         remaining_job_indices = []
         for i in range(len(jobs)):
             if jobs[i].inp is None:

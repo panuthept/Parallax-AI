@@ -19,7 +19,7 @@ client = Client(
         "openai/gpt-oss-20b": [
             {"api_key": "EMPTY", "base_url": f"http://<YOUR_MODEL_ADDRESS>:8000/v1"},
         ],
-        # Load balance across multiple instances of the same model
+        # Load balancing across multiple remote instances of the same model
         "google/gemma-3-27b-it": [
             {"api_key": "EMPTY", "base_url": f"http://<YOUR_MODEL_ADDRESS>:8000/v1"},
             {"api_key": "EMPTY", "base_url": f"http://<YOUR_MODEL_ADDRESS>:8000/v1"},
@@ -50,7 +50,7 @@ agent.run([
 
 ### MultiAgent
 ```python
-from parallax_ai import MultiAgent, AgentIO, Dependency
+from parallax_ai import MultiAgent, ModuleIO
 
 multi_agent = MultiAgent(
     agents={
@@ -67,12 +67,12 @@ multi_agent = MultiAgent(
             output_structure={"summary": str},
         ),
     },
-    agent_ios={
-        "translator": AgentIO(
-            dependency=Dependency(external_data=["text"]),
+    ios={
+        "translator": ModuleIO(
+            dependencies=["text"],
         ),
-        "summarizer": AgentIO(
-            dependency=Dependency(agent_outputs=["translator"]),
+        "summarizer": ModuleIO(
+            dependencies=["translator"],
         ),
     },
 )

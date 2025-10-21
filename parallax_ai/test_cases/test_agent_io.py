@@ -1,9 +1,9 @@
 import inspect
-from parallax_ai.core.multi_agent import AgentIO, Dependency
+from parallax_ai.core.multi_agent import ModuleIO, Dependency
 
 
 def test_save_and_load_methods():
-    agent_io = AgentIO(
+    agent_io = ModuleIO(
         dependency=Dependency(external_data=["data"], agent_outputs=["agent1"]),
     )
     print(agent_io)
@@ -19,7 +19,7 @@ def test_save_and_load_methods():
     def test_output_processing(inputs, outputs, data):
         return [{**inp, **out, "data": data} for inp, out in zip(inputs, outputs)]
 
-    agent_io = AgentIO(
+    agent_io = ModuleIO(
         dependency=Dependency(external_data=["data"], agent_outputs=["agent1"]),
         input_processing=lambda outputs, data: [{"output": o, "data": data["abc"]} for out in outputs for o in out],
         output_processing=test_output_processing, 

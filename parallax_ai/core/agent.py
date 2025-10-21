@@ -285,7 +285,7 @@ class Agent:
         self.output_processor = OutputProcessor(
             output_structure=output_structure,
         )
-        self.client = Client(**kwargs) if client is None else client
+        self.client = client
         self.engine = ParallaxEngine(
             client=self.client, 
             max_tries=max_tries,
@@ -434,8 +434,8 @@ class Agent:
         session_ids = [job.session_id for job in jobs]
         return session_ids, inputs, outputs
     
-    def input_transformation(self, inputs, progress_name: Optional[str] = None):
-        return inputs, progress_name
+    def input_transformation(self, inputs):
+        return inputs
     
     def output_transformation(self, outputs):
         return outputs
@@ -447,7 +447,8 @@ class Agent:
         return_inputs: bool = False,
         **kwargs,
     ) -> List[Tuple[str, Any]]:
-        inputs, progress_name = self.input_transformation(inputs, progress_name)
+        assert self.client is not None, "Client is not initialized."
+        inputs = self.input_transformation(inputs)
 
         session_ids, inputs, outputs = self._run(inputs, progress_name=progress_name, **kwargs)
         if self.conversational_agent:
