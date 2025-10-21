@@ -22,7 +22,7 @@ class MultiAgent:
         self.modules = modules
         self._modules = self._flatten_modules(modules)
         self.max_tries = max_tries
-        self.dismiss_none_output = dismiss_none_output
+        self.dismiss_none_output = dismiss_none_output  # If True, None outputs from agents will be removed from outputs
         self.engine = ParallaxEngine(
             client=self.client, max_tries=max_tries, dismiss_none_output=False
         )
@@ -229,12 +229,16 @@ class MultiAgent:
             agent_outputs[agent_name] = self._modules[agent_name].agent.output_transformation(outputs)
         return agent_outputs
     
-    @staticmethod
-    def check_and_acquire_dependencies(contents: Dict[str, Any], dependencies: List[Any]) -> Dict[str, Any]:
+    def check_and_acquire_dependencies(self, contents: Dict[str, Any], dependencies: List[Any]) -> Dict[str, Any]:
         acquired_contents = {}
         for dep in dependencies:
             if dep in contents:
                 acquired_contents[dep] = contents[dep]
+                # Remove 'None' from agent outputs dependencies to improve quality of life
+                if dep in self._modules:
+                    assert isinstance(acquired_contents[dep], list), f"Agent '{dep}' outputs are supposed to be a list. But got {type(acquired_contents[dep])}."
+                    acquired_contents[dep] = [out for out in acquired_contents[dep] if out is not None]
+                    assert len(acquired_contents[dep]) > 0, f"All outputs from agent '{dep}' are None. Cannot proceed. This may be due to output formatting issues. Consider increasing max_tries or checking the agent's output format and system prompt."
             else:
                 return None
         return acquired_contents
@@ -253,7 +257,6 @@ class MultiAgent:
                 if dependencies is None:
                     continue
 
-                # NOTE: How to skip 'None' inputs?
                 if module.io.input_processing is not None:
                     agent_input = module.io.input_processing(dependencies)
                     if isinstance(agent_input, GeneratorType) or isinstance(agent_input, list):
@@ -277,26 +280,38 @@ class MultiAgent:
                 if self._modules[agent_name].agent.conversational_agent:
                     agent_output = agent_output[1]
                 assert instance_id in self.instances, "Instance ID not found."
-                if self.dismiss_none_output and agent_output is None:
-                    continue
+                # NOTE: Remove this implementation as it may cause double execution issues
+                # if self.dismiss_none_output and agent_output is None:
+                #     continue
                 agent_inputs[instance_id].append(agent_input)
                 agent_outputs[instance_id].append(agent_output)
             # Update instance contents with agent outputs
             for instance_id in agent_outputs:
                 agent_input = agent_inputs[instance_id]
                 agent_output = agent_outputs[instance_id]
-                if self._modules[agent_name].io.output_processing is not None:
+                if agent_output is None:
+                    self.instances[instance_id].contents[agent_name] = None
+                elif self._modules[agent_name].io.output_processing is not None:
                     # Process outputs if output_processing is provided
                     agent_output = self._modules[agent_name].io.output_processing(
                         deepcopy(agent_input),
                         deepcopy(agent_output),
                     )
+                    assert isinstance(agent_output, (list, GeneratorType)) or agent_output is None, "output_processing must return a list or generator."
                     if isinstance(agent_output, GeneratorType):
                         self.instances[instance_id].contents[agent_name] = deepcopy(list(agent_output))
                     else:
                         self.instances[instance_id].contents[agent_name] = deepcopy(agent_output)
                 else:
                     self.instances[instance_id].contents[agent_name] = deepcopy(agent_output)
+
+    def _remove_none_outputs(self, outputs: Dict[str, List[Any]]) -> Dict[str, List[Any]]:
+        cleaned_outputs = {}
+        for agent_name, agent_outputs in outputs.items():
+            if agent_name not in self._modules:
+                continue
+            cleaned_outputs[agent_name] = [out for out in agent_outputs if out is not None]
+        return cleaned_outputs
     
     def run_single_step(
         self,
@@ -341,7 +356,10 @@ class MultiAgent:
         remaining_instances = {}
         for i, instance in self.instances.items():
             if instance.is_completed(self.leaf_modules):
-                return_contents.append(instance.contents)
+                if self.dismiss_none_output:
+                    return_contents.append(self._remove_none_outputs(instance.contents))
+                else:
+                    return_contents.append(instance.contents)
             else:
                 remaining_instances[i] = instance
         # Remove finished or stalled instances
