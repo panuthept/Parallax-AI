@@ -119,7 +119,9 @@ class MoESafeguardAgent:
             harmful_score += score_mapping[label] * score
         return harmful_score
     
-    def __call__(self, prompts: List[str], responses: List[str], oracle_cultures: List[str], verbose: bool = False) -> List[float]:
+    def __call__(self, prompts: List[str], responses: List[str], oracle_cultures: List[str] = None, verbose: bool = False) -> List[float]:
+        if oracle_cultures is None:
+            oracle_cultures = [None] * len(prompts)
         outputs = self.multi_agent.run(
             inputs=[
                 {
