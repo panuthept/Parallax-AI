@@ -305,9 +305,10 @@ class MultiAgent:
     def _remove_none_outputs(self, outputs: Dict[str, List[Any]]) -> Dict[str, List[Any]]:
         cleaned_outputs = {}
         for agent_name, agent_outputs in outputs.items():
-            if agent_name not in self._modules:
-                continue
-            cleaned_outputs[agent_name] = [out for out in agent_outputs if out is not None]
+            if agent_name in self._modules:
+                cleaned_outputs[agent_name] = [out for out in agent_outputs if out is not None]
+            else:
+                cleaned_outputs[agent_name] = agent_outputs
         return cleaned_outputs
     
     def run_single_step(
