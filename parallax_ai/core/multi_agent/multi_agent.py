@@ -286,7 +286,7 @@ class MultiAgent:
             for instance_id in agent_outputs:
                 agent_input = agent_inputs[instance_id]
                 agent_output = agent_outputs[instance_id]
-                if agent_output is None:
+                if agent_input is None or agent_output is None:
                     self.instances[instance_id].contents[agent_name] = None
                 elif self._modules[agent_name].io.output_processing is not None:
                     # Process outputs if output_processing is provided
