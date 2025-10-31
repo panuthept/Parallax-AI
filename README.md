@@ -50,35 +50,39 @@ agent.run([
 
 ### MultiAgent
 ```python
-from parallax_ai import MultiAgent, ModuleIO
+from parallax_ai import MultiAgent, ModuleIO, AgentModule, Agent
 
 multi_agent = MultiAgent(
-    agents={
-        "translator": Agent(
-            model_name="google/gemma-3-27b-it",
-            system_prompt="You are a helpful assistant that translates English to French.",
-            input_structure={"text": str},
-            output_structure={"translation": str},
+    modules={
+        "translator": AgentModule(
+            agent=Agent(
+                model_name="google/gemma-3-27b-it",
+                system_prompt="You are a helpful assistant that translates English to French.",
+                input_structure={"text": str},
+                output_structure={"translation": str},
+            ),
+            io=ModuleIO(
+                dependencies=["text"],
+            ),
         ),
-        "summarizer": Agent(
-            model_name="openai/gpt-oss-20b",
-            system_prompt="You are a helpful assistant that summarizes text.",
-            input_structure={"translation": str},
-            output_structure={"summary": str},
+        "summarizer": AgentModule(
+            agent=Agent(
+                model_name="openai/gpt-oss-20b",
+                system_prompt="You are a helpful assistant that summarizes text.",
+                input_structure={"translation": str},
+                output_structure={"summary": str},
+            ),
+            io=ModuleIO(
+                dependencies=["translator"],
+            ),
         ),
-    },
-    ios={
-        "translator": ModuleIO(
-            dependencies=["text"],
-        ),
-        "summarizer": ModuleIO(
-            dependencies=["translator"],
-        ),
-    },
+    }
 )
-multi_agent.run([
-    {"text": "Hello, how are you?"},
-    {"text": "What is your name?"},
-    {"text": "Where do you live?"},
-])
+multi_agent.run(
+    inputs=[
+        {"text": "Hello, how are you?"},
+        {"text": "What is your name?"},
+        {"text": "Where do you live?"},
+    ]
+)
 ```
