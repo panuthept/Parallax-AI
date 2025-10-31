@@ -92,7 +92,10 @@ class SafeguardAgent:
         prompt_harmful_scores = []
         response_harmful_scores = []
         for output in outputs:
-            prompt_harmful_scores.append(self._get_harmful_score(output["prompt_safety_annotator"][0]["prompt_safety_assessment"]))
+            if output["prompt_safety_annotator"][0] is None:
+                prompt_harmful_scores.append(None)
+            else:
+                prompt_harmful_scores.append(self._get_harmful_score(output["prompt_safety_annotator"][0]["prompt_safety_assessment"]))
             if output["response_safety_annotator"][0] is None:
                 response_harmful_scores.append(None)
             else:

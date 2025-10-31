@@ -250,7 +250,9 @@ class Client:
                 print(f"List of failed URLs: {failed_base_urls}")
                 time.sleep(wait_time)  # Wait before retrying
                 if len(remaining_true_indices) >= prev_remaining_count:
-                    wait_time = min(wait_time * 2, 600)  # Exponential backoff with a max wait time
+                    wait_time = min(wait_time * 2, 60)  # Exponential backoff with a max wait time
+                else:
+                    wait_time = 2  # Reset wait time if some requests succeeded
                 prev_remaining_count = len(remaining_true_indices)
 
     def run(

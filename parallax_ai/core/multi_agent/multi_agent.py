@@ -16,7 +16,7 @@ class MultiAgent:
         modules: Dict[str, AgentModule],
         client: Client = None,
         max_tries: int = 10,
-        dismiss_none_output: bool = True,
+        dismiss_none_output: bool = True,   # If True, None outputs from agents will be removed from outputs
     ):
         self.client = client
         self.modules = modules
@@ -229,8 +229,7 @@ class MultiAgent:
             agent_outputs[agent_name] = self._modules[agent_name].agent.output_transformation(outputs)
         return agent_outputs
     
-    @staticmethod
-    def check_and_acquire_dependencies(contents: Dict[str, Any], dependencies: List[Any]) -> Dict[str, Any]:
+    def check_and_acquire_dependencies(self, contents: Dict[str, Any], dependencies: List[Any]) -> Dict[str, Any]:
         acquired_contents = {}
         for dep in dependencies:
             if dep in contents:
@@ -253,7 +252,6 @@ class MultiAgent:
                 if dependencies is None:
                     continue
 
-                # NOTE: How to skip 'None' inputs?
                 if module.io.input_processing is not None:
                     agent_input = module.io.input_processing(dependencies)
                     if isinstance(agent_input, GeneratorType) or isinstance(agent_input, list):
@@ -285,12 +283,15 @@ class MultiAgent:
             for instance_id in agent_outputs:
                 agent_input = agent_inputs[instance_id]
                 agent_output = agent_outputs[instance_id]
-                if self._modules[agent_name].io.output_processing is not None:
+                if len(agent_output) == 0:
+                    self.instances[instance_id].contents[agent_name] = None
+                elif self._modules[agent_name].io.output_processing is not None:
                     # Process outputs if output_processing is provided
                     agent_output = self._modules[agent_name].io.output_processing(
                         deepcopy(agent_input),
                         deepcopy(agent_output),
                     )
+                    assert isinstance(agent_output, (list, GeneratorType)) or agent_output is None, "output_processing must return a list or generator."
                     if isinstance(agent_output, GeneratorType):
                         self.instances[instance_id].contents[agent_name] = deepcopy(list(agent_output))
                     else:
