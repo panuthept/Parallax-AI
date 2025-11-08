@@ -143,7 +143,7 @@ print(outputs)
     {
         "original": "Hello, how are you?", 
         "translations": ["Bonjour, comment ça va?", "Salut, comment ça va?"]
-        "metadata": {"service_name": "TranslationService", "output_mode": "no_revision"}
+        "metadata": {"service_name": "TranslationService", "output_name": "no_revision"}
     }
 ]
 ```
