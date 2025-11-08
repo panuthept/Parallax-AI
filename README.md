@@ -8,81 +8,142 @@ You can install Parallax using pip:
 pip install parallax-ai
 ```
 
-### Client
+### Usage Example
 ```python
-from parallax_ai import Client
+from parallax_ai import Service, OutputComposer
+from parallax_ai.modules import AgentSpec, AgentModule, ClassificationModule, SwitchModule, LambdaModule, ModuleInterface
 
-# Initialize Client with multiple models and load balancing
-client = Client(
-    # Add custom remote model addresses here
-    model_remote_address={
-        "openai/gpt-oss-20b": [
-            {"api_key": "EMPTY", "base_url": f"http://<YOUR_MODEL_ADDRESS>:8000/v1"},
-        ],
-        # Load balancing across multiple remote instances of the same model
-        "google/gemma-3-27b-it": [
-            {"api_key": "EMPTY", "base_url": f"http://<YOUR_MODEL_ADDRESS>:8000/v1"},
-            {"api_key": "EMPTY", "base_url": f"http://<YOUR_MODEL_ADDRESS>:8000/v1"},
-            {"api_key": "EMPTY", "base_url": f"http://<YOUR_MODEL_ADDRESS>:8000/v1"},
-            {"api_key": "EMPTY", "base_url": f"http://<YOUR_MODEL_ADDRESS>:8000/v1"},
-        ],
-    },
-)
-```
 
-### Agent
-```python
-from parallax_ai import Agent
-# Create an Agent with structured input and output
-agent = Agent(
-    model_name="google/gemma-3-27b-it",
-    system_prompt="You are a helpful assistant that translates English to French.",
-    input_structure={"text": str},
-    output_structure={"translation": str},
-)
-# Run the agent with batch of structured inputs
-agent.run([
-    {"text": "Hello, how are you?"},
-    {"text": "What is your name?"},
-    {"text": "Where do you live?"},
-])
-```
+worker_nodes = "path/to/your/worker_nodes.json"
+# Or define worker nodes directly
+worker_nodes = {
+    "google/gemma-3-27b-it": [
+        {"api_key": "your_api_key_here", "base_url": "https://api.example.com/v1"},
+        {"api_key": "your_api_key_here", "base_url": "https://api.example.com/v1"},
+        {"api_key": "your_api_key_here", "base_url": "https://api.example.com/v1"}
+    ]
+}
 
-### MultiAgent
-```python
-from parallax_ai import MultiAgent, ModuleIO, AgentModule, Agent
-
-multi_agent = MultiAgent(
-    modules={
-        "translator": AgentModule(
-            agent=Agent(
+service = Service(
+    name="TranslationService",
+    worker_nodes=worker_nodes,
+    modules=[
+        AgentModule(
+            name="translator",
+            spec=AgentSpec(
                 model_name="google/gemma-3-27b-it",
                 system_prompt="You are a helpful assistant that translates English to French.",
-                input_structure={"text": str},
+                input_structure={"text": str, "persona_info": str},
                 output_structure={"translation": str},
             ),
-            io=ModuleIO(
-                dependencies=["text"],
+            interface=Interface(
+                dependencies=["text", "persona_infos"],
+                input_processing=lambda deps: [
+                    {
+                        "text": deps["text"],
+                        "persona_info": persona_info,
+                    } for persona_info in deps["persona_infos"]
+                ],
+                output_processing=lambda inputs, outputs: {
+                    "translations": [out["translation"] for out in outputs]
+                },
             ),
         ),
-        "summarizer": AgentModule(
-            agent=Agent(
-                model_name="openai/gpt-oss-20b",
-                system_prompt="You are a helpful assistant that summarizes text.",
-                input_structure={"translation": str},
-                output_structure={"summary": str},
+        ClassificationModule(
+            name="reviewer",
+            spec=AgentSpec(
+                model_name="google/gemma-3-27b-it",
+                system_prompt="You are a helpful assistant that reviews translations for accuracy.",
+                input_structure={"original": str, "translation": str},
+                output_structure={"need_revision": bool},
             ),
-            io=ModuleIO(
-                dependencies=["translator"],
+            n=10,
+            interface=ModuleInterface(
+                dependencies=["text", "translations"],
+                input_processing=lambda deps: [
+                    {
+                        "original": deps["text"],
+                        "translation": translation,
+                    } for translation in deps["translations"]
+                ],
+                output_processing=lambda inputs, outputs: {
+                    "reviews": [out["need_revision"] for out in outputs]
+                },
             ),
         ),
-    }
+        SwitchModule(
+            name="reviser",
+            condition_key="need_revision",
+            cases={
+                True: AgentModule(
+                    spec=AgentSpec(
+                        model_name="google/gemma-3-27b-it",
+                        system_prompt="You are a helpful assistant that revises translations if needed.",
+                        input_structure={"original": str, "translation": str},
+                        output_structure={"revised_translation": str},
+                    ),
+                ),
+                False: LambdaModule(
+                    function=lambda inp: {"revised_translation": None}
+                ),
+            },
+            interface=ModuleInterface(
+                dependencies=["text", "translations", "reviews"],
+                input_processing=lambda deps: [
+                    {
+                        "original": deps["text"],
+                        "translation": translation,
+                        "need_revision": review,
+                    } for translation, review in zip(deps["translations"], deps["reviews"])
+                ],
+                output_processing=lambda inputs, outputs: {
+                    "revised_translations": [out["revised_translation"] for out in outputs]
+                },
+            ),
+        ),
+    ],
+    output_composers=[
+        OutputComposer(
+            name="no_revision",
+            dependencies=["text", "translations", "reviews"],
+            condition=lambda deps: all(not review for review in deps["reviews"]),
+            compose=lambda deps: {
+                "original": deps["text"],
+                "translations": deps["translations"],
+            },
+        ),
+        OutputComposer(
+            name="revision",
+            dependencies=["text", "translations", "reviews", "revised_translations"],
+            compose=lambda deps: {
+                "original": deps["text"],
+                "translations": [
+                    revised if review else translation
+                    for translation, review, revised in zip(
+                        deps["translations"],
+                        deps["reviews"],
+                        deps["revised_translations"],
+                    ),
+                ],
+            },
+        ),
+    ],
 )
-multi_agent.run(
+outputs = service.run(
     inputs=[
-        {"text": "Hello, how are you?"},
-        {"text": "What is your name?"},
-        {"text": "Where do you live?"},
+        {
+            "text": "Hello, how are you?",
+            "persona_infos": ["You are a friendly and polite person.", "You like to use formal language."],
+        },
     ]
 )
+print(outputs)
+# Expected Output:
+[
+    {
+        "original": "Hello, how are you?", 
+        "translations": ["Bonjour, comment ça va?", "Salut, comment ça va?"]
+        "metadata": {"service_name": "TranslationService", "output_mode": "no_revision"}
+    }
+]
 ```

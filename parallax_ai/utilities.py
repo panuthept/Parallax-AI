@@ -1,8 +1,8 @@
 import uuid
+import typing
 from typing import Any, Literal
 from typing_validation import validate
-from typing import get_origin, get_args, List, Dict, Tuple, Union
-import typing
+from typing import List, Dict, Tuple, Union, get_origin, get_args
 
 
 def save_type_structure(type_structure: Any) -> Any:
@@ -117,3 +117,17 @@ def type_validation(data: Any, expected_type: type, raise_error: bool = False):
         
 def generate_session_id():
     return str(uuid.uuid4())
+
+def get_dummy_output(output_structure):
+    """
+    Dummy output based on output_structure in AgentSpec.
+    Value is set to None for all fields.
+    """
+    def generate_dummy(structure):
+        if isinstance(structure, dict):
+            return {key: generate_dummy(value) for key, value in structure.items()}
+        elif isinstance(structure, list):
+            return [generate_dummy(item) for item in structure]
+        else:
+            return None
+    return generate_dummy(output_structure)
