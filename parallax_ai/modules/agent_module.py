@@ -8,6 +8,25 @@ from ..utilities import type_validation, get_dummy_output
 from typing import Any, Literal, List, Optional, get_origin, get_args
 
 
+def prompt_completions(inputs: dict):
+    for _ in range(inputs.get("max_retries", 10)):
+        try:
+            # Sample a model address
+            model_address = random.choice(inputs["model_addresses"])
+            api_key = model_address.get("api_key")
+            base_url = model_address.get("base_url")
+            # Get raw response from the model
+            client = OpenAI(api_key=api_key, base_url=base_url)
+            output = client.completions.create(
+                model=inputs["model"],
+                prompt=inputs["prompt"],
+                **inputs["kwargs"]
+            )
+            return output
+        except Exception as e:
+            continue
+    raise RuntimeError("Max retries exceeded for completions.\nError: " + str(e))
+
 def chat_completions(inputs: dict):
     for _ in range(inputs.get("max_retries", 10)):
         try:
@@ -17,20 +36,21 @@ def chat_completions(inputs: dict):
             base_url = model_address.get("base_url")
             # Get raw response from the model
             client = OpenAI(api_key=api_key, base_url=base_url)
-            response = client.chat.completions.create(
+            output = client.chat.completions.create(
                 model=inputs["model"],
                 messages=inputs["messages"],
                 **inputs["kwargs"]
             )
-            # Extract the content
-            output = response.choices[0].message.content
             return output
         except Exception as e:
             continue
     raise RuntimeError("Max retries exceeded for completions.\nError: " + str(e))
 
-def output_verify_and_parsing(output: str, output_structure: Any) -> Any:
+def output_verify_and_parsing(output, output_structure: Any) -> Any:
+    # Extract the content
+    output = output.choices[0].message.content
     if output_structure is not None:
+        # Parse the output
         output = json.loads(output)
         if (isinstance(output_structure, list) and isinstance(output_structure[0], dict)) or isinstance(output_structure, dict):
             if isinstance(output_structure, list):
@@ -76,7 +96,12 @@ def agent_completions(inputs: dict):
     return parsed_output
 
 @dataclass
-class AgentSpec:
+class ModelSpec:
+    model_name: str
+    prompt_template: Optional[str] = None
+
+@dataclass
+class AgentSpec(ModelSpec):
     model_name: str
     system_prompt: Optional[str] = None
     input_structure: Optional[dict] = None
@@ -155,7 +180,10 @@ class AgentModule(BaseModule):
         if system_prompt is not None:
             messages.append({"role": "system", "content": system_prompt})
         # Add input prompt as user message
-        content = "\n\n".join([f'{key.replace("_", " ").capitalize()}:\n{value}' for key, value in module_input.items()])
+        if self.spec.prompt_template is not None:
+            content = self.spec.prompt_template.format(**module_input)
+        else:
+            content = "\n\n".join([f'{key.replace("_", " ").capitalize()}:\n{value}' for key, value in module_input.items()])
         messages.append({"role": "user", "content": content})
         return messages
     

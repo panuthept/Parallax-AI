@@ -11,7 +11,7 @@ pip install parallax-ai
 ### Usage Example
 ```python
 from parallax_ai import Service, OutputComposer
-from parallax_ai.modules import AgentSpec, AgentModule, ClassificationModule, SwitchModule, LambdaModule, ModuleInterface
+from parallax_ai.modules import AgentSpec, AgentModule, ClassificationAgentModule, SwitchModule, LambdaModule, ModuleInterface
 
 
 worker_nodes = "path/to/your/worker_nodes.json"
@@ -49,7 +49,7 @@ service = Service(
                 },
             ),
         ),
-        ClassificationModule(
+        ClassificationAgentModule(
             name="reviewer",
             spec=AgentSpec(
                 model_name="google/gemma-3-27b-it",

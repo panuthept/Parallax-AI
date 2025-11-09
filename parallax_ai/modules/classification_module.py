@@ -27,7 +27,7 @@ def agent_classification(inputs: dict) -> dict:
     return softmax_outputs
 
 @dataclass
-class ClassificationModule(AgentModule):
+class ClassificationAgentModule(AgentModule):
     n: int = 10
 
     def get_executor_input(self, module_input: dict) -> dict:
