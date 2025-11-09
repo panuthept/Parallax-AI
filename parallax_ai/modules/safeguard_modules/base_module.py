@@ -2,6 +2,7 @@ import numpy as np
 from ...dataclasses import Job
 from dataclasses import dataclass
 from ..base_module import BaseModule
+from typing import List, Tuple, Optional
 from ..agent_module import ModelSpec, chat_completions, prompt_completions
 
 
@@ -19,7 +20,7 @@ def safeguard_completions(inputs: dict) -> dict:
     probs = np.exp(logprobs) / np.sum(np.exp(logprobs))
     class_probs = list(zip(labels, probs))
 
-    return sorted(class_probs, key=lambda x: x[1], reverse=True)
+    return {"safety_classification": sorted(class_probs, key=lambda x: x[1], reverse=True)}
 
 @dataclass
 class BaseGuardModule(BaseModule):
@@ -30,6 +31,15 @@ class BaseGuardModule(BaseModule):
         "safe": "Safe", 
         "unsafe": "Harmful"
     }
+
+    @property
+    def input_structure(self) -> dict:
+        return {"prompt": str, "response": Optional[str]}
+    
+    @property
+    def output_structure(self) -> dict:
+        return {"safety_classification": List[Tuple[str, float]]}
+    
 
     def get_safeguard_input(self, module_input: dict) -> list:
         messages = [{"role": "user", "content": module_input["prompt"]}] 
