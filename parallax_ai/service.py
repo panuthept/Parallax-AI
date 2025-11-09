@@ -14,6 +14,7 @@ class Service:
         datapool: Optional[DataPool] = None,
         worker_nodes: Optional[Dict[str, List[dict]]] = None,
         output_composers: Optional[List[OutputComposer]] = None,
+        debug_mode: bool = False,
     ):
         self.name = name
         self.modules = modules
@@ -22,7 +23,7 @@ class Service:
         self.output_composers = output_composers
         self.worker_nodes = worker_nodes
         # Initialize Distributor
-        self.distributor = Distributor()
+        self.distributor = Distributor(debug_mode=debug_mode)
 
     def update_worker_nodes(self, modules: List[BaseModule]):
         if self.worker_nodes is None:

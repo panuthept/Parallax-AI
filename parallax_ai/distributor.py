@@ -23,9 +23,11 @@ class Distributor:
         ray_local_workers: Optional[int] = None,
         local_workers: Optional[int] = None,
         chunk_size: Optional[int] = 6000,   # Maximum requests to send in each batch
+        debug_mode: bool = False,   # If True, disable parallelism for easier debugging
         **kwargs
     ):
         self.chunk_size = chunk_size
+        self.debug_mode = debug_mode
 
         self.pool = None
         if ray_remote_address is not None or ray_local_workers is not None:
@@ -51,7 +53,12 @@ class Distributor:
                 for index in range(start_index, min(start_index + self.chunk_size, len(jobs)))
             ]
 
-            if ray.is_initialized():
+            if self.debug_mode:
+                for batched_input in tqdm(batched_inputs, desc="Executing jobs", position=0, disable=not verbose):
+                    index, output, success = func_wrapper(batched_input)
+                    jobs[index].update_execution_result(output, success)
+                    yield (index, jobs[index])
+            elif ray.is_initialized():
                 ray_func_wrapper = ray.remote(func_wrapper)
                 running_tasks = [ray_func_wrapper.remote(inp) for inp in batched_inputs] 
                 with tqdm(total=len(running_tasks), desc="Executing jobs", position=0, disable=not verbose) as pbar:
