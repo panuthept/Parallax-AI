@@ -1,6 +1,5 @@
 from typing import Optional
-from ..dataclasses import SafetySample
-from ..baseclasses import SafetyBenchmark
+from ..base_bench import SafetyBenchmark
 
 
 class SEALSBench(SafetyBenchmark):
@@ -20,11 +19,5 @@ class SEALSBench(SafetyBenchmark):
         for data in dataset:
             if language is not None and data["target_language"] != language:
                 continue
-            samples.append(
-                SafetySample(
-                    messages=[{"role": "user", "content": data["prompt"]}],
-                    gold_harmful_score=self.harmful_score_mapping[data["label"]],
-                    gold_harmful_category=data["category"],
-                )
-            )
+            samples.append({"prompt": data["prompt"], "gold_harmful_score": self.harmful_score_mapping[data["label"]]})
         return samples

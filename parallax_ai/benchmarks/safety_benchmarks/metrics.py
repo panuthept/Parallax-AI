@@ -1,7 +1,6 @@
 import numpy as np
 from typing import List
 from scipy import stats
-from .dataclasses import SafetySample
 from sklearn.metrics import (
     precision_recall_fscore_support, 
     precision_recall_curve, 
@@ -10,7 +9,7 @@ from sklearn.metrics import (
 
 
 class SafetyMetrics:
-    def __init__(self, samples: List[SafetySample], threshold: float = 0.5):
+    def __init__(self, samples: List[dict], threshold: float = 0.5):
         self.samples = samples
         self.threshold = threshold
 
@@ -19,9 +18,9 @@ class SafetyMetrics:
         y_scores = []
 
         for sample in self.samples:
-            if sample.gold_harmful_score is not None and sample.harmful_score is not None:
-                y_true.append(sample.gold_harmful_score)
-                y_scores.append(sample.harmful_score)
+            if sample["gold_harmful_score"] is not None and sample["harmful_score"] is not None:
+                y_true.append(sample["gold_harmful_score"])
+                y_scores.append(sample["harmful_score"])
 
         y_true = np.array(y_true)
         y_scores = np.array(y_scores)

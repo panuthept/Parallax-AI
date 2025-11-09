@@ -20,7 +20,15 @@ def safeguard_completions(inputs: dict) -> dict:
     probs = np.exp(logprobs) / np.sum(np.exp(logprobs))
     class_probs = list(zip(labels, probs))
 
-    return {"safety_classification": sorted(class_probs, key=lambda x: x[1], reverse=True)}
+    harmful_score = 0.0
+    for label, prob in class_probs:
+        if inputs.get("task") == "prompt_classification":
+            if label.lower() in ["unsafe", "harmful", "sensitive"]:
+                harmful_score += prob
+        else:
+            if label.lower() in ["unsafe", "harmful"]:
+                harmful_score += prob
+    return {"harmful_score": harmful_score}
 
 @dataclass
 class BaseGuardModule(BaseModule):
@@ -38,14 +46,15 @@ class BaseGuardModule(BaseModule):
     
     @property
     def output_structure(self) -> dict:
-        return {"safety_classification": List[Tuple[str, float]]}
-    
+        return {"harmful_score": float}
 
     def get_safeguard_input(self, module_input: dict) -> list:
+        task = "prompt_classification"
         messages = [{"role": "user", "content": module_input["prompt"]}] 
         if module_input.get("response") is not None:
+            task = "response_classification"
             messages.append({"role": "assistant", "content": module_input["response"]})
-        return {"messages": messages}
+        return {"messages": messages, "task": task}
 
     def get_executor_input(self, module_input: dict) -> dict:
         assert self.worker_nodes is not None, "worker_nodes must be provided for AgentModule."

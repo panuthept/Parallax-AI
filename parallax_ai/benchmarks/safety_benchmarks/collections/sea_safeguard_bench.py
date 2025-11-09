@@ -1,7 +1,6 @@
 import numpy as np
 from typing import Optional
-from ..dataclasses import SafetySample
-from ..baseclasses import SafetyBenchmark
+from ..base_bench import SafetyBenchmark
 
 
 class SEASafeguardBench(SafetyBenchmark):
@@ -31,72 +30,23 @@ class SEASafeguardBench(SafetyBenchmark):
         for data in dataset:
             if subset == "general":
                 if "prompt_classification" in tasks:
-                    samples.append(
-                        SafetySample(
-                            messages=[{"role": "user", "content": data["prompt"]}],
-                            gold_harmful_score=self.harmful_score_mapping[data["prompt_label"]],
-                        )
-                    )
+                    samples.append({"prompt": data["prompt"], "gold_harmful_score": self.harmful_score_mapping[data["prompt_label"]]})
                 if "response_classification" in tasks and data["response"] is not None:
-                    samples.append(
-                        SafetySample(
-                            messages=[
-                                {"role": "user", "content": data["prompt"]}, 
-                                {"role": "assistant", "content": data["response"]}
-                            ],
-                            gold_harmful_score=self.harmful_score_mapping[data["response_label"]],
-                        )
-                    )
+                    samples.append({"prompt": data["prompt"], "response": data["response"], "gold_harmful_score": self.harmful_score_mapping[data["response_label"]]})
             elif subset == "cultural_content_generation":
                 if "prompt_classification" in tasks:
                     if "English" in languages:
-                        samples.append(
-                            SafetySample(
-                                messages=[{"role": "user", "content": data["en_prompt"]}],
-                                gold_harmful_score=np.mean([self.harmful_score_mapping[label] for label in data["prompt_annotations"]]).item(),
-                            )
-                        )
+                        samples.append({"prompt": data["en_prompt"], "gold_harmful_score": np.mean([self.harmful_score_mapping[label] for label in data["prompt_annotations"]]).item()})
                     if "Local" in languages:
-                        samples.append(
-                            SafetySample(
-                                messages=[{"role": "user", "content": data["local_prompt"]}],
-                                gold_harmful_score=np.mean([self.harmful_score_mapping[label] for label in data["prompt_annotations"]]).item(),
-                            )
-                        )
+                        samples.append({"prompt": data["local_prompt"], "gold_harmful_score": np.mean([self.harmful_score_mapping[label] for label in data["prompt_annotations"]]).item()})
                 if "response_classification" in tasks and data["en_response"] is not None and data["local_response"] is not None:
                     if "English" in languages:
-                        samples.append(
-                            SafetySample(
-                                messages=[
-                                    {"role": "user", "content": data["en_prompt"]},
-                                    {"role": "assistant", "content": data["en_response"]}
-                                ],
-                                gold_harmful_score=np.mean([self.harmful_score_mapping[label] for label in data["response_annotations"]]).item(),
-                            )
-                        )
+                        samples.append({"prompt": data["en_prompt"], "response": data["en_response"], "gold_harmful_score": np.mean([self.harmful_score_mapping[label] for label in data["response_annotations"]]).item()})
                     if "Local" in languages:
-                        samples.append(
-                            SafetySample(
-                                messages=[
-                                    {"role": "user", "content": data["local_prompt"]},
-                                    {"role": "assistant", "content": data["local_response"]}
-                                ],
-                                gold_harmful_score=np.mean([self.harmful_score_mapping[label] for label in data["response_annotations"]]).item(),
-                            )
-                        )
+                        samples.append({"prompt": data["local_prompt"], "response": data["local_response"], "gold_harmful_score": np.mean([self.harmful_score_mapping[label] for label in data["response_annotations"]]).item()})
             elif subset == "cultural_in_the_wild":
                 if "English" in languages:
-                    samples.append(
-                        SafetySample(
-                            messages=[{"role": "user", "content": data["en_prompt"]}],
-                            gold_harmful_score=self.harmful_score_mapping[data["prompt_label"]],
-                        )
-                    )
+                    samples.append({"prompt": data["en_prompt"], "gold_harmful_score": self.harmful_score_mapping[data["prompt_label"]]})
                 if "Local" in languages:
-                    samples.append(
-                        SafetySample(
-                            messages=[{"role": "user", "content": data["local_prompt"]}],
-                            gold_harmful_score=self.harmful_score_mapping[data["prompt_label"]],
-                        )
-                    )
+                    samples.append({"prompt": data["local_prompt"], "gold_harmful_score": self.harmful_score_mapping[data["prompt_label"]]})
         return samples
