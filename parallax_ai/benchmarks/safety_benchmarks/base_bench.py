@@ -14,7 +14,7 @@ class SafetyBenchmark:
         samples: List[dict] = self._get_samples(**kwargs)
         return safeguard.run(inputs=samples, verbose=True)
     
-    def evaluate(self, safeguard, threshold: float = 0.5, **kwargs) -> SafetyMetrics:
+    def evaluate(self, safeguard: BaseGuardModule, threshold: float = 0.5, **kwargs) -> dict:
         samples = self.run(safeguard, **kwargs)
         metrics = SafetyMetrics(samples=samples, threshold=threshold)
         return {
