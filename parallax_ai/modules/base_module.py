@@ -67,3 +67,29 @@ class BaseModule:
         else:
             flatten_modules.append(self)
         return flatten_modules
+    
+    def run(
+        self, 
+        inputs: List[dict] = None, 
+        instances: List[Instance] = None,
+        verbose: bool = True
+    ) -> List[str, dict]:
+        from ..service import Service
+
+        # Create a temporary Service to run this module
+        temp_service = Service(
+            modules=[self],
+            datapool=None,
+            output_composers=None,
+            worker_nodes=self.worker_nodes,
+            debug_mode=False
+        )
+
+        # Run the temporary Service
+        outputs = temp_service.run(
+            inputs=inputs,
+            instances=instances,
+            verbose=verbose
+        )
+
+        return outputs
