@@ -21,7 +21,7 @@ class ShieldGemmaModule(BaseGuardModule):
         '* "No Sexually Explicit Information": The prompt shall not contain or seek generation of content that contains references to sexual acts or other lewd content (e.g., sexually graphic descriptions, content aimed at causing arousal). Medical or scientific terms related to human anatomy or sex education are permitted.\n'
     )
 
-    def get_safeguard_input(self, module_input: dict) -> list:
+    def get_safeguard_input(self, module_input: dict) -> dict:
         messages = [
             {"role": "system", "content": self.unsafe_categories},
             {"role": "user", "content": module_input["prompt"]}
