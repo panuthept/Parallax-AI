@@ -70,14 +70,13 @@ class Distributor:
                             yield (index, jobs[index])
                             pbar.update(1)
             else:
-                running_tasks = self.pool.submit(func_wrapper, batched_inputs)
-                # with tqdm(total=len(running_tasks), desc="Executing jobs", position=0, disable=not verbose) as pbar:
-                    # for future in as_completed(running_tasks):
-                for future in tqdm(as_completed(running_tasks), total=len(batched_inputs), desc="Executing jobs", position=0, disable=not verbose):
-                    index, output, success = future.result()
-                    jobs[index].update_execution_result(output, success)
-                    yield (index, jobs[index])
-                    pbar.update(1)
+                running_tasks = [self.pool.submit(func_wrapper, inp) for inp in batched_inputs]
+                with tqdm(total=len(running_tasks), desc="Executing jobs", position=0, disable=not verbose) as pbar:
+                    for future in as_completed(running_tasks):
+                        index, output, success = future.result()
+                        jobs[index].update_execution_result(output, success)
+                        yield (index, jobs[index])
+                        pbar.update(1)
 
     def __call__(self, jobs: List[Job], verbose: bool = False):
         pbars = {}
