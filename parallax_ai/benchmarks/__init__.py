@@ -1,1 +1,1 @@
-from .safety_benchmarks import SafetyMetrics, SafetySample, SafetyBenchmark, SEASafeguardBench, SEALSBench, RabakBench
+from .safety_benchmarks import SafetyMetrics, SafetyBenchmark, SEASafeguardBench, SEALSBench, RabakBench
