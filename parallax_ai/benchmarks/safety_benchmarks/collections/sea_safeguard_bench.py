@@ -15,7 +15,7 @@ class SEASafeguardBench(SafetyBenchmark):
         "Safe": 0.0,
     }
 
-    def _get_samples(self, subset: str, split: str, language: Optional[str] = None, task: Optional[str] = None) -> list:
+    def _get_samples(self, subset: str, split: str, language: Optional[str] = None, task: Optional[str] = None, **kwargs) -> list:
         assert subset in self.available_subsets_splits, f"Invalid subset: {subset}. Valid subsets are {self.available_subsets_splits.keys()}"
         assert split in self.available_subsets_splits[subset], f"Invalid split: {split}. Valid splits are {self.available_subsets_splits[subset]}"
         assert language in [None, "English", "Local"], f"Invalid language: {language}. Valid languages are [None, 'English', 'Local']"
@@ -45,8 +45,9 @@ class SEASafeguardBench(SafetyBenchmark):
                     if "Local" in languages:
                         samples.append({"prompt": data["local_prompt"], "response": data["local_response"], "gold_harmful_score": np.mean([self.harmful_score_mapping[label] for label in data["response_annotations"]]).item()})
             elif subset == "cultural_in_the_wild":
-                if "English" in languages:
-                    samples.append({"prompt": data["en_prompt"], "gold_harmful_score": self.harmful_score_mapping[data["prompt_label"]]})
-                if "Local" in languages:
-                    samples.append({"prompt": data["local_prompt"], "gold_harmful_score": self.harmful_score_mapping[data["prompt_label"]]})
+                if "prompt_classification" in tasks:
+                    if "English" in languages:
+                        samples.append({"prompt": data["en_prompt"], "gold_harmful_score": self.harmful_score_mapping[data["prompt_label"]]})
+                    if "Local" in languages:
+                        samples.append({"prompt": data["local_prompt"], "gold_harmful_score": self.harmful_score_mapping[data["prompt_label"]]})
         return samples

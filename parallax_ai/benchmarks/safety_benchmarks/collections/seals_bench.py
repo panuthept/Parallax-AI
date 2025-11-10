@@ -9,7 +9,7 @@ class SEALSBench(SafetyBenchmark):
     }
     available_language = ["English", "Lao", "Chinese", "Vietnamese", "Indonesian", "Thai", "Malay", "Khmer", "Burmese", "Filipino"]
 
-    def _get_samples(self, language: Optional[str] = None) -> list:
+    def _get_samples(self, language: Optional[str] = None, **kwargs) -> list:
         assert language in [None, *self.available_language], f"Invalid language: {language}. Valid languages are [None, 'English', 'Lao', 'Chinese', 'Vietnamese', 'Indonesian', 'Thai', 'Malay', 'Khmer', 'Burmese', 'Filipino']"
 
         from datasets import load_dataset

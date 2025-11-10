@@ -80,14 +80,12 @@ class Service:
                 for instance in self.datapool.retrieve(target_modules=composer.dependencies):
                     if composer.condition_satisfy(instance.contents):
                         composed_output = composer.compose(instance.contents)
-                        composed_output["metadata"] = {"service_name": self.name, "output_name": composer.name}
                         outputs.append(composed_output)
                         # Clean up memory
                         self.datapool.remove(instance.id)
         # Get outputs from finished instances
         for instance in self.datapool.retrieve(target_modules=[module.name for module in self.flattened_modules]):
             output = instance.contents
-            output["metadata"] = {"service_name": self.name, "output_name": "finished"}
             outputs.append(output)
             # Clean up memory
             self.datapool.remove(instance.id)

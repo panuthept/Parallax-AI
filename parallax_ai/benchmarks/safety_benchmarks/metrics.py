@@ -44,7 +44,7 @@ class SafetyMetrics:
             "recall": recall,
             "f1_score": f1,
             "pr_auc": pr_auc,
-            "mean_squared_error": mean_squared_error,
-            "spearman_correlation:": spearman_corr,
+            "mean_squared_error": mean_squared_error.item(),
+            "spearman_correlation:": spearman_corr.item(),
             "supports": len(y_true),
         }

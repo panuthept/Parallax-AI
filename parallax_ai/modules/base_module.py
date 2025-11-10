@@ -40,7 +40,7 @@ class BaseModule:
         # Get module outputs
         module_outputs = {}
         for instance_id in instance_ids:
-            if self.interface is not None:
+            if self.interface is not None and self.interface.output_processing is not None:
                 outputs = self.interface.get_module_outputs(
                     inputs=instance_inputs[instance_id],
                     outputs=instance_outputs[instance_id]

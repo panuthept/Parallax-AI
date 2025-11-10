@@ -13,6 +13,7 @@ def safeguard_completions(inputs: dict) -> dict:
     elif "messages" in inputs:
         output = chat_completions(inputs)
         label_logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs if top_logprob.token] for content in output.choices[0].logprobs.content]
+        print(label_logprobs)
         label_logprobs = [(inputs["representative_tokens"][token], logprob) for token, logprob in label_logprobs[inputs["representative_token_index"]] if token in inputs["representative_tokens"]]
     
     logprobs = [logprob for label, logprob in label_logprobs]
@@ -28,7 +29,7 @@ def safeguard_completions(inputs: dict) -> dict:
         else:
             if label.lower() in ["unsafe", "harmful"]:
                 harmful_score += prob
-    return {"harmful_score": harmful_score}
+    return {"harmful_score": harmful_score.item()}
 
 @dataclass
 class BaseGuardModule(BaseModule):
@@ -54,7 +55,7 @@ class BaseGuardModule(BaseModule):
     def output_structure(self) -> dict:
         return {"harmful_score": float}
 
-    def get_safeguard_input(self, module_input: dict) -> list:
+    def get_safeguard_input(self, module_input: dict) -> dict:
         task = "prompt_classification"
         messages = [{"role": "user", "content": module_input["prompt"]}] 
         if module_input.get("response") is not None:
