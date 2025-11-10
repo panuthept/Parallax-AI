@@ -1,6 +1,6 @@
 from typing import List
 from .metrics import SafetyMetrics
-from ...modules.safeguard_modules import BaseGuardModule
+from ...modules.safeguards import BaseGuardModule
 
 
 class SafetyBenchmark:

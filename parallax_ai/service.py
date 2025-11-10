@@ -51,7 +51,7 @@ class Service:
         inputs: List[dict] = None, 
         instances: List[Instance] = None,
         verbose: bool = True
-    ) -> List[str, dict]:
+    ) -> List[dict]:
         # Set worker nodes for all modules
         self.update_worker_nodes(self.flattened_modules, self.worker_nodes)
 

@@ -1,18 +1,20 @@
-from dataclasses import dataclass
 from ..agent_module import ModelSpec
+from dataclasses import dataclass, field
 from .base_module import BaseGuardModule
 
 
 @dataclass
 class SealionGuardModule(BaseGuardModule):
-    spec: ModelSpec = ModelSpec(model_name="aisingapore/Llama-Guard-Delta-200k")
+    spec: ModelSpec = field(default_factory=lambda: ModelSpec(model_name="aisingapore/Llama-Guard-Delta-200k"))
     max_retries: int = 10
     representative_token_index: int = 0
-    representative_tokens = {
-        "safe": "Safe",
-        "s": "Sensitive",
-        "unsafe": "Harmful",
-    }
+    representative_tokens: dict = field(default_factory=lambda:
+        {
+            "safe": "Safe",
+            "s": "Sensitive",
+            "unsafe": "Harmful",
+        }
+    )
 
     def get_safeguard_input(self, module_input: dict) -> list:
         if module_input.get("response") is None:

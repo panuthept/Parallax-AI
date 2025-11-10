@@ -1,8 +1,8 @@
 import numpy as np
+from typing import Optional
 from ...dataclasses import Job
-from dataclasses import dataclass
 from ..base_module import BaseModule
-from typing import List, Tuple, Optional
+from dataclasses import dataclass, field
 from ..agent_module import ModelSpec, chat_completions, prompt_completions
 
 
@@ -32,13 +32,15 @@ def safeguard_completions(inputs: dict) -> dict:
 
 @dataclass
 class BaseGuardModule(BaseModule):
-    spec: ModelSpec
+    spec: ModelSpec = None
     max_retries: int = 10
     representative_token_index: int = 0
-    representative_tokens: dict = {
-        "safe": "Safe", 
-        "unsafe": "Harmful"
-    }
+    representative_tokens: dict = field(default_factory=lambda: 
+        {
+            "safe": "Safe", 
+            "unsafe": "Harmful"
+        }
+    )
 
     @property
     def input_structure(self) -> dict:

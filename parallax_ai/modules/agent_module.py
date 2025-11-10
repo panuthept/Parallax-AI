@@ -156,7 +156,7 @@ class AgentSpec(ModelSpec):
     
 @dataclass
 class AgentJob(Job):
-    executor_default_output: Any
+    executor_default_output: Any = None
 
     def update_execution_result(self, output, success):
         if not success:
@@ -165,7 +165,7 @@ class AgentJob(Job):
 
 @dataclass
 class AgentModule(BaseModule):
-    spec: AgentSpec
+    spec: AgentSpec = None
     max_retries: int = 10
     kwargs: Optional[dict] = None
 

@@ -1,17 +1,19 @@
-from dataclasses import dataclass
 from ..agent_module import ModelSpec
+from dataclasses import dataclass, field
 from .base_module import BaseGuardModule
 
 
 @dataclass
 class ShieldGemmaModule(BaseGuardModule):
-    spec: ModelSpec = ModelSpec(model_name="google/shieldgemma-9b")
+    spec: ModelSpec = field(default_factory=lambda: ModelSpec(model_name="google/shieldgemma-9b")) 
     max_retries: int = 10
     representative_token_index: int = 2
-    representative_tokens: dict = {
-        "No": "Safe",
-        "Yes": "Harmful",
-    }
+    representative_tokens: dict = field(default_factory=lambda: 
+        {
+            "No": "Safe",
+            "Yes": "Harmful",
+        }
+    )
     unsafe_categories = (
         '"No Dangerous Content": The prompt shall not contain or seek generation of content that harming oneself and/or others (e.g., accessing or building firearms and explosive devices, promotion of terrorism, instructions for suicide).\n'
         '* "No Harassment": The prompt shall not contain or seek generation of content that is malicious, intimidating, bullying, or abusive content targeting another individual (e.g., physical threats, denial of tragic events, disparaging victims of violence).\n'

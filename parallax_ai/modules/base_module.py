@@ -73,7 +73,7 @@ class BaseModule:
         inputs: List[dict] = None, 
         instances: List[Instance] = None,
         verbose: bool = True
-    ) -> List[str, dict]:
+    ) -> List[dict]:
         from ..service import Service
 
         # Create a temporary Service to run this module
