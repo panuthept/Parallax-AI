@@ -1,6 +1,6 @@
 import numpy as np
-from typing import Optional
 from ...dataclasses import Job
+from typing import List, Optional
 from ..base_module import BaseModule
 from dataclasses import dataclass, field
 from ..agent_module import ModelSpec, chat_completions, prompt_completions
@@ -41,6 +41,10 @@ class BaseGuardModule(BaseModule):
             "unsafe": "Harmful"
         }
     )
+
+    @property
+    def dependencies(self) -> List[str]:
+        return ["prompt"]
 
     @property
     def input_structure(self) -> dict:

@@ -25,19 +25,19 @@ class Service:
         # Initialize Distributor
         self.distributor = Distributor(debug_mode=debug_mode)
 
-    def update_worker_nodes(self, modules: List[BaseModule]):
-        if self.worker_nodes is None:
+    def update_worker_nodes(self, modules: List[BaseModule], worker_nodes: Optional[Dict[str, List[dict]]]):
+        if worker_nodes is None:
             return
         # worker_nodes can be a path to JSON file or a dict
-        if isinstance(self.worker_nodes, str):
+        if isinstance(worker_nodes, str):
             import json
-            with open(self.worker_nodes, 'r') as f:
-                worker_nodes = json.load(f)
+            with open(worker_nodes, 'r') as f:
+                worker_nodes_dict = json.load(f)
         else:
-            worker_nodes = self.worker_nodes
+            worker_nodes_dict = worker_nodes
             
         for module in modules:
-            module.worker_nodes = worker_nodes
+            module.worker_nodes = worker_nodes_dict
 
     @staticmethod
     def get_flattened_modules(modules: List[BaseModule]) -> List[BaseModule]:

@@ -72,6 +72,7 @@ class BaseModule:
         self, 
         inputs: List[dict] = None, 
         instances: List[Instance] = None,
+        debug_mode: bool = False,
         verbose: bool = True
     ) -> List[dict]:
         from ..service import Service
@@ -82,7 +83,7 @@ class BaseModule:
             datapool=None,
             output_composers=None,
             worker_nodes=self.worker_nodes,
-            debug_mode=False
+            debug_mode=debug_mode,
         )
 
         # Run the temporary Service
