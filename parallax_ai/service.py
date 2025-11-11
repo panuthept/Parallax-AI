@@ -14,7 +14,12 @@ class Service:
         datapool: Optional[DataPool] = None,
         worker_nodes: Optional[Dict[str, List[dict]]] = None,
         output_composers: Optional[List[OutputComposer]] = None,
+        ray_remote_address: Optional[str] = None,
+        ray_local_workers: Optional[int] = None,
+        local_workers: Optional[int] = None,
+        chunk_size: Optional[int] = 6000,
         debug_mode: bool = False,
+        **kwargs,
     ):
         self.name = name
         self.modules = modules
@@ -23,7 +28,14 @@ class Service:
         self.output_composers = output_composers
         self.worker_nodes = worker_nodes
         # Initialize Distributor
-        self.distributor = Distributor(debug_mode=debug_mode)
+        self.distributor = Distributor(
+            ray_remote_address=ray_remote_address,
+            ray_local_workers=ray_local_workers,
+            local_workers=local_workers,
+            chunk_size=chunk_size,
+            debug_mode=debug_mode,
+            **kwargs
+        )
 
     def update_worker_nodes(self, modules: List[BaseModule], worker_nodes: Optional[Dict[str, List[dict]]]):
         if worker_nodes is None:
