@@ -118,7 +118,7 @@ def type_validation(data: Any, expected_type: type, raise_error: bool = False):
 def generate_session_id():
     return str(uuid.uuid4())
 
-def get_dummy_output(output_structure):
+def get_dummy_output(output_structure, default_value=None):
     """
     Dummy output based on output_structure in AgentSpec.
     Value is set to None for all fields.
@@ -129,5 +129,5 @@ def get_dummy_output(output_structure):
         elif isinstance(structure, list):
             return [generate_dummy(item) for item in structure]
         else:
-            return None
+            return default_value
     return generate_dummy(output_structure)
