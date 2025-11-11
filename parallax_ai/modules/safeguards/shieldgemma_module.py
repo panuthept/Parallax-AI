@@ -7,7 +7,7 @@ from .base_module import BaseGuardModule
 class ShieldGemmaModule(BaseGuardModule):
     spec: ModelSpec = field(default_factory=lambda: ModelSpec(model_name="google/shieldgemma-9b")) 
     max_retries: int = 10
-    representative_token_index: int = 2
+    representative_token_index: int = 0
     representative_tokens: dict = field(default_factory=lambda: 
         {
             "No": "Safe",
