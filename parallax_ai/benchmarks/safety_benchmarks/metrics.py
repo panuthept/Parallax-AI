@@ -16,16 +16,18 @@ class SafetyMetrics:
     def get_results(self):
         y_true = []
         y_scores = []
+        y_true_binary = []
 
         for sample in self.samples:
-            if sample["gold_harmful_score"] is not None and sample["harmful_score"] is not None:
-                y_true.append(sample["gold_harmful_score"])
+            if sample["gold_harmful_label"] is not None and sample["gold_severity_level"] is not None and sample["harmful_score"] is not None:
+                y_true.append(sample["gold_severity_level"])
                 y_scores.append(sample["harmful_score"])
+                y_true_binary.append(sample["gold_harmful_label"])
 
         y_true = np.array(y_true)
         y_scores = np.array(y_scores)
 
-        y_true_binary = (y_true >= self.threshold).astype(int)
+        # y_true_binary = (y_true >= self.threshold).astype(int)
 
         precision, recall, f1, _ = precision_recall_fscore_support(
             y_true_binary, 

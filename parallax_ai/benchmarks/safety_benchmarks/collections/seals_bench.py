@@ -3,9 +3,9 @@ from ..base_bench import SafetyBenchmark
 
 
 class SEALSBench(SafetyBenchmark):
-    harmful_score_mapping = {
-        "unsafe": 1.0,
-        "safe": 0.0,
+    harmful_label_mapping = {
+        "unsafe": 1,
+        "safe": 0,
     }
     available_language = ["English", "Lao", "Chinese", "Vietnamese", "Indonesian", "Thai", "Malay", "Khmer", "Burmese", "Filipino"]
 
@@ -19,5 +19,9 @@ class SEALSBench(SafetyBenchmark):
         for data in dataset:
             if language is not None and data["target_language"] != language:
                 continue
-            samples.append({"prompt": data["prompt"], "gold_harmful_score": self.harmful_score_mapping[data["label"]]})
+            samples.append({
+                "prompt": data["prompt"], 
+                "gold_harmful_label": int(self.harmful_label_mapping[data["label"]]),
+                "gold_severity_level": float(self.harmful_label_mapping[data["label"]]),
+            })
         return samples
