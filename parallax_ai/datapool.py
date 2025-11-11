@@ -87,6 +87,9 @@ class DataPool:
         self.index = Index()
         self.instances: Dict[str, Instance] = {}
 
+    def __len__(self) -> int:
+        return len(self.instances)
+
     def add(
         self, 
         data: List[dict] = None,
