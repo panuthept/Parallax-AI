@@ -1,5 +1,5 @@
 from typing import Literal, List, Dict
-from parallax_ai import ClassificationAgent, MultiAgent, AgentModule, ModuleIO, Client
+from parallax_ai import ClassificationAgent, MultiAgent, AgentModule, ModuleIO, AgentClient
 
 
 class SafeguardAgent:
@@ -11,7 +11,7 @@ class SafeguardAgent:
         **kwargs,
     ):
         self.multi_agent = MultiAgent(
-            client=Client(**kwargs),
+            client=AgentClient(**kwargs),
             max_tries=max_tries,
             dismiss_none_output=False,
             modules={

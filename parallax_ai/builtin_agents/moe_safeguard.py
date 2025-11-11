@@ -1,5 +1,5 @@
 from typing import Literal, List, Dict
-from parallax_ai import ClassificationAgent, MultiAgent, AgentModule, ModuleIO, Client
+from parallax_ai import ClassificationAgent, MultiAgent, AgentModule, ModuleIO, AgentClient
 
 
 def get_country_weights(labels: Dict[str, float]) -> List[tuple[str, float]]:
@@ -21,7 +21,7 @@ class MoESafeguardAgent:
     ):
         self.candidate_countries = candidate_countries
         self.multi_agent = MultiAgent(
-            client=Client(**kwargs),
+            client=AgentClient(**kwargs),
             max_tries=max_tries,
             dismiss_none_output=False,
             modules={
