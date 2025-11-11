@@ -15,7 +15,7 @@ def func_wrapper(
             executor_output = executor_func(executor_input)
             return index, executor_output, True
         except Exception as e:
-            pass
+            print(e)
     return index, None, False
 
 class Distributor:
