@@ -24,14 +24,45 @@ class SealionGuardModule(BaseGuardModule):
         if module_input.get("response") is None:
             task = "prompt_classification"
             prompt = module_input["prompt"]
-            messages = [
-                {"role": "user", "content": f"You are a classifier for analyzing interactions between humans and LLMs. Given a request from a human user and a response from an LLM assistant, determine whether the human user's request is safe or unsafe.\nHuman user:{prompt}"}
-            ]
+            prompt = self.tokenizer.apply_chat_template(
+                [
+                    {"role": "user", "content": f"You are a classifier for analyzing interactions between humans and LLMs. Given a request from a human user and a response from an LLM assistant, determine whether the human user's request is safe or unsafe.\nHuman user:{prompt}"}
+                ],
+                tokenize=False,
+                add_generation_prompt=False,
+                thinking_mode="off",
+            )
         else:
             task = "response_classification"
             prompt = module_input["prompt"]
             response = module_input["response"]
-            messages = [
-                {"role": "user", "content": f"You are a classifier for analyzing interactions between humans and LLMs. Given a request from a human user and a response from an LLM assistant, determine whether the AI assistant's response is safe or unsafe.\nHuman user:{prompt}\nAI assistant:{response}"}
-            ]
-        return {"messages": messages, "task": task}
+            prompt = self.tokenizer.apply_chat_template(
+                [
+                    {"role": "user", "content": f"You are a classifier for analyzing interactions between humans and LLMs. Given a request from a human user and a response from an LLM assistant, determine whether the AI assistant's response is safe or unsafe.\nHuman user:{prompt}\nAI assistant:{response}"}
+                ],
+                tokenize=False,
+                add_generation_prompt=False,
+                thinking_mode="off",
+            )
+        prompt = prompt + "<|start_header_id|>model<|end_header_id|>\n\n"
+        prompt = prompt[len(self.tokenizer.bos_token):] if prompt.startswith(self.tokenizer.bos_token) else prompt
+        return {"prompt": prompt, "task": task}
+    
+    def get_executor_input(self, module_input: dict) -> dict:
+        assert self.worker_nodes is not None, "worker_nodes must be provided for AgentModule."
+        assert self.spec.model_name in self.worker_nodes, f"Model addresses for model '{self.spec.model_name}' not found in worker_nodes."
+
+        safeguard_input = self.get_safeguard_input(module_input)
+        executor_input = {
+            **safeguard_input,
+            "representative_tokens": self.representative_tokens,
+            "representative_token_index": self.representative_token_index,
+            "model": self.spec.model_name,
+            "model_addresses": self.worker_nodes[self.spec.model_name],
+            "max_retries": self.max_retries,
+            "kwargs": {
+                "max_tokens": 10,
+                "logprobs": 20,
+            }
+        }
+        return executor_input
