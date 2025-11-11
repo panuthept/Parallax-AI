@@ -9,42 +9,32 @@ from typing import Any, Literal, List, Optional, get_origin, get_args
 
 
 def prompt_completions(inputs: dict):
-    for _ in range(inputs.get("max_retries", 10)):
-        try:
-            # Sample a model address
-            model_address = random.choice(inputs["model_addresses"])
-            api_key = model_address.get("api_key")
-            base_url = model_address.get("base_url")
-            # Get raw response from the model
-            client = OpenAI(api_key=api_key, base_url=base_url)
-            output = client.completions.create(
-                model=inputs["model"],
-                prompt=inputs["prompt"],
-                **inputs["kwargs"]
-            )
-            return output
-        except Exception as e:
-            continue
-    raise RuntimeError("Max retries exceeded for completions.\nError: " + str(e))
+    # Sample a model address
+    model_address = random.choice(inputs["model_addresses"])
+    api_key = model_address.get("api_key")
+    base_url = model_address.get("base_url")
+    # Get raw response from the model
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    output = client.completions.create(
+        model=inputs["model"],
+        prompt=inputs["prompt"],
+        **inputs["kwargs"]
+    )
+    return output
 
 def chat_completions(inputs: dict):
-    for _ in range(inputs.get("max_retries", 10)):
-        try:
-            # Sample a model address
-            model_address = random.choice(inputs["model_addresses"])
-            api_key = model_address.get("api_key")
-            base_url = model_address.get("base_url")
-            # Get raw response from the model
-            client = OpenAI(api_key=api_key, base_url=base_url)
-            output = client.chat.completions.create(
-                model=inputs["model"],
-                messages=inputs["messages"],
-                **inputs["kwargs"]
-            )
-            return output
-        except Exception as e:
-            continue
-    raise RuntimeError("Max retries exceeded for completions.\nError: " + str(e))
+    # Sample a model address
+    model_address = random.choice(inputs["model_addresses"])
+    api_key = model_address.get("api_key")
+    base_url = model_address.get("base_url")
+    # Get raw response from the model
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    output = client.chat.completions.create(
+        model=inputs["model"],
+        messages=inputs["messages"],
+        **inputs["kwargs"]
+    )
+    return output
 
 def output_verify_and_parsing(output, output_structure: Any) -> Any:
     # Extract the content
@@ -153,15 +143,6 @@ class AgentSpec(ModelSpec):
                 "{keywords}"
             ).format(keywords=keywords)
         return system_prompt
-    
-@dataclass
-class AgentJob(Job):
-    executor_default_output: Any = None
-
-    def update_execution_result(self, output, success):
-        if not success:
-            output = self.executor_default_output
-        super().update_execution_result(output, success)
 
 @dataclass
 class AgentModule(BaseModule):
@@ -202,8 +183,8 @@ class AgentModule(BaseModule):
         }
         return executor_input
 
-    def _create_job(self, instance_id: str, module_input: dict) -> AgentJob:
-        return AgentJob(
+    def _create_job(self, instance_id: str, module_input: dict) -> Job:
+        return Job(
             module_input=module_input,
             executor_func=agent_completions,
             executor_input=self.get_executor_input(module_input),

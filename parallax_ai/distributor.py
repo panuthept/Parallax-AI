@@ -10,11 +10,13 @@ def func_wrapper(
     inputs: Tuple[int, Any, Callable],
 ) -> Tuple[bool, Any]:
     index, executor_input, executor_func = inputs
-    try:
-        executor_output = executor_func(executor_input)
-        return index, executor_output, True
-    except Exception as e:
-        return True, None, False
+    for _ in range(executor_input.get("max_retries", 10)):
+        try:
+            executor_output = executor_func(executor_input)
+            return index, executor_output, True
+        except Exception as e:
+            pass
+    return index, None, False
 
 class Distributor:
     def __init__(
