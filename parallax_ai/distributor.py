@@ -28,25 +28,35 @@ class Distributor:
         debug_mode: bool = False,   # If True, disable parallelism for easier debugging
         **kwargs
     ):
+        self.ray_remote_address = ray_remote_address
+        self.ray_local_workers = ray_local_workers
+        self.local_workers = local_workers
         self.chunk_size = chunk_size
         self.debug_mode = debug_mode
-
         self.pool = None
-        if ray_remote_address is not None or ray_local_workers is not None:
+
+    def start_engine(self):
+        if self.ray_remote_address is not None or self.ray_local_workers is not None:
             if ray.is_initialized():
                 ray.shutdown()
             try:
-                if ray_remote_address is not None:
-                    server_info = ray.init(address=f"ray://{ray_remote_address}:10001", **kwargs)
-                elif ray_local_workers is not None:
-                    server_info = ray.init(num_cpus=ray_local_workers, **kwargs) 
+                if self.ray_remote_address is not None:
+                    server_info = ray.init(address=f"ray://{self.ray_remote_address}:10001")
+                elif self.ray_local_workers is not None:
+                    server_info = ray.init(num_cpus=self.ray_local_workers) 
                 print(f"Ray initialized:\n{server_info}")
             except:
-                self.pool = Pool(max_workers=local_workers)
+                self.pool = Pool(max_workers=self.local_workers)
                 print("Fail to initialize Ray, switch to ProcessPoolExecutor.")
         else:
-            self.pool = Pool(max_workers=local_workers)
+            self.pool = Pool(max_workers=self.local_workers)
             print("ProcessPoolExecutor initialized.")
+
+    def stop_engine(self):
+        if ray.is_initialized():
+            ray.shutdown()
+        if self.pool is not None:
+            self.pool.shutdown()
 
     def execute(self, jobs: List[Job], verbose: bool = False):
         for start_index in range(0, len(jobs), self.chunk_size):
@@ -81,6 +91,8 @@ class Distributor:
                         pbar.update(1)
 
     def __call__(self, jobs: List[Job], verbose: bool = False):
+        self.start_engine()
+        
         pbars = {}
         progress_names = set(job.progress_name for job in jobs if job.progress_name is not None)
         for progress_name in set(progress_names):
@@ -92,4 +104,6 @@ class Distributor:
             if job.progress_name in pbars:
                 pbars[job.progress_name].update(1)
         completed_jobs = [job for i, job in sorted(completed_jobs, key=lambda x: x[0])]
+
+        self.stop_engine()
         return completed_jobs
