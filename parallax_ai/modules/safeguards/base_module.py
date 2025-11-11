@@ -3,6 +3,7 @@ from ...dataclasses import Job
 from typing import List, Optional
 from ..base_module import BaseModule
 from dataclasses import dataclass, field
+from ...utilities import get_dummy_output
 from ..agent_module import ModelSpec, chat_completions, prompt_completions
 
 
@@ -14,7 +15,6 @@ def safeguard_completions(inputs: dict) -> dict:
         output = chat_completions(inputs)
         label_logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs if top_logprob.token] for content in output.choices[0].logprobs.content]
         label_logprobs = [(inputs["representative_tokens"][token], logprob) for token, logprob in label_logprobs[inputs["representative_token_index"]] if token in inputs["representative_tokens"]]
-    
     logprobs = [logprob for label, logprob in label_logprobs]
     labels = [label for label, logprob in label_logprobs]
     probs = np.exp(logprobs) / np.sum(np.exp(logprobs))
@@ -33,7 +33,7 @@ def safeguard_completions(inputs: dict) -> dict:
 @dataclass
 class BaseGuardModule(BaseModule):
     spec: ModelSpec = None
-    max_retries: int = 10
+    max_retries: int = 10000000000
     representative_token_index: int = 0
     representative_tokens: dict = field(default_factory=lambda: 
         {
@@ -87,6 +87,7 @@ class BaseGuardModule(BaseModule):
             module_input=module_input,
             executor_func=safeguard_completions,
             executor_input=self.get_executor_input(module_input),
+            executor_default_output=get_dummy_output(self.output_structure, default_value=1/len(self.representative_tokens)),
             instance_id=instance_id,
             module_name=self.name,
             progress_name=self.progress_name
