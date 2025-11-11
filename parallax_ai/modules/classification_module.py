@@ -1,9 +1,10 @@
+from .base_module import Job
 from dataclasses import dataclass
 from collections import defaultdict
 from ..utilities import get_dummy_output
 from concurrent.futures import as_completed
+from .agent_module import AgentModule, agent_completions
 from concurrent.futures import ProcessPoolExecutor as Pool
-from .agent_module import AgentJob, AgentModule, agent_completions
 
 
 def agent_classification(inputs: dict) -> dict:
@@ -35,8 +36,8 @@ class ClassificationAgentModule(AgentModule):
         executor_input["n"] = self.n
         return executor_input
     
-    def _create_job(self, instance_id: str, module_input: dict) -> AgentJob:
-        return AgentJob(
+    def _create_job(self, instance_id: str, module_input: dict) -> Job:
+        return Job(
             module_input=module_input,
             executor_func=agent_classification,
             executor_input=self.get_executor_input(module_input),
