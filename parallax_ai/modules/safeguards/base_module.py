@@ -28,7 +28,7 @@ def safeguard_completions(inputs: dict) -> dict:
         else:
             if label.lower() in ["unsafe", "harmful"]:
                 harmful_score += prob
-    return {"harmful_score": harmful_score.item()}
+    return {"harmful_score": harmful_score}
 
 @dataclass
 class BaseGuardModule(BaseModule):
