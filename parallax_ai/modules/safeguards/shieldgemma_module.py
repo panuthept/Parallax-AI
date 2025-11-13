@@ -22,10 +22,12 @@ class ShieldGemmaModule(BaseGuardModule):
     )
 
     def get_safeguard_input(self, module_input: dict) -> dict:
+        task = "prompt_classification"
         messages = [
             {"role": "system", "content": self.unsafe_categories},
             {"role": "user", "content": module_input["prompt"]}
         ] 
         if module_input.get("response") is not None:
+            task = "response_classification"
             messages.append({"role": "assistant", "content": module_input["response"]})
-        return {"messages": messages}
+        return {"messages": messages, "task": task}

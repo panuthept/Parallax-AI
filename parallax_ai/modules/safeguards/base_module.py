@@ -18,7 +18,7 @@ def safeguard_completions(inputs: dict) -> dict:
     logprobs = [logprob for label, logprob in label_logprobs]
     labels = [label for label, logprob in label_logprobs]
     probs = np.exp(logprobs) / np.sum(np.exp(logprobs))
-    class_probs = list(zip(labels, probs))
+    class_probs = [(label, prob.item()) for label, prob in zip(labels, probs)]
 
     harmful_score = 0.0
     for label, prob in class_probs:
@@ -75,7 +75,7 @@ class BaseGuardModule(BaseModule):
             "model_addresses": self.worker_nodes[self.spec.model_name],
             "max_retries": self.max_retries,
             "kwargs": {
-                "max_tokens": 10,
+                "max_tokens": 100,
                 "logprobs": True,
                 "top_logprobs": 20,
             }
