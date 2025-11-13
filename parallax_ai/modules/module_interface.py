@@ -17,7 +17,8 @@ class ModuleInterface:
         return outputs
 
     def get_module_inputs(self, instance: Instance) -> List[dict]:
-        inputs = {dep: instance.contents[dep] for dep in self.dependencies}
+        # inputs = {dep: instance.contents[dep] for dep in self.dependencies}
+        inputs = instance.contents
         if self.input_processing is not None:
             processed_inputs = self.input_processing(inputs)
             if isinstance(processed_inputs, GeneratorType):
