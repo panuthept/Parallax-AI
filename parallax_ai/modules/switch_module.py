@@ -19,4 +19,6 @@ class SwitchModule(BaseModule):
         selected_module = self.cases[condition_value]
         selected_module.worker_nodes = self.worker_nodes
         
-        return selected_module._create_job(instance_id, module_input)
+        job = selected_module._create_job(instance_id, module_input)
+        job.module_name = self.name  # Keep the SwitchModule's name
+        return job

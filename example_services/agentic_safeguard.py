@@ -1,5 +1,5 @@
 from parallax_ai import Service
-from typing import Dict, Literal
+from typing import List, Tuple, Literal
 from parallax_ai.modules import AgentSpec, ClassificationAgentModule, SwitchModule, ModuleInterface
 
 
@@ -70,7 +70,7 @@ class AgenticSafeguardService(Service):
         )
 
     @staticmethod
-    def _get_harmful_score(output: Dict[str, float]) -> float:
+    def _get_harmful_score(output: List[Tuple[str, float]]) -> float:
         score_mapping = {
             "Safe": 0,
             "Safe-Sensitive": 0.25,
@@ -79,6 +79,6 @@ class AgenticSafeguardService(Service):
             "Harmful": 1.0,
         }
         harmful_score = 0.0
-        for label, score in output.items():
+        for label, score in output:
             harmful_score += score_mapping[label] * score
         return harmful_score
