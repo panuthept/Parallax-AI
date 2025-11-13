@@ -17,5 +17,6 @@ class SwitchModule(BaseModule):
         assert condition_value in self.cases, \
             f"Condition value '{condition_value}' not found in cases."
         selected_module = self.cases[condition_value]
+        selected_module.worker_nodes = self.worker_nodes
         
         return selected_module._create_job(instance_id, module_input)

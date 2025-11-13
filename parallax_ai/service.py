@@ -18,7 +18,6 @@ class Service:
         ray_local_workers: Optional[int] = None,
         local_workers: Optional[int] = None,
         chunk_size: Optional[int] = 6000,
-        debug_mode: bool = False,
         **kwargs,
     ):
         self.name = name
@@ -33,7 +32,6 @@ class Service:
             ray_local_workers=ray_local_workers,
             local_workers=local_workers,
             chunk_size=chunk_size,
-            debug_mode=debug_mode,
             **kwargs
         )
 
@@ -62,7 +60,8 @@ class Service:
         self, 
         inputs: List[dict] = None, 
         instances: List[Instance] = None,
-        verbose: bool = True
+        verbose: bool = True,
+        debug_mode: bool = False,
     ) -> List[dict]:
         # Set worker nodes for all modules
         self.update_worker_nodes(self.flattened_modules, self.worker_nodes)
@@ -77,7 +76,7 @@ class Service:
                 pendding_jobs.extend(module.create_jobs(instance))
 
         # Execute jobs
-        completed_jobs = self.distributor(pendding_jobs, verbose=verbose)
+        completed_jobs = self.distributor(pendding_jobs, verbose=verbose, debug_mode=debug_mode)
 
         # Update DataPool
         for module in self.flattened_modules:

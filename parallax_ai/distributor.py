@@ -25,14 +25,12 @@ class Distributor:
         ray_local_workers: Optional[int] = None,
         local_workers: Optional[int] = None,
         chunk_size: Optional[int] = 6000,   # Maximum requests to send in each batch
-        debug_mode: bool = False,   # If True, disable parallelism for easier debugging
         **kwargs
     ):
         self.ray_remote_address = ray_remote_address
         self.ray_local_workers = ray_local_workers
         self.local_workers = local_workers
         self.chunk_size = chunk_size
-        self.debug_mode = debug_mode
         self.pool = None
 
     def start_engine(self):
@@ -58,14 +56,14 @@ class Distributor:
         if self.pool is not None:
             self.pool.shutdown()
 
-    def execute(self, jobs: List[Job], verbose: bool = False):
+    def execute(self, jobs: List[Job], verbose: bool = False, debug_mode: bool = False):
         for start_index in range(0, len(jobs), self.chunk_size):
             batched_inputs = [
                 (index, jobs[index].executor_input, jobs[index].executor_func) 
                 for index in range(start_index, min(start_index + self.chunk_size, len(jobs)))
             ]
 
-            if self.debug_mode:
+            if debug_mode:
                 for batched_input in tqdm(batched_inputs, desc="Executing jobs", position=0, disable=not verbose):
                     index, output, success = func_wrapper(batched_input)
                     jobs[index].update_execution_result(output, success)
@@ -90,7 +88,12 @@ class Distributor:
                         yield (index, jobs[index])
                         pbar.update(1)
 
-    def __call__(self, jobs: List[Job], verbose: bool = False):
+    def __call__(
+        self, 
+        jobs: List[Job], 
+        verbose: bool = False,
+        debug_mode: bool = False,   # If True, disable parallelism for easier debugging
+    ):
         self.start_engine()
         
         pbars = {}
@@ -99,7 +102,7 @@ class Distributor:
             pbars[progress_name] = tqdm(total=len([job for job in jobs if job.progress_name == progress_name]), desc=progress_name, position=len(pbars) + 1, disable=not verbose)
 
         completed_jobs = []
-        for i, job in self.execute(jobs):
+        for i, job in self.execute(jobs, debug_mode=debug_mode):
             completed_jobs.append((i, job))
             if job.progress_name in pbars:
                 pbars[job.progress_name].update(1)

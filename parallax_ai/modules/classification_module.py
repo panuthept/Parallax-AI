@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor as Pool
 
 def agent_classification(inputs: dict) -> dict:
     pool = Pool(max_workers=inputs["n"])
-    running_tasks = pool.submit(agent_completions, [inputs] * inputs["n"])
+    running_tasks = [pool.submit(agent_completions, inputs) for _ in range(inputs["n"])]
     
     predicted_classes = defaultdict(lambda: defaultdict(int))
     for future in as_completed(running_tasks):
@@ -19,6 +19,7 @@ def agent_classification(inputs: dict) -> dict:
                 predicted_classes[key][value] += 1
         else:
             raise ValueError("Parsed output must be a dict for classification.")
+    pool.shutdown()
 
     softmax_outputs = {}
     for key, class_counts in predicted_classes.items():

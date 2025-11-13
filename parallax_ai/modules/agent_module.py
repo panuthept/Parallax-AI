@@ -41,8 +41,19 @@ def output_verify_and_parsing(output, output_structure: Any) -> Any:
     output = output.choices[0].message.content
     if output_structure is not None:
         # Parse the output
-        output = json.loads(output)
         if (isinstance(output_structure, list) and isinstance(output_structure[0], dict)) or isinstance(output_structure, dict):
+            # Remove prefix and suffix texts
+            output = output.split("```json")
+            if len(output) != 2:
+                return None
+            output = output[1].split("```")
+            if len(output) != 2:
+                return None
+            output = output[0].strip()
+            # Fix \n problem in JSON
+            output = "".join([line.strip() for line in output.split("\n")])
+            # Parse the JSON object
+            output = json.loads(output)
             if isinstance(output_structure, list):
                 assert isinstance(output, list)
                 outputs = output
@@ -153,7 +164,10 @@ class AgentModule(BaseModule):
     def get_agent_input(self, module_input: dict) -> dict:
         # Ensure input matches the defined structure
         if self.spec.input_structure is not None:
-            assert type_validation(module_input, self.spec.input_structure), "Invalid inputs"
+            # Filter irrelevant fields
+            module_input = {k: v for k, v in module_input.items() if k in self.spec.input_structure}
+            for key in self.spec.input_structure.keys():
+                assert type_validation(module_input[key], self.spec.input_structure[key]), "Invalid inputs. Expected structure: {self.spec.input_structure}, but got: {module_input}"
         # Convert input to conversational format
         messages = []
         # Add system prompt if available
