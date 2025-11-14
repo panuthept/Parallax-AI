@@ -32,12 +32,12 @@ if __name__ == "__main__":
         # "meta-llama/Llama-Guard-3-8B": [
         #     {"api_key": "EMPTY", "base_url": f"http://192.168.12.137:8000/v1"},
         # ],
-        "ToxicityPrompts/PolyGuard-Qwen-Smol": [
-            {"api_key": "EMPTY", "base_url": f"http://192.168.12.131:8000/v1"},
-        ],
-        "ToxicityPrompts/PolyGuard-Qwen": [
-            {"api_key": "EMPTY", "base_url": f"http://192.168.12.132:8000/v1"},
-        ],
+        # "ToxicityPrompts/PolyGuard-Qwen-Smol": [
+        #     {"api_key": "EMPTY", "base_url": f"http://192.168.12.131:8000/v1"},
+        # ],
+        # "ToxicityPrompts/PolyGuard-Qwen": [
+        #     {"api_key": "EMPTY", "base_url": f"http://192.168.12.132:8000/v1"},
+        # ],
         # "ToxicityPrompts/PolyGuard-Ministral": [
         #     {"api_key": "EMPTY", "base_url": f"http://192.168.12.144:8000/v1"},
         # ],
@@ -82,12 +82,12 @@ if __name__ == "__main__":
         #     {"api_key": "EMPTY", "base_url": f"http://192.168.12.131:8000/v1"},
         # ],
 
-        # "google/gemma-3-27b-it": [
-        #     {"api_key": "EMPTY", "base_url": f"http://192.168.12.136:8000/v1"},
-        # ],
-        # "aisingapore/Gemma-SEA-LION-v4-27B-IT": [
-        #     {"api_key": "EMPTY", "base_url": f"http://192.168.12.133:8000/v1"},
-        # ],
+        "google/gemma-3-27b-it": [
+            {"api_key": "EMPTY", "base_url": f"http://192.168.12.136:8000/v1"},
+        ],
+        "aisingapore/Gemma-SEA-LION-v4-27B-IT": [
+            {"api_key": "EMPTY", "base_url": f"http://192.168.12.133:8000/v1"},
+        ],
         # "meta-llama/Llama-3.1-70B-Instruct": [
         #     {"api_key": "EMPTY", "base_url": f"http://192.168.12.132:8000/v1"},
         # ],
@@ -125,8 +125,8 @@ if __name__ == "__main__":
         "aisingapore/Gemma-Guard-SEALION-27B-Delta": GemmaSealionGuardModule,
         # "google/gemma-3-27b-it": AgenticSafeguardMoE,
         # "aisingapore/Gemma-SEA-LION-v4-27B-IT": AgenticSafeguardMoE,
-        # "google/gemma-3-27b-it": AgenticSafeguard,
-        # "aisingapore/Gemma-SEA-LION-v4-27B-IT": AgenticSafeguard,
+        "google/gemma-3-27b-it": AgenticSafeguard,
+        "aisingapore/Gemma-SEA-LION-v4-27B-IT": AgenticSafeguard,
         # "meta-llama/Llama-3.1-70B-Instruct": AgenticSafeguard,
         # "meta-llama/Llama-3.3-70B-Instruct": AgenticSafeguard,
         # "openai/gpt-oss-20b": AgenticSafeguard,
@@ -138,17 +138,17 @@ if __name__ == "__main__":
     # benchmark = PKUSafeRLHFQA()
     benchmark_name = "sea_safeguard_bench"
     benchmark = SEASafeguardBench()
-    # subset = "general"
-    # languages = ["English"]
+    subset = "general"
+    languages = ["English"]
     # subset = "cultural_content_generation"
-    subset = "cultural_in_the_wild"
-    languages = ["English", "Local"]
+    # subset = "cultural_in_the_wild"
+    # languages = ["English", "Local"]
 
     for model_name in worker_nodes.keys():
         for split in benchmark.available_subsets_splits[subset]:
             for language in languages:
-                # save_path = f"./outputs/safeguards/{model_name}/{benchmark_name}/{subset}/{split}"
-                save_path = f"./outputs/safeguards/{model_name}/{benchmark_name}/{subset}/{split}/{language}"
+                save_path = f"./outputs/zeroshots/{model_name}/{benchmark_name}/{subset}/{split}"
+                # save_path = f"./outputs/zeroshots/{model_name}/{benchmark_name}/{subset}/{split}/{language}"
 
                 if not os.path.exists(f"{save_path}/prompt_classification.json"):
                     results = benchmark.run(
@@ -156,20 +156,20 @@ if __name__ == "__main__":
                         splits=[split],
                         language=language,
                         task="prompt_classification",
-                        # safeguard=safeguards[model_name](
-                        #     model_name=model_name,
-                        #     worker_nodes=worker_nodes,
-                        # ),
                         safeguard=safeguards[model_name](
-                            name="Safeguard",
-                            spec=ModelSpec(model_name=model_name),
-                            interface=ModuleInterface(
-                                dependencies=["prompt"],
-                                output_processing=lambda inputs, outputs: {"harmful_score": outputs[0]["harmful_score"]}
-                            ),
-                            progress_name="Prompt Classification",
+                            model_name=model_name,
                             worker_nodes=worker_nodes,
                         ),
+                        # safeguard=safeguards[model_name](
+                        #     name="Safeguard",
+                        #     spec=ModelSpec(model_name=model_name),
+                        #     interface=ModuleInterface(
+                        #         dependencies=["prompt"],
+                        #         output_processing=lambda inputs, outputs: {"harmful_score": outputs[0]["harmful_score"]}
+                        #     ),
+                        #     progress_name="Prompt Classification",
+                        #     worker_nodes=worker_nodes,
+                        # ),
                         debug_mode=False,
                         verbose=True
                     )
@@ -188,20 +188,20 @@ if __name__ == "__main__":
                         splits=[split],
                         language=language,
                         task="response_classification",
-                        # safeguard=safeguards[model_name](
-                        #     model_name=model_name,
-                        #     worker_nodes=worker_nodes,
-                        # ),
                         safeguard=safeguards[model_name](
-                            name="Safeguard",
-                            spec=ModelSpec(model_name=model_name),
-                            interface=ModuleInterface(
-                                dependencies=["prompt", "response"],
-                                output_processing=lambda inputs, outputs: {"harmful_score": outputs[0]["harmful_score"]}
-                            ),
-                            progress_name="Response Classification",
+                            model_name=model_name,
                             worker_nodes=worker_nodes,
                         ),
+                        # safeguard=safeguards[model_name](
+                        #     name="Safeguard",
+                        #     spec=ModelSpec(model_name=model_name),
+                        #     interface=ModuleInterface(
+                        #         dependencies=["prompt", "response"],
+                        #         output_processing=lambda inputs, outputs: {"harmful_score": outputs[0]["harmful_score"]}
+                        #     ),
+                        #     progress_name="Response Classification",
+                        #     worker_nodes=worker_nodes,
+                        # ),
                         debug_mode=False,
                         verbose=True
                     )
