@@ -42,14 +42,15 @@ def output_verify_and_parsing(output, output_structure: Any) -> Any:
     if output_structure is not None:
         # Parse the output
         if (isinstance(output_structure, list) and isinstance(output_structure[0], dict)) or isinstance(output_structure, dict):
-            # Remove prefix and suffix texts
-            output = output.split("```json")
-            if len(output) != 2:
-                return None
-            output = output[1].split("```")
-            if len(output) != 2:
-                return None
-            output = output[0].strip()
+            if "```json" in output:
+                # Remove prefix and suffix texts
+                output = output.split("```json")
+                if len(output) != 2:
+                    return None
+                output = output[1].split("```")
+                if len(output) != 2:
+                    return None
+                output = output[0].strip()
             # Fix \n problem in JSON
             output = "".join([line.strip() for line in output.split("\n")])
             # Parse the JSON object

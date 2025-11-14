@@ -15,7 +15,9 @@ def func_wrapper(
             executor_output = executor_func(executor_input)
             return index, executor_output, True
         except Exception as e:
-            print(e)
+            error = e
+            pass
+    print(error)
     return index, None, False
 
 class Distributor:
@@ -48,7 +50,7 @@ class Distributor:
                 print("Fail to initialize Ray, switch to ProcessPoolExecutor.")
         else:
             self.pool = Pool(max_workers=self.local_workers)
-            print("ProcessPoolExecutor initialized.")
+            # print("ProcessPoolExecutor initialized.")
 
     def stop_engine(self):
         if ray.is_initialized():
@@ -64,29 +66,25 @@ class Distributor:
             ]
 
             if debug_mode:
-                for batched_input in tqdm(batched_inputs, desc="Executing jobs", position=0, disable=not verbose):
+                for batched_input in batched_inputs:
                     index, output, success = func_wrapper(batched_input)
                     jobs[index].update_execution_result(output, success)
                     yield (index, jobs[index])
             elif ray.is_initialized():
                 ray_func_wrapper = ray.remote(func_wrapper)
                 running_tasks = [ray_func_wrapper.remote(inp) for inp in batched_inputs] 
-                with tqdm(total=len(running_tasks), desc="Executing jobs", position=0, disable=not verbose) as pbar:
-                    while running_tasks:
-                        done, running_tasks = ray.wait(running_tasks)
-                        for finished in done:
-                            index, output, success = ray.get(finished)
-                            jobs[index].update_execution_result(output, success)
-                            yield (index, jobs[index])
-                            pbar.update(1)
-            else:
-                running_tasks = [self.pool.submit(func_wrapper, inp) for inp in batched_inputs]
-                with tqdm(total=len(running_tasks), desc="Executing jobs", position=0, disable=not verbose) as pbar:
-                    for future in as_completed(running_tasks):
-                        index, output, success = future.result()
+                while running_tasks:
+                    done, running_tasks = ray.wait(running_tasks)
+                    for finished in done:
+                        index, output, success = ray.get(finished)
                         jobs[index].update_execution_result(output, success)
                         yield (index, jobs[index])
-                        pbar.update(1)
+            else:
+                running_tasks = [self.pool.submit(func_wrapper, inp) for inp in batched_inputs]
+                for future in as_completed(running_tasks):
+                    index, output, success = future.result()
+                    jobs[index].update_execution_result(output, success)
+                    yield (index, jobs[index])
 
     def __call__(
         self, 
@@ -99,7 +97,7 @@ class Distributor:
         pbars = {}
         progress_names = set(job.progress_name for job in jobs if job.progress_name is not None)
         for progress_name in set(progress_names):
-            pbars[progress_name] = tqdm(total=len([job for job in jobs if job.progress_name == progress_name]), desc=progress_name, position=len(pbars) + 1, disable=not verbose)
+            pbars[progress_name] = tqdm(total=len([job for job in jobs if job.progress_name == progress_name]), desc=progress_name, position=len(pbars), disable=not verbose)
 
         completed_jobs = []
         for i, job in self.execute(jobs, debug_mode=debug_mode):
@@ -107,6 +105,7 @@ class Distributor:
             if job.progress_name in pbars:
                 pbars[job.progress_name].update(1)
         completed_jobs = [job for i, job in sorted(completed_jobs, key=lambda x: x[0])]
-
+        
         self.stop_engine()
+
         return completed_jobs
