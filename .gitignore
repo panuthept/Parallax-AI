@@ -208,3 +208,5 @@ __marimo__/
 
 .DS_Store
 /data
+_benchmark_results/
+benchmark_results/
