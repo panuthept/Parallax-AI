@@ -7,7 +7,7 @@ name = "parallax-ai"
 version = "0.5.1"
 description = "Parallel Multi-Agent Inference."
 readme = "README.md"
-requires-python = "<=3.11"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [
     {name = "Panuthep Tasawong", email = "falcon_270394@hotmail.co.th"},
