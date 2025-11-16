@@ -6,3 +6,4 @@ from .composer import OutputComposer
 from .datapool import DataPool
 from .distributor import Distributor
 from .service import Service
+from .benchmarks import SEASafeguardBench, SEALSBench, PKUSafeRLHFQA
