@@ -1,14 +1,23 @@
 import os
 import json
+import argparse
 from parallax_ai.benchmarks import SEASafeguardBench
 from parallax_ai.modules import ModelSpec, ModuleInterface
 from parallax_ai.modules.safeguards import SealionGuardModule
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Run safeguard benchmarking.')
+    parser.add_argument('--model_name', type=str, required=False, help='Model name to benchmark')
+    parser.add_argument('--model_address', type=str, required=False, help='Model address to benchmark')
+    args = parser.parse_args()
+
+    model_name = args.model_name
+    model_address = args.model_address
+
     worker_nodes = {
-        "<model_hf_repo>": [
-            {"api_key": "EMPTY", "base_url": f"http://<model_address>:8000/v1"},
+        model_name: [
+            {"api_key": "EMPTY", "base_url": f"http://{model_address}:8000/v1"},
         ],
     }
     benchmark_name = "sea_safeguard_bench"
