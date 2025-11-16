@@ -14,7 +14,7 @@ Deploy a vLLM Model Serving API
 ray start --head
 python -m vllm.entrypoints.openai.api_server \
     --host 0.0.0.0 --port 8000 \
-    --model <model_name> \
+    --model <your_model_name> \
     --dtype=auto \
     --tensor-parallel-size=4
 ```
