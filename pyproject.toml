@@ -17,6 +17,9 @@ dependencies = [
     "dill",
     "numpy",
     "openai",
+    "scipy",
+    "scikit-learn",
+    "transformers",
     "typing-validation",
 ]
 

@@ -1,4 +1,3 @@
 from .metrics import SafetyMetrics
-from .dataclasses import SafetySample
-from .baseclasses import SafetyBenchmark
-from .collections import SEASafeguardBench, SEALSBench, RabakBench
+from .base_bench import SafetyBenchmark
+from .collections import SEASafeguardBench, SEALSBench, PKUSafeRLHFQA
