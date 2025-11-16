@@ -20,5 +20,5 @@ python -m vllm.entrypoints.openai.api_server \
 ```
 Run Benchmarking Script
 ```bash
-python example_scripts/safeguard_benchmarking.py
+python example_scripts/safeguard_benchmarking.py --model_name <your_model_name> --model_address <your_model_address>
 ```
