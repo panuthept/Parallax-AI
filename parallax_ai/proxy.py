@@ -20,7 +20,7 @@ def func_wrapper(
     print(error)
     return index, None, False
 
-class Distributor:
+class Proxy:
     def __init__(
         self,
         ray_remote_address: Optional[str] = None,
@@ -35,7 +35,7 @@ class Distributor:
         self.chunk_size = chunk_size
         self.pool = None
 
-    def start_engine(self):
+    def create_workers(self):
         if self.ray_remote_address is not None or self.ray_local_workers is not None:
             if ray.is_initialized():
                 ray.shutdown()
@@ -52,7 +52,7 @@ class Distributor:
             self.pool = Pool(max_workers=self.local_workers)
             # print("ProcessPoolExecutor initialized.")
 
-    def stop_engine(self):
+    def release_workers(self):
         if ray.is_initialized():
             ray.shutdown()
         if self.pool is not None:
@@ -92,7 +92,7 @@ class Distributor:
         verbose: bool = False,
         debug_mode: bool = False,   # If True, disable parallelism for easier debugging
     ):
-        self.start_engine()
+        self.create_workers()
         
         pbars = {}
         progress_names = set(job.progress_name for job in jobs if job.progress_name is not None)
@@ -106,6 +106,6 @@ class Distributor:
                 pbars[job.progress_name].update(1)
         completed_jobs = [job for i, job in sorted(completed_jobs, key=lambda x: x[0])]
         
-        self.stop_engine()
+        self.release_workers()
 
         return completed_jobs

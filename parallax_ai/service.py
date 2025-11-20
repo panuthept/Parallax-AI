@@ -1,6 +1,6 @@
+from .proxy import Proxy
 from .datapool import DataPool
 from .modules import BaseModule
-from .distributor import Distributor
 from .composer import OutputComposer
 from .dataclasses import Job, Instance
 from typing import List, Dict, Optional
@@ -26,8 +26,8 @@ class Service:
         self.datapool = datapool if datapool is not None else DataPool()
         self.output_composers = output_composers
         self.worker_nodes = worker_nodes
-        # Initialize Distributor
-        self.distributor = Distributor(
+        
+        self.distributor = Proxy(
             ray_remote_address=ray_remote_address,
             ray_local_workers=ray_local_workers,
             local_workers=local_workers,
