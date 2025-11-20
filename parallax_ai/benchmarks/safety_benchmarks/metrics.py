@@ -9,8 +9,9 @@ from sklearn.metrics import (
 
 
 class SafetyMetrics:
-    def __init__(self, samples: List[dict], threshold: float = 0.5):
+    def __init__(self, samples: List[dict], label_mapping: dict, threshold: float = 0.5):
         self.samples = samples
+        self.label_mapping = label_mapping
         self.threshold = threshold
 
     def get_results(self):
@@ -22,7 +23,7 @@ class SafetyMetrics:
             if sample["gold_harmful_label"] is not None and sample["gold_severity_level"] is not None and sample["harmful_score"] is not None:
                 y_true.append(sample["gold_severity_level"])
                 y_scores.append(sample["harmful_score"])
-                y_true_binary.append(sample["gold_harmful_label"])
+                y_true_binary.append(self.label_mapping[sample["gold_harmful_label"]])
 
         y_true = np.array(y_true)
         y_scores = np.array(y_scores)
