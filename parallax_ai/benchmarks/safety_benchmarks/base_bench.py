@@ -1,7 +1,6 @@
-from typing import List, Union
+from typing import List
 from ...service import Service
 from .metrics import SafetyMetrics
-from ...modules.safeguards import BaseGuardModule
 
 
 class SafetyBenchmark:
@@ -17,11 +16,11 @@ class SafetyBenchmark:
     def _get_samples(self, **kwargs) -> List[dict]:
         raise NotImplementedError("Subclasses should implement this method.")
 
-    def run(self, safeguard: Union[Service, BaseGuardModule], debug_mode: bool = False, verbose: bool = True, **kwargs) -> List[dict]:
+    def run(self, safeguard: Service, debug_mode: bool = False, verbose: bool = True, **kwargs) -> List[dict]:
         samples: List[dict] = self._get_samples(**kwargs)
         return safeguard.run(inputs=samples, debug_mode=debug_mode, verbose=verbose)
     
-    def evaluate(self, safeguard: Union[Service, BaseGuardModule], label_mapping: dict = None, threshold: float = 0.5, **kwargs) -> dict:
+    def evaluate(self, safeguard: Service, label_mapping: dict = None, threshold: float = 0.5, **kwargs) -> dict:
         label_mapping = self.default_label_mapping if label_mapping is None else label_mapping
         
         samples = self.run(safeguard, **kwargs)

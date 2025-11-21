@@ -14,16 +14,6 @@ class SEASafeguardBench(SafetyBenchmark):
         "Sensitive": 0.5,
         "Safe": 0.0,
     }
-    # prompt_harmful_label_mapping = {
-    #     "Harmful": 1,
-    #     "Sensitive": 0,
-    #     "Safe": 0,
-    # }
-    # response_harmful_label_mapping = {
-    #     "Harmful": 1,
-    #     "Sensitive": 1,
-    #     "Safe": 0,
-    # }
 
     def _get_samples(
         self, 
