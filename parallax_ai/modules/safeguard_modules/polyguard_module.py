@@ -3,27 +3,22 @@ from ...dataclasses import Job
 from dataclasses import dataclass, field
 from .base_module import BaseGuardModule
 from ...utilities import get_dummy_output
-from ..agent_module import ModelSpec, chat_completions
+from ..agent_modules.agent_module import ModelSpec, auto_completions
 
 
 def polyguard_completions(inputs: dict) -> dict:
-    output = chat_completions(inputs)
-    label_logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs][:2] for content in output.choices[0].logprobs.content]
+    _, logprobs = auto_completions(inputs, return_logprobs=True)
     if inputs.get("task") == "prompt_classification":
-        label_logprobs = label_logprobs[5]
+        label_logprobs = [(inputs["representative_tokens"][token], logprob) for token, logprob in logprobs[5] if token in inputs["representative_tokens"]]
     else:
-        label_logprobs = [[(token, logprob) for token, logprob in label_logprob if token in inputs["representative_tokens"]] for label_logprob in label_logprobs]
+        label_logprobs = [[(inputs["representative_tokens"][token], logprob) for token, logprob in token_logprob if token in inputs["representative_tokens"]] for token_logprob in logprobs]
         label_logprobs = [label_logprob for label_logprob in label_logprobs if len(label_logprob) > 0]
         label_logprobs = label_logprobs[-1]
-    label_logprobs = [(inputs["representative_tokens"][token], logprob) for token, logprob in label_logprobs if token in inputs["representative_tokens"]]
     
     logprobs = [logprob for label, logprob in label_logprobs]
     labels = [label for label, logprob in label_logprobs]
     probs = np.exp(logprobs) / np.sum(np.exp(logprobs))
-    # class_probs = list(zip(labels, probs))
     class_probs = [(label, prob.item()) for label, prob in zip(labels, probs)]
-    # print(f"Task: {inputs.get('task')}")
-    # print(class_probs)
 
     harmful_score = 0.0
     for label, prob in class_probs:

@@ -1,14 +1,14 @@
-from ..agent_module import ModelSpec
 from .base_module import BaseGuardModule
 from .polyguard_module import PolyGuardModule
 from .sealguard_module import SEALGuardModule
 from .qwen3guard_module import Qwen3GuardModule
 from .shieldgemma_module import ShieldGemmaModule
+from ..agent_modules.agent_module import ModelSpec
 from .llamaguard_module import LlamaGuardModule, LlamaGuard4Module
 from .sealionguard_module import SealionGuardModule, GemmaSealionGuardModule
 
 
-class AutoSafeguardModule:
+class AutoSafeguard:
     mapping = {
         "google/shieldgemma-2b": ShieldGemmaModule,
         "google/shieldgemma-9b": ShieldGemmaModule,
@@ -35,4 +35,6 @@ class AutoSafeguardModule:
 
     @classmethod
     def from_model_name(cls, model_name: str) -> BaseGuardModule:
-        return cls.mapping[model_name](spec=ModelSpec(model_name=model_name))
+        if model_name in model_name:
+            return cls.mapping[model_name](spec=ModelSpec(model_name=model_name))
+        raise ValueError(f"No safeguard module found for model name: {model_name}")

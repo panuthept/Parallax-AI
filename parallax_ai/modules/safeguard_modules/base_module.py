@@ -1,20 +1,16 @@
 import numpy as np
 from ...dataclasses import Job
 from typing import List, Optional
-from ..base_module import BaseModule
 from dataclasses import dataclass, field
 from ...utilities import get_dummy_output
-from ..agent_module import ModelSpec, chat_completions, prompt_completions
+from ...modules.base_module import BaseModule
+from ..agent_modules.agent_module import ModelSpec, auto_completions
 
 
 def safeguard_completions(inputs: dict) -> dict:
-    if "prompt" in inputs:
-        output = prompt_completions(inputs)
-        label_logprobs = [(inputs["representative_tokens"][token], logprob) for token, logprob in output.choices[0].logprobs.top_logprobs[inputs["representative_token_index"]].items() if token in inputs["representative_tokens"]]
-    elif "messages" in inputs:
-        output = chat_completions(inputs)
-        label_logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs if top_logprob.token] for content in output.choices[0].logprobs.content]
-        label_logprobs = [(inputs["representative_tokens"][token], logprob) for token, logprob in label_logprobs[inputs["representative_token_index"]] if token in inputs["representative_tokens"]]
+    _, logprobs = auto_completions(inputs, return_logprobs=True)
+    label_logprobs = [(inputs["representative_tokens"][token], logprob) for token, logprob in logprobs[inputs["representative_token_index"]] if token in inputs["representative_tokens"]]
+    
     logprobs = [logprob for label, logprob in label_logprobs]
     labels = [label for label, logprob in label_logprobs]
     probs = np.exp(logprobs) / np.sum(np.exp(logprobs))

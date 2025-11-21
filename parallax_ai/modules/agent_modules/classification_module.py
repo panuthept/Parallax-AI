@@ -1,8 +1,7 @@
-from .base_module import Job
+from ..base_module import Job
 from dataclasses import dataclass
 from collections import defaultdict
-from ..utilities import get_dummy_output
-from concurrent.futures import as_completed
+from ...utilities import get_dummy_output
 from .agent_module import AgentModule, agent_completions
 from concurrent.futures import ProcessPoolExecutor as Pool
 
@@ -16,7 +15,7 @@ def agent_classification(inputs: dict) -> dict:
     
     for future in running_tasks:
         try:
-            parsed_output = future.result(timeout=10)
+            parsed_output = future.result()
         except:
             continue
         if isinstance(parsed_output, dict):

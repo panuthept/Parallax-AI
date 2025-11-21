@@ -1,14 +1,18 @@
 import json
 import random
 from openai import OpenAI
-from ..dataclasses import Job
+from ...dataclasses import Job
 from dataclasses import dataclass
-from .base_module import BaseModule
-from ..utilities import type_validation, get_dummy_output
+from ..base_module import BaseModule
+from ...utilities import type_validation, get_dummy_output
 from typing import Any, Literal, List, Optional, get_origin, get_args
 
 
-def prompt_completions(inputs: dict):
+def prompt_completions(inputs: dict, return_logprobs: bool = False):
+    if return_logprobs:
+        # Ensure that kwargs has logprobs settings
+        if "logprobs" not in inputs["kwargs"]:
+            inputs["kwargs"]["logprobs"] = 20
     # Sample a model address
     model_address = random.choice(inputs["model_addresses"])
     api_key = model_address.get("api_key")
@@ -20,9 +24,19 @@ def prompt_completions(inputs: dict):
         prompt=inputs["prompt"],
         **inputs["kwargs"]
     )
-    return output
+    response = output.choices[0].text
+    if return_logprobs:
+        logprobs = [[(token_id, logprob) for token_id, logprob in logprob.items()] for logprob in output.choices[0].logprobs.top_logprobs]
+        return (response, logprobs)
+    return response
 
-def chat_completions(inputs: dict):
+def chat_completions(inputs: dict, return_logprobs: bool = False):
+    if return_logprobs:
+        # Ensure that kwargs has logprobs settings
+        if "logprobs" not in inputs["kwargs"]:
+            inputs["kwargs"]["logprobs"] = True
+        if "top_logprobs" not in inputs["kwargs"]:
+            inputs["kwargs"]["top_logprobs"] = 20
     # Sample a model address
     model_address = random.choice(inputs["model_addresses"])
     api_key = model_address.get("api_key")
@@ -34,11 +48,21 @@ def chat_completions(inputs: dict):
         messages=inputs["messages"],
         **inputs["kwargs"]
     )
-    return output
+    response = output.choices[0].message.content
+    if return_logprobs:
+        logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs] for content in output.choices[0].logprobs.content]
+        return (response, logprobs)
+    return response
+
+def auto_completions(inputs: dict, return_logprobs: bool = False):
+    if "messages" in inputs:
+        return chat_completions(inputs, return_logprobs=return_logprobs)
+    elif "prompt" in inputs:
+        return prompt_completions(inputs, return_logprobs=return_logprobs)
+    else:
+        raise ValueError("Invalid inputs for auto_completions. Must contain either 'messages' or 'prompt'.")
 
 def output_verify_and_parsing(output, output_structure: Any) -> Any:
-    # Extract the content
-    output = output.choices[0].message.content
     if output_structure is not None:
         # Parse the output
         if (isinstance(output_structure, list) and isinstance(output_structure[0], dict)) or isinstance(output_structure, dict):
@@ -93,7 +117,7 @@ def output_verify_and_parsing(output, output_structure: Any) -> Any:
     return output
 
 def agent_completions(inputs: dict):
-    raw_output = chat_completions(inputs)
+    raw_output = auto_completions(inputs)
     parsed_output = output_verify_and_parsing(raw_output, inputs.get("output_structure"))
     return parsed_output
 

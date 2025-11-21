@@ -1,7 +1,7 @@
-from ..agent_module import ModelSpec
 from transformers import AutoTokenizer
 from dataclasses import dataclass, field
 from .base_module import BaseGuardModule
+from ..agent_modules.agent_module import ModelSpec
 
 
 @dataclass

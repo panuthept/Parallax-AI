@@ -1,5 +1,4 @@
 from .base_module import BaseGuardModule
-from .auto_module import AutoSafeguardModule
 from .sealguard_module import SEALGuardModule
 from .polyguard_module import PolyGuardModule
 from .qwen3guard_module import Qwen3GuardModule
