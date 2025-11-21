@@ -1,10 +1,23 @@
+from typing import Callable
 from .proxy import Proxy
 from .datapool import DataPool
 from .modules import BaseModule
-from .composer import OutputComposer
+from dataclasses import dataclass
 from .dataclasses import Job, Instance
 from typing import List, Dict, Optional
 
+
+@dataclass
+class OutputComposer:
+    name: str
+    dependencies: list[str]
+    condition: Callable[[dict], bool]
+    compose: Callable[[dict], dict]
+    
+    def condition_satisfy(self, instance_contents: dict) -> bool:
+        if self.condition is None:
+            return True
+        return self.condition(instance_contents)
 
 class Service:
     def __init__(
