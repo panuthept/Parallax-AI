@@ -2,13 +2,37 @@ import os
 import json
 import argparse
 from parallax_ai.benchmarks import SEASafeguardBench
-from parallax_ai.builtins.safeguards import SafeguardModel
+from parallax_ai.builtins.safeguards import SafeguardModel, AgenticSafeguard, AgenticSafeguardMoE
 
+
+def get_safeguard(args, worker_nodes):
+    if args.agentic:
+        if args.moe:
+            safeguard = AgenticSafeguardMoE(
+                model_name=args.model_name,
+                worker_nodes=worker_nodes,
+                self_consistency=args.self_consistency,
+                chain_of_thought=args.chain_of_thought,
+            )
+        else:
+            safeguard = AgenticSafeguard(
+                model_name=args.model_name,
+                worker_nodes=worker_nodes,
+                self_consistency=args.self_consistency,
+                chain_of_thought=args.chain_of_thought,
+            )
+    else:
+        safeguard = SafeguardModel(model_name=args.model_name, worker_nodes=worker_nodes)
+    return safeguard
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run safeguard benchmarking.')
     parser.add_argument('--model_name', type=str, required=False, help='Model name to benchmark')
     parser.add_argument('--model_address', type=str, required=False, help='Model address to benchmark')
+    parser.add_argument('--agentic', action='store_true')
+    parser.add_argument('--moe', action='store_true')
+    parser.add_argument('--self_consistency', type=int, default=1)
+    parser.add_argument('--chain_of_thought', action='store_true')
     args = parser.parse_args()
 
     model_name = args.model_name
@@ -26,7 +50,7 @@ if __name__ == "__main__":
     prompt_scores = []
     response_scores = []
     for model_name in worker_nodes.keys():
-        safeguard = SafeguardModel(model_name=model_name, worker_nodes=worker_nodes)
+        safeguard = get_safeguard(args, worker_nodes)
         for split in ["IN_EN", "MS_EN", "MY_EN", "TA_EN", "TH_EN", "TL_EN", "VI_EN"]:
             save_path = f"./outputs/{model_name}/{benchmark_name}/cultural_specific/{split}"
 

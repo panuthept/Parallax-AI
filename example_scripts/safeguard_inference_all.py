@@ -2,13 +2,37 @@ import os
 import json
 import argparse
 from parallax_ai.benchmarks import SEASafeguardBench
-from parallax_ai.builtins.safeguards import SafeguardModel
+from parallax_ai.builtins.safeguards import SafeguardModel, AgenticSafeguard, AgenticSafeguardMoE
 
+
+def get_safeguard(args, worker_nodes):
+    if args.agentic:
+        if args.moe:
+            safeguard = AgenticSafeguardMoE(
+                model_name=args.model_name,
+                worker_nodes=worker_nodes,
+                self_consistency=args.self_consistency,
+                chain_of_thought=args.chain_of_thought,
+            )
+        else:
+            safeguard = AgenticSafeguard(
+                model_name=args.model_name,
+                worker_nodes=worker_nodes,
+                self_consistency=args.self_consistency,
+                chain_of_thought=args.chain_of_thought,
+            )
+    else:
+        safeguard = SafeguardModel(model_name=args.model_name, worker_nodes=worker_nodes)
+    return safeguard
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run safeguard benchmarking.')
     parser.add_argument('--model_name', type=str, required=False, help='Model name to benchmark')
     parser.add_argument('--model_address', type=str, required=False, help='Model address to benchmark')
+    parser.add_argument('--agentic', action='store_true')
+    parser.add_argument('--moe', action='store_true')
+    parser.add_argument('--self_consistency', type=int, default=1)
+    parser.add_argument('--chain_of_thought', action='store_true')
     args = parser.parse_args()
 
     model_name = args.model_name
@@ -19,7 +43,7 @@ if __name__ == "__main__":
             {"api_key": "EMPTY", "base_url": f"http://{model_address}:8000/v1"},
         ],
     }
-    safeguard = SafeguardModel(model_name=model_name, worker_nodes=worker_nodes)
+    safeguard = get_safeguard(args, worker_nodes)
 
     # Run benchmark for all subsets and splits
     benchmark_name = "sea_safeguard_bench"
