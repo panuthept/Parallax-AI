@@ -2,8 +2,7 @@ import os
 import json
 import argparse
 from parallax_ai.benchmarks import SEASafeguardBench
-from parallax_ai.modules import ModelSpec, ModuleInterface
-from parallax_ai.modules.safeguards import SealionGuardModule
+from parallax_ai.builtins.safeguards import SafeguardModel
 
 
 if __name__ == "__main__":
@@ -20,6 +19,7 @@ if __name__ == "__main__":
             {"api_key": "EMPTY", "base_url": f"http://{model_address}:8000/v1"},
         ],
     }
+    safeguard = SafeguardModel(model_name=model_name, worker_nodes=worker_nodes)
 
     # Run benchmark for all subsets and splits
     benchmark_name = "sea_safeguard_bench"
@@ -39,16 +39,7 @@ if __name__ == "__main__":
                         splits=[split],
                         language=language,
                         task="prompt_classification",
-                        safeguard=SealionGuardModule(
-                            name="Prompt Safeguard",
-                            spec=ModelSpec(model_name=model_name),
-                            interface=ModuleInterface(
-                                dependencies=["prompt"],
-                                output_processing=lambda inputs, outputs: {"harmful_score": outputs[0]["harmful_score"]}
-                            ),
-                            progress_name="Prompt Classification",
-                            worker_nodes=worker_nodes,
-                        ),
+                        safeguard=safeguard,
                         debug_mode=False,
                         verbose=True,
                     )
@@ -64,16 +55,7 @@ if __name__ == "__main__":
                         splits=[split],
                         language=language,
                         task="response_classification",
-                        safeguard=SealionGuardModule(
-                            name="Response Safeguard",
-                            spec=ModelSpec(model_name=model_name),
-                            interface=ModuleInterface(
-                                dependencies=["prompt", "response"],
-                                output_processing=lambda inputs, outputs: {"harmful_score": outputs[0]["harmful_score"]}
-                            ),
-                            progress_name="Response Classification",
-                            worker_nodes=worker_nodes,
-                        ),
+                        safeguard=safeguard,
                         debug_mode=False,
                         verbose=True,
                     )

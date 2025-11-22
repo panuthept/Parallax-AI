@@ -8,7 +8,7 @@ from .llamaguard_module import LlamaGuardModule, LlamaGuard4Module
 from .sealionguard_module import SealionGuardModule, GemmaSealionGuardModule
 
 
-class AutoSafeguard:
+class AutoSafeguardModule:
     mapping = {
         "google/shieldgemma-2b": ShieldGemmaModule,
         "google/shieldgemma-9b": ShieldGemmaModule,
@@ -33,8 +33,7 @@ class AutoSafeguard:
         "aisingapore/Gemma-Guard-SEALION-27B-Delta": GemmaSealionGuardModule,
     }
 
-    @classmethod
-    def from_model_name(cls, model_name: str) -> BaseGuardModule:
-        if model_name in model_name:
-            return cls.mapping[model_name](spec=ModelSpec(model_name=model_name))
-        raise ValueError(f"No safeguard module found for model name: {model_name}")
+    def __init__(self, spec: ModelSpec, **kwargs) -> BaseGuardModule:
+        if spec.model_name not in self.mapping:
+            raise ValueError(f"No safeguard module found for model name: {spec.model_name}")
+        return self.mapping[spec.model_name](spec=spec, **kwargs)

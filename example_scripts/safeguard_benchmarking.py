@@ -2,8 +2,7 @@ import os
 import json
 import argparse
 from parallax_ai.benchmarks import SEASafeguardBench
-from parallax_ai.modules import ModelSpec, ModuleInterface
-from parallax_ai.modules.safeguards import SealionGuardModule
+from parallax_ai.builtins.safeguards import SafeguardModel
 
 
 if __name__ == "__main__":
@@ -27,6 +26,7 @@ if __name__ == "__main__":
     prompt_scores = []
     response_scores = []
     for model_name in worker_nodes.keys():
+        safeguard = SafeguardModel(model_name=model_name, worker_nodes=worker_nodes)
         for split in ["IN_EN", "MS_EN", "MY_EN", "TA_EN", "TH_EN", "TL_EN", "VI_EN"]:
             save_path = f"./outputs/{model_name}/{benchmark_name}/cultural_specific/{split}"
 
@@ -36,16 +36,7 @@ if __name__ == "__main__":
                     subsets=["cultural_content_generation", "cultural_in_the_wild"],
                     splits=[split],
                     task="prompt_classification",
-                    safeguard=SealionGuardModule(
-                        name="Prompt Safeguard",
-                        spec=ModelSpec(model_name=model_name),
-                        interface=ModuleInterface(
-                            dependencies=["prompt"],
-                            output_processing=lambda inputs, outputs: {"harmful_score": outputs[0]["harmful_score"]}
-                        ),
-                        progress_name="Prompt Classification",
-                        worker_nodes=worker_nodes,
-                    ),
+                    safeguard=safeguard,
                     debug_mode=False,
                     verbose=True,
                 )
@@ -66,16 +57,7 @@ if __name__ == "__main__":
                     subsets=["cultural_content_generation"],
                     splits=[split],
                     task="response_classification",
-                    safeguard=SealionGuardModule(
-                        name="Response Safeguard",
-                        spec=ModelSpec(model_name=model_name),
-                        interface=ModuleInterface(
-                            dependencies=["prompt", "response"],
-                            output_processing=lambda inputs, outputs: {"harmful_score": outputs[0]["harmful_score"]}
-                        ),
-                        progress_name="Response Classification",
-                        worker_nodes=worker_nodes,
-                    ),
+                    safeguard=safeguard,
                     debug_mode=False,
                     verbose=True,
                 )

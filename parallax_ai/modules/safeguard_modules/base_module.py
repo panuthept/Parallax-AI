@@ -18,12 +18,10 @@ def safeguard_completions(inputs: dict) -> dict:
 
     harmful_score = 0.0
     for label, prob in class_probs:
-        if inputs.get("task") == "prompt_classification":
-            if label.lower() in ["unsafe", "harmful", "sensitive"]:
-                harmful_score += prob
-        else:
-            if label.lower() in ["unsafe", "harmful"]:
-                harmful_score += prob
+        if label.lower() in ["unsafe", "harmful"]:
+            harmful_score += prob
+        elif label.lower() in ["sensitive"]:
+            harmful_score += prob * 0.5
     return {"harmful_score": harmful_score}
 
 @dataclass

@@ -1,6 +1,6 @@
-from parallax_ai import Service
+from ...service import Service
 from typing import List, Tuple, Literal
-from parallax_ai.modules import AgentSpec, ClassificationAgentModule, SwitchModule, ModuleInterface
+from ...modules import AgentSpec, ClassificationAgentModule, SwitchModule, ModuleInterface
 
 
 def get_harmful_score(output: List[Tuple[str, float]]) -> float:
