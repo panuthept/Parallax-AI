@@ -96,4 +96,6 @@ class SEASafeguardBench(SafetyBenchmark):
                                     "gold_harmful_label": data["prompt_label"],
                                     "gold_severity_level": self.harmful_score_mapping[data["prompt_label"]]
                                 })
+        if self.max_samples is not None:
+            return samples[:self.max_samples]
         return samples

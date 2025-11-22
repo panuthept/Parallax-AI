@@ -14,4 +14,6 @@ class PKUSafeRLHFQA(SafetyBenchmark):
                 "gold_harmful_label": int(not data["is_safe"]),
                 "gold_severity_level": float(data["severity_level"]),
             })
+        if self.max_samples is not None:
+            return samples[:self.max_samples]
         return samples

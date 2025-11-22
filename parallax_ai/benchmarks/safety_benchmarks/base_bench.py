@@ -10,8 +10,9 @@ class SafetyBenchmark:
         "Safe": 0
     }
     
-    def __init__(self, cache_dir: str = None):
+    def __init__(self, cache_dir: str = None, max_samples: int = None):
         self.cache_dir = cache_dir
+        self.max_samples = max_samples
 
     def _get_samples(self, **kwargs) -> List[dict]:
         raise NotImplementedError("Subclasses should implement this method.")

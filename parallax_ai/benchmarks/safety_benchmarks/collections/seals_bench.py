@@ -24,4 +24,6 @@ class SEALSBench(SafetyBenchmark):
                 "gold_harmful_label": int(self.harmful_label_mapping[data["label"]]),
                 "gold_severity_level": float(self.harmful_label_mapping[data["label"]]),
             })
+        if self.max_samples is not None:
+            return samples[:self.max_samples]
         return samples
