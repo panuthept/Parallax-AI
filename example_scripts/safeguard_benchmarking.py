@@ -28,7 +28,9 @@ def get_safeguard(args, worker_nodes):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run safeguard benchmarking.')
     parser.add_argument('--model_name', type=str, required=False, help='Model name to benchmark')
-    parser.add_argument('--model_address', type=str, required=False, help='Model address to benchmark')
+    parser.add_argument('--api_key', type=str, default='EMPTY', help='API key for the model')
+    parser.add_argument('--base_url', type=str, default=None, help='Base URL for the model')
+    parser.add_argument('--model_address', type=str, default=None, help='Model ip address to benchmark')
     parser.add_argument('--agentic', action='store_true')
     parser.add_argument('--moe', action='store_true')
     parser.add_argument('--self_consistency', type=int, default=1)
@@ -37,10 +39,12 @@ if __name__ == "__main__":
 
     model_name = args.model_name
     model_address = args.model_address
+    api_key = args.api_key
+    base_url = args.base_url if args.base_url is not None else f"http://{model_address}:8000/v1"
 
     worker_nodes = {
         model_name: [
-            {"api_key": "EMPTY", "base_url": f"http://{model_address}:8000/v1"},
+            {"api_key": args.api_key, "base_url": base_url},
         ],
     }
     benchmark_name = "sea_safeguard_bench"
