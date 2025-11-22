@@ -76,11 +76,11 @@ class Service:
         verbose: bool = True,
         debug_mode: bool = False,
     ) -> List[dict]:
-        # Set worker nodes for all modules
-        self.update_worker_nodes(self.flattened_modules, self.worker_nodes)
-
         # Add inputs to DataPool
         self.datapool.add(data=inputs, instances=instances)
+
+        # Set worker nodes for all modules
+        self.update_worker_nodes(self.flattened_modules, self.worker_nodes)
 
         # Each module creates jobs based on available data in DataPool
         pendding_jobs: List[Job] = []

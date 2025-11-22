@@ -54,8 +54,9 @@ class Index:
             index[field].add(instance_id)
 
     def add(self, instance: Instance) -> None:
-        for fields in [instance.contents, instance.metadata, instance.executors]:
-            self._add(list(fields.keys()), instance.id, self.contents_index)
+        self._add(list(instance.contents.keys()), instance.id, self.contents_index)
+        self._add(list(instance.metadata.keys()), instance.id, self.metadata_index)
+        self._add(list(instance.executors.keys()), instance.id, self.executors_index)
 
     def _remove(self, fields: List[str], instance_id: str, index: Dict[str, Set[str]]) -> None:
         for field in fields:
@@ -65,8 +66,9 @@ class Index:
                     del index[field]
 
     def remove(self, instance: Instance) -> None:
-        for fields in [instance.contents, instance.metadata, instance.executors]:
-            self._remove(list(fields.keys()), instance.id, self.contents_index)
+        self._remove(list(instance.contents.keys()), instance.id, self.contents_index)
+        self._remove(list(instance.metadata.keys()), instance.id, self.metadata_index)
+        self._remove(list(instance.executors.keys()), instance.id, self.executors_index)
 
     def update(
         self, 
