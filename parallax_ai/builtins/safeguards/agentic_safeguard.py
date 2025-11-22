@@ -91,6 +91,7 @@ class AgenticSafeguardMoE(Service):
         self, 
         self_consistency: int = 1,
         chain_of_thought: bool = False,
+        cultures: List[str] = ["Indonesia", "Malaysia", "Myanmar", "Singapore", "Thailand", "Vietnam"],
         model_name: str = "aisingapore/Gemma-SEA-LION-v4-27B-IT", 
         **kwargs
     ):
@@ -103,9 +104,9 @@ class AgenticSafeguardMoE(Service):
                     spec=AgentSpec(
                         model_name=model_name,
                         input_structure={"prompt": str},
-                        output_structure={"culture": Literal["Indonesia", "Malaysia", "Myanmar", "Singapore", "Thailand", "Vietnam"]},
+                        output_structure={"culture": Literal[*cultures]},
                         system_prompt=(
-                            "Given a prompt (user's input to AI), classify the cultural context of the prompt into one of the following cultures: Indonesia, Malaysia, Myanmar, Singapore, Thailand, Vietnam.\n"
+                            f"Given a prompt (user's input to AI), classify the cultural context of the prompt into one of the following cultures: {", ".join(cultures)}.\n"
                             "Consider cultural references, language usage, societal norms, traditions, and any other relevant cultural indicators present in the prompt to make an accurate classification."
                         ) + chain_of_thought_prompt if chain_of_thought else "",
                     ),
