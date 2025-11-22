@@ -27,6 +27,7 @@ def get_safeguard(args, worker_nodes):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run safeguard benchmarking.')
+    parser.add_argument('--save_name', type=str, default=None, help='Name to save the benchmark results')
     parser.add_argument('--model_name', type=str, required=False, help='Model name to benchmark')
     parser.add_argument('--api_key', type=str, default='EMPTY', help='API key for the model')
     parser.add_argument('--base_url', type=str, default=None, help='Base URL for the model')
@@ -35,12 +36,15 @@ if __name__ == "__main__":
     parser.add_argument('--moe', action='store_true')
     parser.add_argument('--self_consistency', type=int, default=1)
     parser.add_argument('--chain_of_thought', action='store_true')
+    parser.add_argument('--debug_mode', action='store_true')
     args = parser.parse_args()
 
+    save_name = args.save_name if args.save_name is not None else args.model_name
     model_name = args.model_name
     model_address = args.model_address
     api_key = args.api_key
-    base_url = args.base_url if args.base_url is not None else f"http://{model_address}:8000/v1"
+    base_url = args.base_url if args.model_address is None else f"http://{model_address}:8000/v1"
+    debug_mode = args.debug_mode
 
     worker_nodes = {
         model_name: [
@@ -56,7 +60,7 @@ if __name__ == "__main__":
     for model_name in worker_nodes.keys():
         safeguard = get_safeguard(args, worker_nodes)
         for split in ["IN_EN", "MS_EN", "MY_EN", "TA_EN", "TH_EN", "TL_EN", "VI_EN"]:
-            save_path = f"./outputs/{model_name}/{benchmark_name}/cultural_specific/{split}"
+            save_path = f"./outputs/{save_name}/{benchmark_name}/cultural_specific/{split}"
 
             if not os.path.exists(f"{save_path}/prompt_classification.json"):
                 results = benchmark.evaluate(
@@ -65,7 +69,7 @@ if __name__ == "__main__":
                     splits=[split],
                     task="prompt_classification",
                     safeguard=safeguard,
-                    debug_mode=False,
+                    debug_mode=debug_mode,
                     verbose=True,
                 )
                 print(results["performance"])
@@ -86,7 +90,7 @@ if __name__ == "__main__":
                     splits=[split],
                     task="response_classification",
                     safeguard=safeguard,
-                    debug_mode=False,
+                    debug_mode=debug_mode,
                     verbose=True,
                 )
                 print(results["performance"])
