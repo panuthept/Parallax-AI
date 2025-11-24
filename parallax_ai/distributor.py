@@ -1,3 +1,4 @@
+import os
 import ray
 from tqdm import tqdm
 from .dataclasses import Job
@@ -35,7 +36,7 @@ class Distributor:
         self.chunk_size = chunk_size
         self.pool = None
 
-    def create_workers(self):
+    def create_workers(self, max_workers: Optional[int] = None):
         if self.ray_remote_address is not None or self.ray_local_workers is not None:
             if ray.is_initialized():
                 ray.shutdown()
@@ -43,13 +44,16 @@ class Distributor:
                 if self.ray_remote_address is not None:
                     server_info = ray.init(address=f"ray://{self.ray_remote_address}:10001")
                 elif self.ray_local_workers is not None:
-                    server_info = ray.init(num_cpus=self.ray_local_workers) 
+                    max_workers = self.ray_local_workers if self.ray_local_workers is not None else min(max_workers, os.cpu_count() * 3)
+                    server_info = ray.init(num_cpus=max_workers) 
                 print(f"Ray initialized:\n{server_info}")
             except:
-                self.pool = Pool(max_workers=self.local_workers)
+                max_workers = self.local_workers if self.local_workers is not None else min(max_workers, os.cpu_count() * 3)
+                self.pool = Pool(max_workers=max_workers)
                 print("Fail to initialize Ray, switch to ProcessPoolExecutor.")
         else:
-            self.pool = Pool(max_workers=self.local_workers)
+            max_workers = self.local_workers if self.local_workers is not None else min(max_workers, os.cpu_count() * 3)
+            self.pool = Pool(max_workers=max_workers)
             # print("ProcessPoolExecutor initialized.")
 
     def release_workers(self):
@@ -92,7 +96,7 @@ class Distributor:
         verbose: bool = False,
         debug_mode: bool = False,   # If True, disable parallelism for easier debugging
     ):
-        self.create_workers()
+        self.create_workers(max_workers=len(jobs))
         
         pbars = {}
         progress_names = set(job.progress_name for job in jobs if job.progress_name is not None)
