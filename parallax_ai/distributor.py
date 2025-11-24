@@ -20,7 +20,7 @@ def func_wrapper(
     print(error)
     return index, None, False
 
-class Proxy:
+class Distributor:
     def __init__(
         self,
         ray_remote_address: Optional[str] = None,

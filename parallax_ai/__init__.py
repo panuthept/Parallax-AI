@@ -3,6 +3,6 @@
 __version__ = "0.5.1"
 
 from .datapool import DataPool
-from .proxy import Proxy
+from .distributor import Distributor
 from .service import Service, OutputComposer
 from .benchmarks import SEASafeguardBench, SEALSBench, PKUSafeRLHFQA

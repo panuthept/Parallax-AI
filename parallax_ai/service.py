@@ -1,5 +1,5 @@
 from typing import Callable
-from .proxy import Proxy
+from .distributor import Distributor
 from .datapool import DataPool
 from .modules import BaseModule
 from dataclasses import dataclass
@@ -40,7 +40,7 @@ class Service:
         self.output_composers = output_composers
         self.worker_nodes = worker_nodes
         
-        self.distributor = Proxy(
+        self.distributor = Distributor(
             ray_remote_address=ray_remote_address,
             ray_local_workers=ray_local_workers,
             local_workers=local_workers,
