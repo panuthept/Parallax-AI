@@ -2,7 +2,17 @@
 
 __version__ = "0.5.1"
 
-from .datapool import DataPool
-from .distributor import Distributor
-from .service import Service, OutputComposer
-from .benchmarks import SEASafeguardBench, SEALSBench, PKUSafeRLHFQA
+from .core import (
+    DataPool,
+    Distributor,
+    Service,
+    OutputComposer,
+    BaseModule,
+    ModuleInterface,
+    LambdaModule,
+    SwitchModule,
+    AgentModule,
+    AgentSpec,
+    ModelSpec,
+    ClassificationAgentModule,
+)
