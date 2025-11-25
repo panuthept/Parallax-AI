@@ -4,7 +4,7 @@ import argparse
 import numpy as np
 from typing import List, Dict
 from parallax_ai.benchmarks import SEASafeguardBench, SafetyMetrics
-from parallax_ai.builtins.safeguards import SafeguardModel, AgenticSafeguard, AgenticSafeguardMoE
+from parallax_ai.services.safeguards import SafeguardModel, AgenticSafeguard, AgenticSafeguardMoE
 
 
 def get_safeguard(args, worker_nodes):
