@@ -15,7 +15,7 @@ class SEASafeguardBench(SafetyBenchmark):
         "Safe": 0.0,
     }
 
-    def _get_samples(
+    def get_samples(
         self, 
         subsets: Optional[str] = None, 
         splits: Optional[str] = None, 

@@ -14,11 +14,11 @@ class SafetyBenchmark:
         self.cache_dir = cache_dir
         self.max_samples = max_samples
 
-    def _get_samples(self, **kwargs) -> List[dict]:
+    def get_samples(self, **kwargs) -> List[dict]:
         raise NotImplementedError("Subclasses should implement this method.")
 
     def run(self, safeguard: Service, debug_mode: bool = False, verbose: bool = True, **kwargs) -> List[dict]:
-        samples: List[dict] = self._get_samples(**kwargs)
+        samples: List[dict] = self.get_samples(**kwargs)
         return safeguard.run(inputs=samples, debug_mode=debug_mode, verbose=verbose)
     
     def evaluate(self, safeguard: Service, label_mapping: dict = None, threshold: float = 0.5, **kwargs) -> dict:

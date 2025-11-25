@@ -2,7 +2,7 @@ from ..base_bench import SafetyBenchmark
 
 
 class PKUSafeRLHFQA(SafetyBenchmark):
-    def _get_samples(self, **kwargs) -> list:
+    def get_samples(self, **kwargs) -> list:
         from datasets import load_dataset
         dataset = load_dataset("PKU-Alignment/PKU-SafeRLHF-QA", split="test", cache_dir=self.cache_dir)
 
