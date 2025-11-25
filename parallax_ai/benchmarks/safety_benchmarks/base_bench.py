@@ -1,5 +1,5 @@
 from typing import List
-from ...service import Service
+from ...core import Service
 from .metrics import SafetyMetrics
 
 
