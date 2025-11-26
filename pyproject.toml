@@ -18,6 +18,7 @@ dependencies = [
     "numpy",
     "openai",
     "scipy",
+    "datasets",
     "scikit-learn",
     "transformers",
     "typing-validation",
