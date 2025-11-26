@@ -132,6 +132,7 @@ class AgentSpec(ModelSpec):
     system_prompt: Optional[str] = None
     input_structure: Optional[dict] = None
     output_structure: Optional[dict|List[dict]] = None
+    default_output: Optional[Any] = None
 
     def get_system_prompt(self):
         system_prompt = self.system_prompt
@@ -227,7 +228,7 @@ class AgentModule(BaseModule):
             module_input=module_input,
             executor_func=agent_completions,
             executor_input=self.get_executor_input(module_input),
-            executor_default_output=get_dummy_output(self.spec.output_structure),
+            executor_default_output=get_dummy_output(self.spec.output_structure) if self.spec.default_output is None else self.spec.default_output,
             instance_id=instance_id,
             module_name=self.name,
             progress_name=self.progress_name

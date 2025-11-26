@@ -15,7 +15,7 @@ def get_harmful_score(output: List[Tuple[str, float]]) -> float:
         "Harmful": 1.0,
     }
     harmful_score = 0.0
-    for label, score in output:
+    for label, score in output.items():
         harmful_score += score_mapping[label] * score
     return harmful_score
 
@@ -105,12 +105,15 @@ class AgenticSafeguardMoE(Service):
                         model_name=model_name,
                         input_structure={"prompt": str},
                         output_structure={"culture": Literal[*cultures]},
+                        default_output={"culture": {culture: 1/len(cultures) for culture in cultures}},
                         system_prompt=(
                             f"Given a prompt (user's input to AI), classify the cultural context of the prompt into one of the following cultures: {", ".join(cultures)}.\n"
-                            "Consider cultural references, language usage, societal norms, traditions, and any other relevant cultural indicators present in the prompt to make an accurate classification."
-                        ) + chain_of_thought_prompt if chain_of_thought else "",
+                            "Consider cultural references, language usage, societal norms, traditions, and any other relevant cultural indicators present in the prompt to make an accurate classification.\n\n"
+
+                            "Think step by step before answering."
+                        ),
                     ),
-                    n=self_consistency,
+                    n=10,
                     progress_name="Cultural Classification",
                     interface=ModuleInterface(
                         dependencies=["prompt"],
@@ -170,7 +173,6 @@ class AgenticSafeguardMoE(Service):
                         } for culture, culture_weight in deps["culture"].items()],
                         output_processing=lambda inputs, outputs: {
                             "harmful_score": sum([inp["culture_weight"] * get_harmful_score(out["safety_assessment"]) for inp, out in zip(inputs, outputs)]),
-                            "culture_scores": [(inp["culture_consideration"], inp["culture_weight"]) for inp in inputs]
                         }
                     ),
                 ),

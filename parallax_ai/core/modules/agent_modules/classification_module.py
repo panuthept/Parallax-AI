@@ -6,7 +6,7 @@ from .agent_module import AgentModule, agent_completions
 from concurrent.futures import ProcessPoolExecutor as Pool
 
 
-def agent_classification(inputs: dict) -> dict:
+def agent_classification(inputs: dict, default_output: dict = None) -> dict:
     n = inputs["n"]
     predicted_classes = defaultdict(lambda: defaultdict(int))
 
@@ -31,7 +31,7 @@ def agent_classification(inputs: dict) -> dict:
     for key, class_counts in predicted_classes.items():
         total_counts = sum(class_counts.values())
         class_probabilities = {cls: count / total_counts for cls, count in class_counts.items()}
-        softmax_outputs[key] = sorted(class_probabilities.items(), key=lambda item: item[1], reverse=True)
+        softmax_outputs[key] = {k: v for k, v in sorted(class_probabilities.items(), key=lambda item: item[1], reverse=True)}
     return softmax_outputs
 
 @dataclass
@@ -48,7 +48,7 @@ class ClassificationAgentModule(AgentModule):
             module_input=module_input,
             executor_func=agent_classification,
             executor_input=self.get_executor_input(module_input),
-            executor_default_output=get_dummy_output(self.spec.output_structure),
+            executor_default_output=get_dummy_output(self.spec.output_structure) if self.spec.default_output is None else self.spec.default_output,
             instance_id=instance_id,
             module_name=self.name,
             progress_name=self.progress_name
