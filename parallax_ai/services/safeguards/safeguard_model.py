@@ -1,6 +1,6 @@
-from ...service import Service
-from ...modules.safeguard_modules import AutoSafeguardModule
-from ...modules import SwitchModule, ModuleInterface, ModelSpec
+from ...core.service import Service
+from ...core.modules.safeguard_modules import AutoSafeguardModule
+from ...core.modules import SwitchModule, ModuleInterface, ModelSpec
 
 
 class SafeguardModel(Service):

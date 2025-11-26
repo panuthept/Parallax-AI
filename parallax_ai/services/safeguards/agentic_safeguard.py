@@ -1,6 +1,6 @@
-from ...service import Service
+from ...core.service import Service
 from typing import List, Tuple, Literal
-from ...modules import AgentSpec, ClassificationAgentModule, SwitchModule, ModuleInterface
+from ...core.modules import AgentSpec, ClassificationAgentModule, SwitchModule, ModuleInterface
 
 
 def get_harmful_score(output: List[Tuple[str, float]]) -> float:
