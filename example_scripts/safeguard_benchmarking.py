@@ -54,6 +54,7 @@ if __name__ == "__main__":
     parser.add_argument('--moe', action='store_true')
     parser.add_argument('--self_consistency', type=int, default=1)
     parser.add_argument('--chain_of_thought', action='store_true')
+    parser.add_argument('--max_samples', type=int, default=None)
     parser.add_argument('--debug_mode', action='store_true')
     args = parser.parse_args()
 
@@ -63,6 +64,7 @@ if __name__ == "__main__":
     api_key = args.api_key
     base_url = args.base_url if args.model_address is None else f"http://{model_address}:8000/v1"
     debug_mode = args.debug_mode
+    max_samples = args.max_samples
 
     worker_nodes = {
         model_name: [
@@ -73,8 +75,9 @@ if __name__ == "__main__":
 
     # Run benchmark for all subsets and splits
     benchmark_name = "sea_safeguard_bench"
-    benchmark = SEASafeguardBench()
-    for subset in benchmark.available_subsets_splits.keys():
+    benchmark = SEASafeguardBench(max_samples=max_samples)
+    # for subset in benchmark.available_subsets_splits.keys():
+    for subset in ["cultural_content_generation"]:
         print(f"Subset: {subset}")
         languages = ["English", "Local"] if subset != "general" else [None]
         for split in benchmark.available_subsets_splits[subset]:
