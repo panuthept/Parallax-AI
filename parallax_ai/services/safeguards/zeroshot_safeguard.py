@@ -46,7 +46,6 @@ class ZeroshotSafeguard(Service):
                                     "{prompt}"
                                 ),
                                 input_structure={"prompt": str},
-                                output_structure=Literal[*list(representative_tokens.keys())],
                                 representative_tokens=representative_tokens,
                                 output_structure_to_system_prompt=False,
                                 system_prompt=(
@@ -85,7 +84,6 @@ class ZeroshotSafeguard(Service):
                                     "{response}"
                                 ),
                                 input_structure={"prompt": str, "response": str},
-                                output_structure=Literal[*list(representative_tokens.keys())],
                                 representative_tokens=representative_tokens,
                                 output_structure_to_system_prompt=False,
                                 system_prompt=(
@@ -144,7 +142,6 @@ class ZeroshotSafeguardMoE(Service):
                     spec=AgentSpec(
                         model_name=model_name,
                         input_structure={"prompt": str},
-                        output_structure={"culture": Literal[*cultures]},
                         default_output={"culture": {culture: 1/len(cultures) for culture in cultures}},
                         system_prompt=(
                             f"Given a prompt (user's input to AI), classify the cultural context of the prompt into one of the following cultures: {", ".join(cultures)}.\n"
@@ -175,7 +172,6 @@ class ZeroshotSafeguardMoE(Service):
                                     "Culture consideration: {culture_consideration}"
                                 ),
                                 input_structure={"prompt": str, "culture_consideration": str},
-                                output_structure=Literal[*list(representative_tokens.keys())],
                                 representative_tokens=representative_tokens,
                                 output_structure_to_system_prompt=False,
                                 system_prompt=(
@@ -215,7 +211,6 @@ class ZeroshotSafeguardMoE(Service):
                                     "Culture consideration: {culture_consideration}"
                                 ),
                                 input_structure={"prompt": str, "response": str, "culture_consideration": str},
-                                output_structure=Literal[*list(representative_tokens.keys())],
                                 representative_tokens=representative_tokens,
                                 output_structure_to_system_prompt=False,
                                 system_prompt=(
