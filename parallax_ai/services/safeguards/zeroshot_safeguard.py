@@ -142,6 +142,7 @@ class ZeroshotSafeguardMoE(Service):
                     spec=AgentSpec(
                         model_name=model_name,
                         input_structure={"prompt": str},
+                        output_structure={"culture": Literal[*cultures]},
                         default_output={"culture": {culture: 1/len(cultures) for culture in cultures}},
                         system_prompt=(
                             f"Given a prompt (user's input to AI), classify the cultural context of the prompt into one of the following cultures: {", ".join(cultures)}.\n"
