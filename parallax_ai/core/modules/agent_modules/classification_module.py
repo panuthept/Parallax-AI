@@ -1,33 +1,18 @@
 import numpy as np
-from functools import partial
 from ..base_module import Job
 from dataclasses import dataclass
 from collections import defaultdict
 from ...utilities import get_dummy_output
-from concurrent.futures import ProcessPoolExecutor as Pool
 from .agent_module import AgentModule, AgentSpec, agent_completions
 
 
 def agentic_classification(inputs: dict) -> dict:
-    n = inputs["n"]
     predicted_classes = defaultdict(lambda: defaultdict(int))
-
-    pool = Pool(max_workers=n)
-    running_tasks = [pool.submit(partial(agent_completions, return_logprobs=False), inputs) for _ in range(n)]
-    
-    for future in running_tasks:
-        try:
-            parsed_output = future.result()
-        except:
-            continue
+    for parsed_output in agent_completions(inputs, n=inputs["n"], return_logprobs=False):
         if isinstance(parsed_output, dict):
             for key, value in parsed_output.items():
                 predicted_classes[key][value] += 1
-            n -= 1
-    pool.shutdown()
-    
-    if n == inputs["n"]:
-        raise ValueError("Agent classification failed to produce any valid outputs.")
+    predicted_classes = {key: dict(predicted_classes[key]) for key in predicted_classes}
 
     softmax_outputs = {}
     for key, class_counts in predicted_classes.items():

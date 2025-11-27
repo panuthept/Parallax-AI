@@ -9,7 +9,11 @@ from ...utilities import type_validation, get_dummy_output
 from typing import Any, Literal, List, Optional, get_origin, get_args
 
 
-def prompt_completions(inputs: dict, return_logprobs: bool = False):
+def prompt_completions(
+    inputs: dict, 
+    n: int = None,
+    return_logprobs: bool = False,
+) -> List[tuple]:
     if return_logprobs:
         # Ensure that kwargs has logprobs settings
         if "logprobs" not in inputs["kwargs"]:
@@ -23,15 +27,23 @@ def prompt_completions(inputs: dict, return_logprobs: bool = False):
     output = client.completions.create(
         model=inputs["model"],
         prompt=inputs["prompt"],
+        n=n,
         **inputs["kwargs"]
     )
-    response = output.choices[0].text
-    tokens_logprobs = None
-    if return_logprobs:
-        tokens_logprobs = [[(token_id, logprob) for token_id, logprob in logprob.items()] for logprob in output.choices[0].logprobs.top_logprobs]
-    return (response, tokens_logprobs)
+    outputs = []
+    for choice in output.choices:
+        response = choice.text
+        tokens_logprobs = None
+        if return_logprobs:
+            tokens_logprobs = [[(token_id, logprob) for token_id, logprob in logprob.items()] for logprob in choice.logprobs.top_logprobs]
+        outputs.append((response, tokens_logprobs))
+    return outputs
 
-def chat_completions(inputs: dict, return_logprobs: bool = False):
+def chat_completions(
+    inputs: dict, 
+    n: int = None,
+    return_logprobs: bool = False
+) -> List[tuple]:
     if return_logprobs:
         # Ensure that kwargs has logprobs settings
         if "logprobs" not in inputs["kwargs"]:
@@ -47,19 +59,27 @@ def chat_completions(inputs: dict, return_logprobs: bool = False):
     output = client.chat.completions.create(
         model=inputs["model"],
         messages=inputs["messages"],
+        n=n,
         **inputs["kwargs"]
     )
-    response = output.choices[0].message.content
-    tokens_logprobs = None
-    if return_logprobs:
-        tokens_logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs] for content in output.choices[0].logprobs.content]
-    return (response, tokens_logprobs)
+    outputs = []
+    for choice in output.choices:
+        response = choice.message.content
+        tokens_logprobs = None
+        if return_logprobs:
+            tokens_logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs] for content in choice.logprobs.content]
+        outputs.append((response, tokens_logprobs))
+    return outputs
 
-def auto_completions(inputs: dict, return_logprobs: bool = False):
+def auto_completions(
+    inputs: dict, 
+    n: int = None, 
+    return_logprobs: bool = False
+) -> List[tuple]:
     if "messages" in inputs:
-        return chat_completions(inputs, return_logprobs=return_logprobs)
+        return chat_completions(inputs, n=n, return_logprobs=return_logprobs)
     elif "prompt" in inputs:
-        return prompt_completions(inputs, return_logprobs=return_logprobs)
+        return prompt_completions(inputs, n=n, return_logprobs=return_logprobs)
     else:
         raise ValueError("Invalid inputs for auto_completions. Must contain either 'messages' or 'prompt'.")
 
@@ -71,10 +91,10 @@ def output_verify_and_parsing(output, output_structure: Any) -> Any:
                 # Remove prefix and suffix texts
                 output = output.split("```json")
                 if len(output) != 2:
-                    return None
+                    raise ValueError("Invalid JSON format in the output.")
                 output = output[1].split("```")
                 if len(output) != 2:
-                    return None
+                    raise ValueError("Invalid JSON format in the output.")
                 output = output[0].strip()
             # Fix \n problem in JSON
             output = "".join([line.strip() for line in output.split("\n")])
@@ -117,12 +137,40 @@ def output_verify_and_parsing(output, output_structure: Any) -> Any:
             type_validation(output, output_structure, raise_error=True)
     return output
 
-def agent_completions(inputs: dict, return_logprobs: bool = False):
-    raw_output, tokens_logprobs = auto_completions(inputs, return_logprobs)
-    parsed_output = output_verify_and_parsing(raw_output, inputs.get("output_structure"))
-    if return_logprobs:
-        return (parsed_output, tokens_logprobs)
-    return parsed_output
+def agent_completions(
+    inputs: dict, 
+    n: int = None, 
+    return_logprobs: bool = False
+):
+    error = None
+    outputs = []
+    for _ in range(inputs.get("max_retries", 10)):
+        for raw_output, tokens_logprobs in auto_completions(inputs, n=n, return_logprobs=return_logprobs):
+            try:
+                parsed_output = output_verify_and_parsing(raw_output, inputs.get("output_structure"))
+            except Exception as e:
+                error = e
+                continue
+
+            if return_logprobs:
+                outputs.append((parsed_output, tokens_logprobs))
+            else:
+                outputs.append(parsed_output)
+
+        if n is not None:
+            if len(outputs) >= n:
+                outputs = outputs[:n]
+                break
+        else:
+            if len(outputs) >= 1:
+                outputs = outputs[:1]
+                break
+        
+    if len(outputs) == 0:
+        raise ValueError(f"All outputs are invalid. Last error: {error}")
+    if n is None:
+        outputs = outputs[0]
+    return outputs
 
 @dataclass
 class ModelSpec:
@@ -233,7 +281,7 @@ class AgentModule(BaseModule):
     def _create_job(self, instance_id: str, module_input: dict) -> Job:
         return Job(
             module_input=module_input,
-            executor_func=partial(agent_completions, return_logprobs=False),
+            executor_func=partial(agent_completions, n=None, return_logprobs=False),
             executor_input=self.get_executor_input(module_input),
             executor_default_output=get_dummy_output(self.spec.output_structure) if self.spec.default_output is None else self.spec.default_output,
             instance_id=instance_id,
