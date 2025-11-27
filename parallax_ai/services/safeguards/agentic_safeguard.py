@@ -1,6 +1,6 @@
 from ...core.service import Service
 from typing import List, Tuple, Literal
-from ...core.modules import AgentSpec, ClassificationAgentModule, SwitchModule, ModuleInterface
+from ...core.modules import AgentSpec, AgenticClassificationModule, SwitchModule, ModuleInterface
 
 
 def get_harmful_score(output: List[Tuple[str, float]]) -> float:
@@ -35,7 +35,7 @@ class AgenticSafeguard(Service):
                     name="safeguard",
                     condition_key="response_present",
                     cases={
-                        False: ClassificationAgentModule(
+                        False: AgenticClassificationModule(
                             name="prompt_guard",
                             spec=AgentSpec(
                                 model_name=model_name,
@@ -53,7 +53,7 @@ class AgenticSafeguard(Service):
                             n=self_consistency,
                             progress_name="Prompt Classification",
                         ),
-                        True: ClassificationAgentModule(
+                        True: AgenticClassificationModule(
                             name="response_guard",
                             spec=AgentSpec(
                                 model_name=model_name,
@@ -99,7 +99,7 @@ class AgenticSafeguardMoE(Service):
         super().__init__(
             name="AgenticSafeguard",
             modules=[
-                ClassificationAgentModule(
+                AgenticClassificationModule(
                     name="cultural_classifier",
                     spec=AgentSpec(
                         model_name=model_name,
@@ -125,7 +125,7 @@ class AgenticSafeguardMoE(Service):
                     name="safeguard",
                     condition_key="response_present",
                     cases={
-                        False: ClassificationAgentModule(
+                        False: AgenticClassificationModule(
                             name="prompt_guard",
                             spec=AgentSpec(
                                 model_name=model_name,
@@ -143,7 +143,7 @@ class AgenticSafeguardMoE(Service):
                             n=self_consistency,
                             progress_name="Prompt Classification",
                         ),
-                        True: ClassificationAgentModule(
+                        True: AgenticClassificationModule(
                             name="response_guard",
                             spec=AgentSpec(
                                 model_name=model_name,

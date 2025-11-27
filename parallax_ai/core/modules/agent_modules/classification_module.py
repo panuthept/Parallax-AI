@@ -4,29 +4,20 @@ from ..base_module import Job
 from dataclasses import dataclass
 from collections import defaultdict
 from ...utilities import get_dummy_output
-from .agent_module import AgentModule, agent_completions
 from concurrent.futures import ProcessPoolExecutor as Pool
+from .agent_module import AgentModule, AgentSpec, agent_completions
 
 
-def softmax(token_logprobs):
-    exps = np.exp(token_logprobs)
-    return exps / exps.sum()
-
-
-def agent_classification(inputs: dict) -> dict:
+def agentic_classification(inputs: dict) -> dict:
     n = inputs["n"]
     predicted_classes = defaultdict(lambda: defaultdict(int))
 
     pool = Pool(max_workers=n)
-    running_tasks = [pool.submit(partial(agent_completions, return_logprobs=True), inputs) for _ in range(n)]
+    running_tasks = [pool.submit(partial(agent_completions, return_logprobs=False), inputs) for _ in range(n)]
     
     for future in running_tasks:
         try:
-            parsed_output, tokens_logprobs = future.result()
-            print(f"parsed_output: {parsed_output}")
-            print(f"tokens_logprobs: {tokens_logprobs}")
-            prob = np.mean([softmax(np.array(tokens_logprob))[0].item() for tokens_logprob in tokens_logprobs])
-            print(f"probability: {prob}")
+            parsed_output = future.result()
         except:
             continue
         if isinstance(parsed_output, dict):
@@ -46,7 +37,7 @@ def agent_classification(inputs: dict) -> dict:
     return softmax_outputs
 
 @dataclass
-class ClassificationAgentModule(AgentModule):
+class AgenticClassificationModule(AgentModule):
     n: int = 10
 
     def get_executor_input(self, module_input: dict) -> dict:
@@ -57,7 +48,63 @@ class ClassificationAgentModule(AgentModule):
     def _create_job(self, instance_id: str, module_input: dict) -> Job:
         return Job(
             module_input=module_input,
-            executor_func=agent_classification,
+            executor_func=agentic_classification,
+            executor_input=self.get_executor_input(module_input),
+            executor_default_output=get_dummy_output(self.spec.output_structure) if self.spec.default_output is None else self.spec.default_output,
+            instance_id=instance_id,
+            module_name=self.name,
+            progress_name=self.progress_name
+        )
+    
+    
+def classification(inputs: dict) -> dict:
+    _, tokens_logprobs = agent_completions(inputs, return_logprobs=True)
+
+    classes_logprob = defaultdict(float)
+    for label, representative_tokens in inputs["representative_tokens"].items():
+        class_logprobs = []
+        for i, representative_token in enumerate(representative_tokens):
+            if i >= len(tokens_logprobs):
+                break
+            class_logprob = None
+            for token, logprob in tokens_logprobs[i]:
+                if token == representative_token:
+                    class_logprob = logprob
+                    break  # Only consider the first occurrence of any of the
+            if class_logprob is None:
+                break
+            class_logprobs.append(class_logprob)
+        if len(class_logprobs) > 0:
+            classes_logprob[label] = np.mean(class_logprobs).item()
+
+    if len(classes_logprob) == 0:
+        raise ValueError("Agent classification failed to produce any valid outputs.")
+    classes_logprob = dict(classes_logprob)
+        
+    total = sum(np.exp(list(classes_logprob.values())))
+    softmax_outputs = {label: 0.0 for label in inputs["representative_tokens"].keys()}
+    for label, logprob in classes_logprob.items():
+        softmax_outputs[label] = (np.exp(logprob) / total).item()
+    softmax_outputs = {k: v for k, v in sorted(softmax_outputs.items(), key=lambda item: item[1], reverse=True)}
+    return softmax_outputs
+    
+@dataclass
+class ClassificationSpec(AgentSpec):
+    representative_tokens: dict = None
+
+@dataclass
+class ClassificationModule(AgentModule):
+    spec: ClassificationSpec = None
+
+    def get_executor_input(self, module_input: dict) -> dict:
+        executor_input = super().get_executor_input(module_input)
+        executor_input["representative_tokens"] = self.spec.representative_tokens
+        return executor_input
+    
+    def _create_job(self, instance_id: str, module_input: dict) -> Job:
+        return Job(
+            module_input=module_input,
+            executor_func=classification,
             executor_input=self.get_executor_input(module_input),
             executor_default_output=get_dummy_output(self.spec.output_structure) if self.spec.default_output is None else self.spec.default_output,
             instance_id=instance_id,

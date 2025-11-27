@@ -14,5 +14,6 @@ from .core import (
     AgentModule,
     AgentSpec,
     ModelSpec,
-    ClassificationAgentModule,
+    AgenticClassificationModule,
+    ClassificationModule,
 )
