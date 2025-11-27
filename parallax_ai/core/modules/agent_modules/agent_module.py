@@ -133,11 +133,15 @@ class AgentSpec(ModelSpec):
     input_structure: Optional[dict] = None
     output_structure: Optional[dict|List[dict]] = None
     default_output: Optional[Any] = None
+    output_structure_to_system_prompt: bool = True
 
     def get_system_prompt(self):
         system_prompt = self.system_prompt
         if system_prompt is None:
             return None
+
+        if not self.output_structure_to_system_prompt:
+            return system_prompt
 
         output_structure = self.output_structure
         if (isinstance(output_structure, list) and isinstance(output_structure[0], dict)) or isinstance(output_structure, dict):
