@@ -1,2 +1,3 @@
 from .safeguard_model import SafeguardModel
 from .agentic_safeguard import AgenticSafeguard, AgenticSafeguardMoE
+from .zeroshot_safeguard import ZeroshotSafeguard, ZeroshotSafeguardMoE

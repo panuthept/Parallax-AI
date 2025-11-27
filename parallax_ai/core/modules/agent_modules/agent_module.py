@@ -1,6 +1,7 @@
 import json
 import random
 from openai import OpenAI
+from functools import partial
 from ...dataclasses import Job
 from dataclasses import dataclass
 from ..base_module import BaseModule
@@ -25,10 +26,10 @@ def prompt_completions(inputs: dict, return_logprobs: bool = False):
         **inputs["kwargs"]
     )
     response = output.choices[0].text
+    tokens_logprobs = None
     if return_logprobs:
-        logprobs = [[(token_id, logprob) for token_id, logprob in logprob.items()] for logprob in output.choices[0].logprobs.top_logprobs]
-        return (response, logprobs)
-    return response
+        tokens_logprobs = [[(token_id, logprob) for token_id, logprob in logprob.items()] for logprob in output.choices[0].logprobs.top_logprobs]
+    return (response, tokens_logprobs)
 
 def chat_completions(inputs: dict, return_logprobs: bool = False):
     if return_logprobs:
@@ -49,10 +50,10 @@ def chat_completions(inputs: dict, return_logprobs: bool = False):
         **inputs["kwargs"]
     )
     response = output.choices[0].message.content
+    tokens_logprobs = None
     if return_logprobs:
-        logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs] for content in output.choices[0].logprobs.content]
-        return (response, logprobs)
-    return response
+        tokens_logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs] for content in output.choices[0].logprobs.content]
+    return (response, tokens_logprobs)
 
 def auto_completions(inputs: dict, return_logprobs: bool = False):
     if "messages" in inputs:
@@ -116,9 +117,11 @@ def output_verify_and_parsing(output, output_structure: Any) -> Any:
             type_validation(output, output_structure, raise_error=True)
     return output
 
-def agent_completions(inputs: dict):
-    raw_output = auto_completions(inputs)
+def agent_completions(inputs: dict, return_logprobs: bool = False):
+    raw_output, tokens_logprobs = auto_completions(inputs, return_logprobs)
     parsed_output = output_verify_and_parsing(raw_output, inputs.get("output_structure"))
+    if return_logprobs:
+        return (parsed_output, tokens_logprobs)
     return parsed_output
 
 @dataclass
@@ -230,7 +233,7 @@ class AgentModule(BaseModule):
     def _create_job(self, instance_id: str, module_input: dict) -> Job:
         return Job(
             module_input=module_input,
-            executor_func=agent_completions,
+            executor_func=partial(agent_completions, return_logprobs=False),
             executor_input=self.get_executor_input(module_input),
             executor_default_output=get_dummy_output(self.spec.output_structure) if self.spec.default_output is None else self.spec.default_output,
             instance_id=instance_id,

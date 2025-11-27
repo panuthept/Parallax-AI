@@ -4,7 +4,7 @@ import argparse
 import numpy as np
 from typing import List, Dict
 from parallax_ai.benchmarks import SEASafeguardBench, SafetyMetrics
-from parallax_ai.services.safeguards import SafeguardModel, AgenticSafeguard, AgenticSafeguardMoE
+from parallax_ai.services.safeguards import SafeguardModel, AgenticSafeguard, AgenticSafeguardMoE, ZeroshotSafeguard, ZeroshotSafeguardMoE
 
 
 def get_safeguard(args, worker_nodes):
@@ -18,6 +18,21 @@ def get_safeguard(args, worker_nodes):
             )
         else:
             safeguard = AgenticSafeguard(
+                model_name=args.model_name,
+                worker_nodes=worker_nodes,
+                self_consistency=args.self_consistency,
+                chain_of_thought=args.chain_of_thought,
+            )
+    elif args.zeroshot:
+        if args.moe:
+            safeguard = ZeroshotSafeguardMoE(
+                model_name=args.model_name,
+                worker_nodes=worker_nodes,
+                self_consistency=args.self_consistency,
+                chain_of_thought=args.chain_of_thought,
+            )
+        else:
+            safeguard = ZeroshotSafeguard(
                 model_name=args.model_name,
                 worker_nodes=worker_nodes,
                 self_consistency=args.self_consistency,
@@ -51,6 +66,7 @@ if __name__ == "__main__":
     parser.add_argument('--base_url', type=str, default=None, help='Base URL for the model')
     parser.add_argument('--model_address', type=str, default=None, help='Model ip address to benchmark')
     parser.add_argument('--agentic', action='store_true')
+    parser.add_argument('--zeroshot', action='store_true')
     parser.add_argument('--moe', action='store_true')
     parser.add_argument('--self_consistency', type=int, default=1)
     parser.add_argument('--chain_of_thought', action='store_true')

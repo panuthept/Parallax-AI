@@ -1,3 +1,5 @@
+import numpy as np
+from functools import partial
 from ..base_module import Job
 from dataclasses import dataclass
 from collections import defaultdict
@@ -6,16 +8,25 @@ from .agent_module import AgentModule, agent_completions
 from concurrent.futures import ProcessPoolExecutor as Pool
 
 
-def agent_classification(inputs: dict, default_output: dict = None) -> dict:
+def softmax(token_logprobs):
+    exps = np.exp(token_logprobs)
+    return exps / exps.sum()
+
+
+def agent_classification(inputs: dict) -> dict:
     n = inputs["n"]
     predicted_classes = defaultdict(lambda: defaultdict(int))
 
     pool = Pool(max_workers=n)
-    running_tasks = [pool.submit(agent_completions, inputs) for _ in range(n)]
+    running_tasks = [pool.submit(partial(agent_completions, return_logprobs=True), inputs) for _ in range(n)]
     
     for future in running_tasks:
         try:
-            parsed_output = future.result()
+            parsed_output, tokens_logprobs = future.result()
+            print(f"parsed_output: {parsed_output}")
+            print(f"tokens_logprobs: {tokens_logprobs}")
+            prob = np.mean([softmax(np.array(tokens_logprob))[0].item() for tokens_logprob in tokens_logprobs])
+            print(f"probability: {prob}")
         except:
             continue
         if isinstance(parsed_output, dict):
