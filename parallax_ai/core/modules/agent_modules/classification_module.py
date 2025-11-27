@@ -75,7 +75,7 @@ def classification(inputs: dict) -> dict:
                 break
             class_logprobs.append(class_logprob)
         if len(class_logprobs) > 0:
-            classes_logprob[label] = np.mean(class_logprobs).item()
+            classes_logprob[label] = np.sum(class_logprobs).item()
 
     if len(classes_logprob) == 0:
         raise ValueError("Agent classification failed to produce any valid outputs.")
