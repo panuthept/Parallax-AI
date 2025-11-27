@@ -127,7 +127,7 @@ def agent_completions(inputs: dict, return_logprobs: bool = False):
 @dataclass
 class ModelSpec:
     model_name: str
-    prompt_template: Optional[str] = None
+    input_template: Optional[str] = None
 
 @dataclass
 class AgentSpec(ModelSpec):
@@ -208,8 +208,8 @@ class AgentModule(BaseModule):
         if system_prompt is not None:
             messages.append({"role": "system", "content": system_prompt})
         # Add input prompt as user message
-        if self.spec.prompt_template is not None:
-            content = self.spec.prompt_template.format(**module_input)
+        if self.spec.input_template is not None:
+            content = self.spec.input_template.format(**module_input)
         else:
             content = "\n\n".join([f'{key.replace("_", " ").capitalize()}:\n{value}' for key, value in module_input.items()])
         messages.append({"role": "user", "content": content})
