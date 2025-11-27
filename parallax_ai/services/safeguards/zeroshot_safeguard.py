@@ -27,7 +27,7 @@ class ZeroshotSafeguard(Service):
     def __init__(
         self, 
         model_name: str = "aisingapore/Gemma-SEA-LION-v4-27B-IT", 
-        representative_tokens: dict = {"Safe": ["Safe"], "Harmful": ["H", "arm", "ful"]},
+        representative_tokens: dict = {"Safe": ["Safe"], "Harmful": ["H"]},
         **kwargs
     ):
         super().__init__(
@@ -131,7 +131,7 @@ class ZeroshotSafeguardMoE(Service):
         self, 
         cultures: List[str] = ["Indonesia", "Malaysia", "Myanmar", "Singapore", "Thailand", "Vietnam"],
         model_name: str = "aisingapore/Gemma-SEA-LION-v4-27B-IT", 
-        representative_tokens: dict = {"Safe": ["Safe"], "Harmful": ["H", "arm", "ful"]},
+        representative_tokens: dict = {"Safe": ["Safe"], "Harmful": ["H"]},
         **kwargs
     ):
         super().__init__(
