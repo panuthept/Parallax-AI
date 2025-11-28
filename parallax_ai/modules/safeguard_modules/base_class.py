@@ -40,17 +40,13 @@ class GuardModule(Module):
         }
     )
 
-    @property
-    def dependencies(self) -> List[str]:
-        return ["prompt"]
-
-    @property
-    def input_structure(self) -> dict:
-        return {"prompt": str, "response": Optional[str]}
+    @classmethod
+    def get_input_stucture(cls) -> str:
+        return "{'prompt': str} or {'prompt': str, 'response': str}"
     
-    @property
-    def output_structure(self) -> dict:
-        return {"harmful_score": float}
+    @classmethod
+    def get_output_stucture(cls) -> str:
+        return "{'harmful_score': float}"
 
     def get_safeguard_input(self, module_input: dict) -> dict:
         task = "prompt_classification"

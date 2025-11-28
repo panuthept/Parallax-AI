@@ -32,10 +32,22 @@ class ModuleInterface:
 
 @dataclass
 class Module:
-    name: str = None
-    interface: Optional[Union[ModuleInterface, Dict[str, ModuleInterface]]] = None
+    interface: Union[ModuleInterface, Dict[str, ModuleInterface]]
+    name: Optional[str] = None
     worker_nodes: Optional[Dict[str, List[dict]]] = None
     progress_name: Optional[str] = None
+
+    @classmethod
+    def get_input_stucture(cls) -> str:
+        return "Undefined"
+    
+    @classmethod
+    def get_output_stucture(cls) -> str:
+        return "Undefined"
+
+    def __post_init__(self):
+        if self.name is None:
+            self.name = self.__class__.__name__
 
     @abstractmethod
     def _create_job(self, instance_id: str, module_input: dict) -> Job:
