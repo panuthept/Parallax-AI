@@ -56,11 +56,10 @@ class MinHashModule(LambdaModule):
         return "{'jaccard_similarity': float}"
 
     def __post_init__(self):
-        minhash_instance = MinHash(
+        self.function = MinHash(
             num_hashes=self.num_hashes,
             max_value=self.max_value,
             prime=self.prime,
             seed=self.seed
         )
-        self.function = minhash_instance
         super().__post_init__()
