@@ -173,14 +173,10 @@ def agent_completions(
     return outputs
 
 @dataclass
-class ModelSpec:
-    model_name: str
-    input_template: Optional[str] = None
-
-@dataclass
-class AgentSpec(ModelSpec):
+class AgentSpec:
     model_name: str
     system_prompt: Optional[str] = None
+    input_template: Optional[str] = None
     input_structure: Optional[dict] = None
     output_structure: Optional[dict|List[dict]] = None
     default_output: Optional[Any] = None
