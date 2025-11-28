@@ -1,7 +1,7 @@
 from typing import Dict
-from ...dataclasses import Job
 from dataclasses import dataclass
-from ...module import Module
+from ...core.module import Module
+from ...core.dataclasses import Job
 
 
 @dataclass

@@ -9,11 +9,4 @@ from .core import (
     OutputComposer,
     Module,
     ModuleInterface,
-    LambdaModule,
-    SwitchModule,
-    AgentModule,
-    AgentSpec,
-    ModelSpec,
-    AgenticClassificationModule,
-    ClassificationModule,
 )

@@ -1,12 +1,11 @@
-from ...core.service import Service
 from typing import Dict, List, Literal
-from ...core.modules import (
+from ...core import Service, ModuleInterface
+from ...modules.basic_modules import SwitchModule
+from ...modules.agent_modules import (
     AgentSpec,
     AgenticClassificationModule,
     ClassificationSpec, 
     ClassificationModule, 
-    SwitchModule, 
-    ModuleInterface
 )
 
 

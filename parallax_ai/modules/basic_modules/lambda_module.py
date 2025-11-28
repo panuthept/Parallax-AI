@@ -1,7 +1,7 @@
-from ...dataclasses import Job
 from typing import Any, Callable
 from dataclasses import dataclass
-from ...module import Module
+from ...core.module import Module
+from ...core.dataclasses import Job
 
 
 @dataclass

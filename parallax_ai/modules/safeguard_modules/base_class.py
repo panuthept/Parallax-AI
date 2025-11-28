@@ -1,9 +1,9 @@
 import numpy as np
-from ...dataclasses import Job
+from ...core.module import Module
 from typing import List, Optional
+from ...core.dataclasses import Job
 from dataclasses import dataclass, field
-from ...utilities import get_dummy_output
-from ...module import Module
+from ...core.utilities import get_dummy_output
 from ..agent_modules.agent_module import auto_completions
 
 

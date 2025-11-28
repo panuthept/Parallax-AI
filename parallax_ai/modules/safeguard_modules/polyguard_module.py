@@ -1,7 +1,7 @@
 import numpy as np
-from ...dataclasses import Job
+from ...core.dataclasses import Job
 from dataclasses import dataclass, field
-from ...utilities import get_dummy_output
+from ...core.utilities import get_dummy_output
 from .base_class import GuardModule, GuardSpec
 from ..agent_modules.agent_module import auto_completions
 

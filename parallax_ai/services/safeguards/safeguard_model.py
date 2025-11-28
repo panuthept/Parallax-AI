@@ -1,6 +1,6 @@
-from ...core.service import Service
-from ...core.modules.safeguard_modules import AutoSafeguardModule
-from ...core.modules import SwitchModule, ModuleInterface, ModelSpec
+from ...core import Service, ModuleInterface
+from ...modules.basic_modules import SwitchModule
+from ...modules.safeguard_modules import AutoSafeguardModule, GuardSpec
 
 
 class SafeguardModel(Service):
@@ -18,12 +18,12 @@ class SafeguardModel(Service):
                     cases={
                         False: AutoSafeguardModule(
                             name="prompt_guard",
-                            spec=ModelSpec(model_name=model_name),
+                            spec=GuardSpec(model_name=model_name),
                             progress_name="Prompt Classification",
                         ),
                         True: AutoSafeguardModule(
                             name="response_guard",
-                            spec=ModelSpec(model_name=model_name),
+                            spec=GuardSpec(model_name=model_name),
                             progress_name="Response Classification",
                         ),
                     },

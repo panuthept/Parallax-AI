@@ -2,10 +2,10 @@ import json
 import random
 from openai import OpenAI
 from functools import partial
-from ...dataclasses import Job
 from dataclasses import dataclass
-from ...module import Module
-from ...utilities import type_validation, get_dummy_output
+from ...core.module import Module
+from ...core.dataclasses import Job
+from ...core.utilities import type_validation, get_dummy_output
 from typing import Any, Literal, List, Optional, get_origin, get_args
 
 

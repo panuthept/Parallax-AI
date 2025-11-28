@@ -1,8 +1,8 @@
 import numpy as np
-from ...module import Job
+from ...core.module import Job
 from dataclasses import dataclass
 from collections import defaultdict
-from ...utilities import get_dummy_output
+from ...core.utilities import get_dummy_output
 from .agent_module import AgentModule, AgentSpec, agent_completions
 
 
