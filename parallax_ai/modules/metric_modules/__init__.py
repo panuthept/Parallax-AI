@@ -1,1 +1,2 @@
-from .minhash_module import MinHashModule
+from .jaccard_similarity_module import JaccardSimilarityModule
+from .binary_classification_metrics_module import BinaryClassificationMetricsModule

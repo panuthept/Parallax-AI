@@ -35,13 +35,14 @@ class MinHash:
         return identical_hashes / self.num_hashes
     
     def __call__(self, input_data: dict) -> dict:
-        set1 = set(input_data.get("set1", []))
-        set2 = set(input_data.get("set2", []))
+        assert "set1" in input_data and "set2" in input_data, "Input data must contain 'set1' and 'set2'."
+        set1 = set(input_data["set1"])
+        set2 = set(input_data["set2"])
         similarity = self.jaccard_similarity(set1, set2)
         return {"jaccard_similarity": similarity}
     
 @dataclass
-class MinHashModule(LambdaModule):
+class JaccardSimilarityModule(LambdaModule):
     num_hashes: int = 128
     max_value: int = 2**32 - 1
     prime: int = 4294967311
