@@ -4,7 +4,7 @@ from typing import List, Optional
 from dataclasses import dataclass, field
 from ...utilities import get_dummy_output
 from ...module import Module
-from ..agent_modules.agent_module import ModelSpec, auto_completions
+from ..agent_modules.agent_module import auto_completions
 
 
 def safeguard_completions(inputs: dict) -> dict:
@@ -25,8 +25,12 @@ def safeguard_completions(inputs: dict) -> dict:
     return {"harmful_score": harmful_score}
 
 @dataclass
-class BaseGuardModule(Module):
-    spec: ModelSpec = None
+class GuardSpec:
+    model_name: str
+
+@dataclass
+class GuardModule(Module):
+    spec: GuardSpec = None
     max_retries: int = 10000000000
     representative_token_index: int = 0
     representative_tokens: dict = field(default_factory=lambda: 

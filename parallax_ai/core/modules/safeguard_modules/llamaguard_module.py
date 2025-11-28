@@ -1,12 +1,11 @@
 
 from dataclasses import dataclass, field
-from .base_module import BaseGuardModule
-from ..agent_modules.agent_module import ModelSpec
+from .base_class import GuardModule, GuardSpec
 
 
 @dataclass
-class LlamaGuardModule(BaseGuardModule):
-    spec: ModelSpec = field(default_factory=lambda: ModelSpec(model_name="meta-llama/Llama-Guard-3-8B"))
+class LlamaGuardModule(GuardModule):
+    spec: GuardSpec = field(default_factory=lambda: GuardSpec(model_name="meta-llama/Llama-Guard-3-8B"))
     max_retries: int = 10
     representative_token_index: int = 1
     representative_tokens: dict = field(default_factory=lambda: 
@@ -17,8 +16,8 @@ class LlamaGuardModule(BaseGuardModule):
     )
 
 @dataclass
-class LlamaGuard4Module(BaseGuardModule):
-    spec: ModelSpec = field(default_factory=lambda: ModelSpec(model_name="meta-llama/Llama-Guard-4-12B"))
+class LlamaGuard4Module(GuardModule):
+    spec: GuardSpec = field(default_factory=lambda: GuardSpec(model_name="meta-llama/Llama-Guard-4-12B"))
     max_retries: int = 10
     representative_token_index: int = 1
     representative_tokens: dict = field(default_factory=lambda: 

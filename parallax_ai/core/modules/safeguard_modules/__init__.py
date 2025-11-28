@@ -1,4 +1,4 @@
-from .base_module import BaseGuardModule
+from .base_class import GuardModule, GuardSpec
 from .auto_module import AutoSafeguardModule
 from .sealguard_module import SEALGuardModule
 from .polyguard_module import PolyGuardModule

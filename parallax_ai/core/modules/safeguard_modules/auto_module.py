@@ -1,9 +1,8 @@
-from .base_module import BaseGuardModule
 from .polyguard_module import PolyGuardModule
 from .sealguard_module import SEALGuardModule
+from .base_class import GuardModule, GuardSpec
 from .qwen3guard_module import Qwen3GuardModule
 from .shieldgemma_module import ShieldGemmaModule
-from ..agent_modules.agent_module import ModelSpec
 from .llamaguard_module import LlamaGuardModule, LlamaGuard4Module
 from .sealionguard_module import SealionGuardModule, GemmaSealionGuardModule
 
@@ -33,7 +32,7 @@ class AutoSafeguardModule:
         "aisingapore/Gemma-Guard-SEALION-27B-Delta": GemmaSealionGuardModule,
     }
 
-    def __init__(self, spec: ModelSpec, **kwargs) -> BaseGuardModule:
+    def __init__(self, spec: GuardSpec, **kwargs) -> GuardModule:
         if spec.model_name not in self.mapping:
             raise ValueError(f"No safeguard module found for model name: {spec.model_name}")
         return self.mapping[spec.model_name](spec=spec, **kwargs)

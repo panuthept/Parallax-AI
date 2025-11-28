@@ -1,12 +1,11 @@
 from transformers import AutoTokenizer
 from dataclasses import dataclass, field
-from .base_module import BaseGuardModule
-from ..agent_modules.agent_module import ModelSpec
+from .base_class import GuardModule, GuardSpec
 
 
 @dataclass
-class SealionGuardModule(BaseGuardModule):
-    spec: ModelSpec = field(default_factory=lambda: ModelSpec(model_name="aisingapore/Llama-Guard-Delta-500k"))
+class SealionGuardModule(GuardModule):
+    spec: GuardSpec = field(default_factory=lambda: GuardSpec(model_name="aisingapore/Llama-Guard-Delta-500k"))
     max_retries: int = 10
     representative_token_index: int = 0
     representative_tokens: dict = field(default_factory=lambda:
@@ -68,8 +67,8 @@ class SealionGuardModule(BaseGuardModule):
         return executor_input
     
 @dataclass
-class GemmaSealionGuardModule(BaseGuardModule):
-    spec: ModelSpec = field(default_factory=lambda: ModelSpec(model_name="aisingapore/Gemma-Guard-SEALION-27B-Delta"))
+class GemmaSealionGuardModule(GuardModule):
+    spec: GuardSpec = field(default_factory=lambda: GuardSpec(model_name="aisingapore/Gemma-Guard-SEALION-27B-Delta"))
     max_retries: int = 10
     representative_token_index: int = 0
     representative_tokens: dict = field(default_factory=lambda:

@@ -1,11 +1,10 @@
 from dataclasses import dataclass, field
-from .base_module import BaseGuardModule
-from ..agent_modules.agent_module import ModelSpec
+from .base_class import GuardModule, GuardSpec
 
 
 @dataclass
-class ShieldGemmaModule(BaseGuardModule):
-    spec: ModelSpec = field(default_factory=lambda: ModelSpec(model_name="google/shieldgemma-9b")) 
+class ShieldGemmaModule(GuardModule):
+    spec: GuardSpec = field(default_factory=lambda: GuardSpec(model_name="google/shieldgemma-9b")) 
     max_retries: int = 10
     representative_token_index: int = 0
     representative_tokens: dict = field(default_factory=lambda: 

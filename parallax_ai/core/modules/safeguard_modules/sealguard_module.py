@@ -1,12 +1,11 @@
 from transformers import AutoTokenizer
 from dataclasses import dataclass, field
-from .base_module import BaseGuardModule
-from ..agent_modules.agent_module import ModelSpec
+from .base_class import GuardModule, GuardSpec
 
 
 @dataclass
-class SEALGuardModule(BaseGuardModule):
-    spec: ModelSpec = field(default_factory=lambda: ModelSpec(model_name="MickyMike/SEALGuard-7B"))
+class SEALGuardModule(GuardModule):
+    spec: GuardSpec = field(default_factory=lambda: GuardSpec(model_name="MickyMike/SEALGuard-7B"))
     max_retries: int = 10
     representative_token_index: int = 0
     representative_tokens: dict = field(default_factory=lambda:

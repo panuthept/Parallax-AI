@@ -1,9 +1,9 @@
 import numpy as np
 from ...dataclasses import Job
 from dataclasses import dataclass, field
-from .base_module import BaseGuardModule
 from ...utilities import get_dummy_output
-from ..agent_modules.agent_module import ModelSpec, auto_completions
+from .base_class import GuardModule, GuardSpec
+from ..agent_modules.agent_module import auto_completions
 
 
 def polyguard_completions(inputs: dict) -> dict:
@@ -31,8 +31,8 @@ def polyguard_completions(inputs: dict) -> dict:
     return {"harmful_score": harmful_score}
 
 @dataclass
-class PolyGuardModule(BaseGuardModule):
-    spec: ModelSpec = field(default_factory=lambda: ModelSpec(model_name="ToxicityPrompts/PolyGuard-Qwen")) 
+class PolyGuardModule(GuardModule):
+    spec: GuardSpec = field(default_factory=lambda: GuardSpec(model_name="ToxicityPrompts/PolyGuard-Qwen")) 
     max_retries: int = 10
     representative_token_index: int = None  # Not used in PolyGuard
     representative_tokens: dict = field(default_factory=lambda: 
