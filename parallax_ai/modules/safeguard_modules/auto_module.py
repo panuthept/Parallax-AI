@@ -8,7 +8,7 @@ from .sealionguard_module import SealionGuardModule, GemmaSealionGuardModule
 
 
 class AutoSafeguardModule:
-    mapping = {
+    available_safeguards = {
         "google/shieldgemma-2b": ShieldGemmaModule,
         "google/shieldgemma-9b": ShieldGemmaModule,
         "google/shieldgemma-27b": ShieldGemmaModule,
@@ -33,6 +33,6 @@ class AutoSafeguardModule:
     }
 
     def __init__(self, spec: GuardSpec, **kwargs) -> GuardModule:
-        if spec.model_name not in self.mapping:
+        if spec.model_name not in self.available_safeguards:
             raise ValueError(f"No safeguard module found for model name: {spec.model_name}")
-        return self.mapping[spec.model_name](spec=spec, **kwargs)
+        return self.available_safeguards[spec.model_name](spec=spec, **kwargs)
