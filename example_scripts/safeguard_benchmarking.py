@@ -92,8 +92,8 @@ if __name__ == "__main__":
     # Run benchmark for all subsets and splits
     benchmark_name = "sea_safeguard_bench"
     benchmark = SEASafeguardBench(max_samples=max_samples)
-    # for subset in benchmark.available_subsets_splits.keys():
-    for subset in ["cultural_content_generation"]:
+    for subset in benchmark.available_subsets_splits.keys():
+    # for subset in ["cultural_content_generation"]:
         print(f"Subset: {subset}")
         languages = ["English", "Local"] if subset != "general" else [None]
         for split in benchmark.available_subsets_splits[subset]:
