@@ -1,13 +1,13 @@
 from typing import Dict
 from ...dataclasses import Job
 from dataclasses import dataclass
-from ..base_module import BaseModule
+from ...module import Module
 
 
 @dataclass
-class SwitchModule(BaseModule):
+class SwitchModule(Module):
     condition_key: str = None
-    cases: Dict[str, BaseModule] = None
+    cases: Dict[str, Module] = None
 
     def _create_job(self, instance_id: str, module_input: dict) -> Job:
         assert self.condition_key in module_input, \

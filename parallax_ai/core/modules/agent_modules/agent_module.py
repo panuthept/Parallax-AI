@@ -4,7 +4,7 @@ from openai import OpenAI
 from functools import partial
 from ...dataclasses import Job
 from dataclasses import dataclass
-from ..base_module import BaseModule
+from ...module import Module
 from ...utilities import type_validation, get_dummy_output
 from typing import Any, Literal, List, Optional, get_origin, get_args
 
@@ -237,7 +237,7 @@ class AgentSpec(ModelSpec):
         return system_prompt
 
 @dataclass
-class AgentModule(BaseModule):
+class AgentModule(Module):
     spec: AgentSpec = None
     max_retries: int = 10
     kwargs: Optional[dict] = None

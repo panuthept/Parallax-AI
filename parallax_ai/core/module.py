@@ -1,13 +1,37 @@
 from copy import deepcopy
 from abc import abstractmethod
+from types import GeneratorType
 from dataclasses import dataclass
-from ..dataclasses import Job, Instance
-from .module_interface import ModuleInterface
-from typing import Optional, Union, Dict, List
+from .dataclasses import Job, Instance
+from typing import Optional, Union, Dict, List, Callable, Any
 
 
 @dataclass
-class BaseModule:
+class ModuleInterface:
+    dependencies: List[str]
+    input_processing: Optional[Callable[[dict], list]] = None # (deps) -> inputs
+    output_processing: Callable[[list, list], list] = None # (inputs, outputs) -> deps
+
+    def get_module_outputs(self, inputs: Any, outputs: Any) -> dict:
+        if self.output_processing is not None:
+            processed_output = self.output_processing(inputs, outputs)
+            return processed_output
+        return outputs
+
+    def get_module_inputs(self, instance: Instance) -> List[dict]:
+        # inputs = {dep: instance.contents[dep] for dep in self.dependencies}
+        inputs = instance.contents
+        if self.input_processing is not None:
+            processed_inputs = self.input_processing(inputs)
+            if isinstance(processed_inputs, GeneratorType):
+                processed_inputs = list(processed_inputs)
+            elif not isinstance(processed_inputs, list):
+                processed_inputs = [processed_inputs]
+            return processed_inputs
+        return [inputs]
+
+@dataclass
+class Module:
     name: str = None
     interface: Optional[Union[ModuleInterface, Dict[str, ModuleInterface]]] = None
     worker_nodes: Optional[Dict[str, List[dict]]] = None
@@ -50,7 +74,7 @@ class BaseModule:
             module_outputs[instance_id] = outputs
         return module_outputs
     
-    def flatten(self) -> List['BaseModule']:
+    def flatten(self) -> List['Module']:
         """
         Breakdown Module with multiple IOs into multiple Module with single IO.
         Ex. Module(name="module", ... io={"task1": ModuleIO, "task2": ModuleIO})
@@ -75,7 +99,7 @@ class BaseModule:
         debug_mode: bool = False,
         verbose: bool = True
     ) -> List[dict]:
-        from ..service import Service
+        from .service import Service
 
         # Create a temporary Service to run this module
         temp_service = Service(

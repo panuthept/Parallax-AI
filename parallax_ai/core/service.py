@@ -1,7 +1,7 @@
 from typing import Callable
 from .distributor import Distributor
 from .datapool import DataPool
-from .modules import BaseModule
+from .module import Module
 from dataclasses import dataclass
 from .dataclasses import Job, Instance
 from typing import List, Dict, Optional
@@ -22,7 +22,7 @@ class OutputComposer:
 class Service:
     def __init__(
         self, 
-        modules: List[BaseModule],
+        modules: List[Module],
         name: str = None,
         datapool: Optional[DataPool] = None,
         worker_nodes: Optional[Dict[str, List[dict]]] = None,
@@ -48,7 +48,7 @@ class Service:
             **kwargs
         )
 
-    def update_worker_nodes(self, modules: List[BaseModule], worker_nodes: Optional[Dict[str, List[dict]]]):
+    def update_worker_nodes(self, modules: List[Module], worker_nodes: Optional[Dict[str, List[dict]]]):
         if worker_nodes is None:
             return
         # worker_nodes can be a path to JSON file or a dict
@@ -63,7 +63,7 @@ class Service:
             module.worker_nodes = worker_nodes_dict
 
     @staticmethod
-    def get_flattened_modules(modules: List[BaseModule]) -> List[BaseModule]:
+    def get_flattened_modules(modules: List[Module]) -> List[Module]:
         flattened_modules = []
         for module in modules:
             flattened_modules.extend(module.flatten())

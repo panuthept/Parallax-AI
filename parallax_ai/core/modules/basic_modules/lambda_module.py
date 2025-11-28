@@ -1,11 +1,11 @@
 from ...dataclasses import Job
 from typing import Any, Callable
 from dataclasses import dataclass
-from ..base_module import BaseModule
+from ...module import Module
 
 
 @dataclass
-class LambdaModule(BaseModule):
+class LambdaModule(Module):
     function: Callable[[dict], Any] = None
 
     def _create_job(self, instance_id: str, module_input: dict) -> Job:

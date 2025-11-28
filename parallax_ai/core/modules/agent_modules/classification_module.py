@@ -1,5 +1,5 @@
 import numpy as np
-from ..base_module import Job
+from ...module import Job
 from dataclasses import dataclass
 from collections import defaultdict
 from ...utilities import get_dummy_output

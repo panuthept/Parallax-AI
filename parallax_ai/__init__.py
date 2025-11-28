@@ -7,7 +7,7 @@ from .core import (
     Distributor,
     Service,
     OutputComposer,
-    BaseModule,
+    Module,
     ModuleInterface,
     LambdaModule,
     SwitchModule,
