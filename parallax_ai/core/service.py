@@ -48,6 +48,16 @@ class Service:
             **kwargs
         )
 
+    @staticmethod
+    def get_flattened_modules(modules: List[Module]) -> List[Module]:
+        flattened_modules = []
+        for module in modules:
+            flattened_modules.extend(module.flatten())
+        return flattened_modules
+    
+    def flatten_modules(self):
+        self.flattened_modules = self.get_flattened_modules(self.modules)
+    
     def update_worker_nodes(self, modules: List[Module], worker_nodes: Optional[Dict[str, List[dict]]]):
         if worker_nodes is None:
             return
@@ -61,13 +71,6 @@ class Service:
             
         for module in modules:
             module.worker_nodes = worker_nodes_dict
-
-    @staticmethod
-    def get_flattened_modules(modules: List[Module]) -> List[Module]:
-        flattened_modules = []
-        for module in modules:
-            flattened_modules.extend(module.flatten())
-        return flattened_modules
 
     def run(
         self, 
