@@ -99,8 +99,9 @@ class DataPool:
     ) -> None:
         if data is not None:
             for contents in data:
+                metadata = contents.pop("metadata", {})
                 # Update self.instances
-                instance = Instance(contents=contents)
+                instance = Instance(contents=contents, metadata=metadata)
                 self.instances[instance.id] = instance
                 # Update self.index
                 self.index.add(instance)

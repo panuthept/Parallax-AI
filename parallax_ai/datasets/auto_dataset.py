@@ -15,7 +15,7 @@ class AutoDataset:
         "sea_safeguard_bench": SEASafeguardBenchDataset,
     }
 
-    def __init__(self, dataset_name: str, **kwargs) -> Dataset:
+    def __init__(self, dataset_name: str) -> Dataset:
         if dataset_name not in self.available_datasets:
             raise ValueError(f"No dataset found for dataset name: {dataset_name}")
-        return self.available_datasets[dataset_name](**kwargs)
+        return self.available_datasets[dataset_name]

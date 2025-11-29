@@ -109,6 +109,10 @@ class Service:
                     for instance in self.datapool.retrieve(target_modules=composer.dependencies):
                         if composer.condition_satisfy(instance.contents):
                             composed_output = composer.compose(instance.contents)
+                            if "metadata" not in composed_output:
+                                composed_output["metadata"] = {}
+                            composed_output["metadata"].update({"composed_by": composer.name})
+                            composed_output["metadata"].update(instance.metadata)
                             outputs.append(composed_output)
                             # Clean up memory
                             self.datapool.remove(instance.id)
