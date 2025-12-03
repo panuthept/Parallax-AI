@@ -128,7 +128,7 @@ class ZeroshotSafeguard(Service):
 class ZeroshotSafeguardMoE(Service):
     def __init__(
         self, 
-        cultures: List[str] = ["Indonesia", "Malaysia", "Myanmar", "Singapore", "Thailand", "Vietnam"],
+        cultures: List[str] = ["Indonesia", "Malaysia", "Myanmar", "Singapore", "Thailand", "Philippines", "Vietnam"],
         model_name: str = "aisingapore/Gemma-SEA-LION-v4-27B-IT", 
         representative_tokens: dict = {"Safe": ["Safe"], "Harmful": ["H"]},
         **kwargs
