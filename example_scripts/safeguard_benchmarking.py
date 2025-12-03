@@ -3,7 +3,8 @@ import json
 import argparse
 import numpy as np
 from typing import List, Dict
-from parallax_ai.benchmarks import SEASafeguardBench, SafetyMetrics
+# from parallax_ai.benchmarks import SEASafeguardBench, SafetyMetrics
+from parallax_ai.metrics.safeguard_metrics import SafeguardMetrics
 from parallax_ai.services.safeguards import SafeguardModel, AgenticSafeguard, AgenticSafeguardMoE, ZeroshotSafeguard, ZeroshotSafeguardMoE
 
 
@@ -50,12 +51,17 @@ def get_result(paths: List[str], metrics: str = "pr_auc") -> float:
         scores.append(score)
     return round(sum(scores) / len(scores) * 100, 1)
 
-def compute_result(paths: List[str], label_mapping: Dict[str, float], metrics: str = "pr_auc") -> float:
+def compute_result(paths: List[str], label_mapping: Dict[str, float], metric: str = "pr_auc") -> float:
     samples = []
     for path in paths:
         data = json.load(open(path, 'r'))
         samples.extend(data['examples'])
-    score = SafetyMetrics(samples=samples, label_mapping=label_mapping).get_results()[metrics]
+    metrics = SafeguardMetrics(label_mapping=label_mapping)
+    score = metrics(
+        predicted_scores=[sample["harmful_score"] for sample in samples],
+        gold_labels=[sample["gold_harmful_label"] for sample in samples],
+        gold_scores=[sample["gold_severity_level"] for sample in samples],
+    )[metric]
     return round(score * 100, 1)
 
 if __name__ == "__main__":
@@ -82,60 +88,60 @@ if __name__ == "__main__":
     debug_mode = args.debug_mode
     max_samples = args.max_samples
 
-    worker_nodes = {
-        model_name: [
-            {"api_key": args.api_key, "base_url": base_url},
-        ],
-    }
-    safeguard = get_safeguard(args, worker_nodes)
+    # worker_nodes = {
+    #     model_name: [
+    #         {"api_key": args.api_key, "base_url": base_url},
+    #     ],
+    # }
+    # safeguard = get_safeguard(args, worker_nodes)
 
-    # Run benchmark for all subsets and splits
+    # # Run benchmark for all subsets and splits
     benchmark_name = "sea_safeguard_bench"
-    benchmark = SEASafeguardBench(max_samples=max_samples)
-    for subset in benchmark.available_subsets_splits.keys():
-    # for subset in ["cultural_content_generation"]:
-        print(f"Subset: {subset}")
-        languages = ["English", "Local"] if subset != "general" else [None]
-        for split in benchmark.available_subsets_splits[subset]:
-            print(f"Split: {split}")
-            for language in languages:
-                print(f"Language: {language}")
-                save_path = f"./outputs/{save_name}/{benchmark_name}/{subset}/{split}/{language}"
-                if not os.path.exists(f"{save_path}/prompt_classification.json"):
-                    results = benchmark.evaluate(
-                        label_mapping={"Harmful": 1.0, "Sensitive": 0.0, "Safe": 0.0},
-                        subsets=[subset],
-                        splits=[split],
-                        language=language,
-                        task="prompt_classification",
-                        safeguard=safeguard,
-                        debug_mode=debug_mode,
-                        verbose=True,
-                    )
-                    print(results["performance"])
-                    os.makedirs(save_path, exist_ok=True)
-                    with open(f"{save_path}/prompt_classification.json", "w") as f:
-                        json.dump(results, f, indent=4, ensure_ascii=False)
+    # benchmark = SEASafeguardBench(max_samples=max_samples)
+    # for subset in benchmark.available_subsets_splits.keys():
+    # # for subset in ["cultural_content_generation"]:
+    #     print(f"Subset: {subset}")
+    #     languages = ["English", "Local"] if subset != "general" else [None]
+    #     for split in benchmark.available_subsets_splits[subset]:
+    #         print(f"Split: {split}")
+    #         for language in languages:
+    #             print(f"Language: {language}")
+    #             save_path = f"./outputs/{save_name}/{benchmark_name}/{subset}/{split}/{language}"
+    #             if not os.path.exists(f"{save_path}/prompt_classification.json"):
+    #                 results = benchmark.evaluate(
+    #                     label_mapping={"Harmful": 1.0, "Sensitive": 0.0, "Safe": 0.0},
+    #                     subsets=[subset],
+    #                     splits=[split],
+    #                     language=language,
+    #                     task="prompt_classification",
+    #                     safeguard=safeguard,
+    #                     debug_mode=debug_mode,
+    #                     verbose=True,
+    #                 )
+    #                 print(results["performance"])
+    #                 os.makedirs(save_path, exist_ok=True)
+    #                 with open(f"{save_path}/prompt_classification.json", "w") as f:
+    #                     json.dump(results, f, indent=4, ensure_ascii=False)
                 
-                if subset == "cultural_in_the_wild":
-                    continue # No response classification for this subset
+    #             if subset == "cultural_in_the_wild":
+    #                 continue # No response classification for this subset
 
-                if not os.path.exists(f"{save_path}/response_classification.json"):
-                    results = benchmark.evaluate(
-                        label_mapping={"Harmful": 1.0, "Sensitive": 1.0, "Safe": 0.0},
-                        subsets=[subset],
-                        splits=[split],
-                        language=language,
-                        task="response_classification",
-                        safeguard=safeguard,
-                        debug_mode=debug_mode,
-                        verbose=True,
-                    )
-                    print(results["performance"])
+    #             if not os.path.exists(f"{save_path}/response_classification.json"):
+    #                 results = benchmark.evaluate(
+    #                     label_mapping={"Harmful": 1.0, "Sensitive": 1.0, "Safe": 0.0},
+    #                     subsets=[subset],
+    #                     splits=[split],
+    #                     language=language,
+    #                     task="response_classification",
+    #                     safeguard=safeguard,
+    #                     debug_mode=debug_mode,
+    #                     verbose=True,
+    #                 )
+    #                 print(results["performance"])
 
-                    os.makedirs(save_path, exist_ok=True)
-                    with open(f"{save_path}/response_classification.json", "w") as f:
-                        json.dump(results, f, indent=4, ensure_ascii=False)
+    #                 os.makedirs(save_path, exist_ok=True)
+    #                 with open(f"{save_path}/response_classification.json", "w") as f:
+    #                     json.dump(results, f, indent=4, ensure_ascii=False)
 
     print("\n=== Performance Summary (PR-AUC) ===")
     # Report performance summary #1
