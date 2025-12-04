@@ -32,8 +32,8 @@ class ModuleInterface:
 
 @dataclass
 class Module:
-    interface: Union[ModuleInterface, Dict[str, ModuleInterface]]
     name: Optional[str] = None
+    interface: Optional[Union[ModuleInterface, Dict[str, ModuleInterface]]] = None
     worker_nodes: Optional[Dict[str, List[dict]]] = None
     progress_name: Optional[str] = None
 

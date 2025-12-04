@@ -93,6 +93,8 @@ class Distributor:
         verbose: bool = False,
         debug_mode: bool = False,   # If True, disable parallelism for easier debugging
     ):
+        if len(jobs) == 0:
+            return []
         self.create_workers(max_workers=len(jobs))
         
         pbars = {}

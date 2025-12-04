@@ -16,12 +16,12 @@ class SafeguardModel(Service):
                     name="safeguard",
                     condition_key="response_present",
                     cases={
-                        False: AutoSafeguardModule(
+                        False: AutoSafeguardModule.from_spec(
                             name="prompt_guard",
                             spec=GuardSpec(model_name=model_name),
                             progress_name="Prompt Classification",
                         ),
-                        True: AutoSafeguardModule(
+                        True: AutoSafeguardModule.from_spec(
                             name="response_guard",
                             spec=GuardSpec(model_name=model_name),
                             progress_name="Response Classification",

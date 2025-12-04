@@ -1,4 +1,5 @@
 import json
+import time
 import random
 from openai import OpenAI
 from functools import partial
@@ -11,7 +12,7 @@ from typing import Any, Literal, List, Optional, get_origin, get_args
 
 def prompt_completions(
     inputs: dict, 
-    n: int = None,
+    n: int = 1,
     return_logprobs: bool = False,
 ) -> List[tuple]:
     if return_logprobs:
@@ -37,11 +38,13 @@ def prompt_completions(
         if return_logprobs:
             tokens_logprobs = [[(token_id, logprob) for token_id, logprob in logprob.items()] for logprob in choice.logprobs.top_logprobs]
         outputs.append((response, tokens_logprobs))
+    if n == 1:
+        return outputs[0]
     return outputs
 
 def chat_completions(
     inputs: dict, 
-    n: int = None,
+    n: int = 1,
     return_logprobs: bool = False
 ) -> List[tuple]:
     if return_logprobs:
@@ -73,7 +76,7 @@ def chat_completions(
 
 def auto_completions(
     inputs: dict, 
-    n: int = None, 
+    n: int = 1, 
     return_logprobs: bool = False
 ) -> List[tuple]:
     if "messages" in inputs:
@@ -139,17 +142,23 @@ def output_verify_and_parsing(output, output_structure: Any) -> Any:
 
 def agent_completions(
     inputs: dict, 
-    n: int = None, 
+    n: int = 1, 
     return_logprobs: bool = False
 ):
+    wait_time = 1
     error = None
     outputs = []
     for _ in range(inputs.get("max_retries", 10)):
         for raw_output, tokens_logprobs in auto_completions(inputs, n=n, return_logprobs=return_logprobs):
             try:
                 parsed_output = output_verify_and_parsing(raw_output, inputs.get("output_structure"))
+                wait_time = 1  # Reset wait time after a successful attempt
             except Exception as e:
                 error = e
+                if error == "Connection error":
+                    print(f"Got error: {error}. Retrying in {wait_time} seconds.")
+                    time.sleep(wait_time)
+                    wait_time *= 2
                 continue
 
             if return_logprobs:
@@ -157,14 +166,9 @@ def agent_completions(
             else:
                 outputs.append(parsed_output)
 
-        if n is not None:
-            if len(outputs) >= n:
-                outputs = outputs[:n]
-                break
-        else:
-            if len(outputs) >= 1:
-                outputs = outputs[:1]
-                break
+        if len(outputs) >= n:
+            outputs = outputs[:n]
+            break
         
     if len(outputs) == 0:
         raise ValueError(f"All outputs are invalid. Last error: {error}")
