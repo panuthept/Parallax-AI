@@ -13,7 +13,7 @@ def safeguard_completions(inputs: dict) -> dict:
     logprobs = None
     for _ in range(inputs.get("max_retries", 10)):
         try:
-            _, logprobs = auto_completions(inputs, return_logprobs=True)
+            _, logprobs = auto_completions(inputs, return_logprobs=True)[0]
             break
         except Exception as e:
             error = e

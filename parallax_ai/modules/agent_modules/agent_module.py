@@ -38,8 +38,6 @@ def prompt_completions(
         if return_logprobs:
             tokens_logprobs = [[(token_id, logprob) for token_id, logprob in logprob.items()] for logprob in choice.logprobs.top_logprobs]
         outputs.append((response, tokens_logprobs))
-    if n == 1:
-        return outputs[0]
     return outputs
 
 def chat_completions(
@@ -72,8 +70,6 @@ def chat_completions(
         if return_logprobs:
             tokens_logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs] for content in choice.logprobs.content]
         outputs.append((response, tokens_logprobs))
-    if n == 1:
-        return outputs[0]
     return outputs
 
 def auto_completions(
@@ -174,8 +170,6 @@ def agent_completions(
         
     if len(outputs) == 0:
         raise ValueError(f"All outputs are invalid. Last error: {error}")
-    if n is None:
-        outputs = outputs[0]
     return outputs
 
 @dataclass
