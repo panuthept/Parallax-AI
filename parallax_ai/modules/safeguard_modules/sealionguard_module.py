@@ -44,7 +44,8 @@ class SealionGuardModule(GuardModule):
                 thinking_mode="off",
             )
         prompt = prompt + "<|start_header_id|>model<|end_header_id|>\n\n"
-        prompt = prompt[len(self.tokenizer.bos_token):] if prompt.startswith(self.tokenizer.bos_token) else prompt
+        if self.tokenizer.bos_token is not None:
+            prompt = prompt[len(self.tokenizer.bos_token):] if prompt.startswith(self.tokenizer.bos_token) else prompt
         return {"prompt": prompt, "task": task}
     
     def get_executor_input(self, module_input: dict) -> dict:
