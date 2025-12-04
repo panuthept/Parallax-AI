@@ -72,6 +72,8 @@ def chat_completions(
         if return_logprobs:
             tokens_logprobs = [[(top_logprob.token, top_logprob.logprob) for top_logprob in content.top_logprobs] for content in choice.logprobs.content]
         outputs.append((response, tokens_logprobs))
+    if n == 1:
+        return outputs[0]
     return outputs
 
 def auto_completions(
