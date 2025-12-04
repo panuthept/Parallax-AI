@@ -20,6 +20,7 @@ class AutoSafeguardModule:
         "ToxicityPrompts/PolyGuard-Ministral": PolyGuardModule,
         "MickyMike/SEALGuard-1.5B": SEALGuardModule,           
         "MickyMike/SEALGuard-7B": SEALGuardModule,             
+        "Qwen/Qwen3Guard-Gen-4B": Qwen3GuardModule,
         "Qwen/Qwen3Guard-Gen-8B": Qwen3GuardModule,
         "aisingapore/Gemma-Guard-4B-Delta": GemmaSealionGuardModule,
         "aisingapore/SEA-Guard-V2": SealionGuardModule,
@@ -33,6 +34,7 @@ class AutoSafeguardModule:
         "aisingapore/1M_SEA-Guard_qwen3-4b_Non_Bias": SealionGuardModule,
         "aisingapore/1M_SEA-Guard_qwen3-8b_Non_Bias": SealionGuardModule,
         "aisingapore/1M_SEA-Guard_llama-8b_Non_Bias": SealionGuardModule,
+        "aisingapore/1M_SEA-Guard_gemma3-12b_Non_Bias": GemmaSealionGuardModule,
     }
 
     @classmethod
