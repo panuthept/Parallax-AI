@@ -1,3 +1,4 @@
+import time
 import numpy as np
 from ...core.dataclasses import Job
 from dataclasses import dataclass, field
