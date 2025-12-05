@@ -83,12 +83,18 @@ class GuardModule(Module):
             "model": self.spec.model_name,
             "model_addresses": self.worker_nodes[self.spec.model_name],
             "max_retries": self.max_retries,
-            "kwargs": {
+        }
+        if "messages" in executor_input:
+            executor_input["kwargs"] = {
                 "max_tokens": 100,
                 "logprobs": True,
                 "top_logprobs": 20,
             }
-        }
+        elif "prompt" in executor_input:
+            executor_input["kwargs"] = {
+                "max_tokens": 100,
+                "logprobs": 20,
+            }
         return executor_input
 
     def _create_job(self, instance_id: str, module_input: dict) -> Job:
