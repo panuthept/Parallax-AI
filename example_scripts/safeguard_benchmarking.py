@@ -147,22 +147,22 @@ if __name__ == "__main__":
     # Report performance summary #1
     results = []
     # Prompt Classification Results
-    results.append(get_result(
-        paths=[
-            f"./outputs/{save_name}/{benchmark_name}/general/EN/None/prompt_classification.json",
-        ]
-    ))
-    results.append(get_result(
-        paths=[
-            f"./outputs/{save_name}/{benchmark_name}/general/IN/None/prompt_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/MS/None/prompt_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/MY/None/prompt_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/TA/None/prompt_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/TH/None/prompt_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/TL/None/prompt_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/VI/None/prompt_classification.json",
-        ]
-    ))
+    # results.append(get_result(
+    #     paths=[
+    #         f"./outputs/{save_name}/{benchmark_name}/general/EN/None/prompt_classification.json",
+    #     ]
+    # ))
+    # results.append(get_result(
+    #     paths=[
+    #         f"./outputs/{save_name}/{benchmark_name}/general/IN/None/prompt_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/MS/None/prompt_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/MY/None/prompt_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/TA/None/prompt_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/TH/None/prompt_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/TL/None/prompt_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/VI/None/prompt_classification.json",
+    #     ]
+    # ))
     results.append(get_result(
         paths=[
             f"./outputs/{save_name}/{benchmark_name}/cultural_in_the_wild/IN_EN/English/prompt_classification.json",
@@ -210,22 +210,22 @@ if __name__ == "__main__":
     results.append(round(np.mean(results).item(), 1))
     response_classification_start_index = len(results)
     # Response Classification Results
-    results.append(get_result(
-        paths=[
-            f"./outputs/{save_name}/{benchmark_name}/general/EN/None/response_classification.json",
-        ]
-    ))
-    results.append(get_result(
-        paths=[
-            f"./outputs/{save_name}/{benchmark_name}/general/IN/None/response_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/MS/None/response_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/MY/None/response_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/TA/None/response_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/TH/None/response_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/TL/None/response_classification.json",
-            f"./outputs/{save_name}/{benchmark_name}/general/VI/None/response_classification.json",
-        ]
-    ))
+    # results.append(get_result(
+    #     paths=[
+    #         f"./outputs/{save_name}/{benchmark_name}/general/EN/None/response_classification.json",
+    #     ]
+    # ))
+    # results.append(get_result(
+    #     paths=[
+    #         f"./outputs/{save_name}/{benchmark_name}/general/IN/None/response_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/MS/None/response_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/MY/None/response_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/TA/None/response_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/TH/None/response_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/TL/None/response_classification.json",
+    #         f"./outputs/{save_name}/{benchmark_name}/general/VI/None/response_classification.json",
+    #     ]
+    # ))
     results.append(get_result(
         paths=[
             f"./outputs/{save_name}/{benchmark_name}/cultural_content_generation/IN_EN/English/response_classification.json",
@@ -251,29 +251,29 @@ if __name__ == "__main__":
     results.append(round(np.mean(results[response_classification_start_index:]).item(), 1))
     print(" & ".join(map(str, results)))
 
-    # Report performance summary #2
-    prompt_results = []
-    response_results = []
-    for subset in ["IN_EN", "MS_EN", "MY_EN", "TA_EN", "TH_EN", "TL_EN", "VI_EN"]:
-        prompt_results.append(compute_result(
-            paths=[
-                f"./outputs/{save_name}/{benchmark_name}/cultural_in_the_wild/{subset}/English/prompt_classification.json",
-                f"./outputs/{save_name}/{benchmark_name}/cultural_in_the_wild/{subset}/Local/prompt_classification.json",
-                f"./outputs/{save_name}/{benchmark_name}/cultural_content_generation/{subset}/English/prompt_classification.json",
-                f"./outputs/{save_name}/{benchmark_name}/cultural_content_generation/{subset}/Local/prompt_classification.json",
-            ],
-            label_mapping={"Harmful": 1.0, "Sensitive": 0.0, "Safe": 0.0},
-        ))
-        response_results.append(compute_result(
-            paths=[
-                f"./outputs/{save_name}/{benchmark_name}/cultural_content_generation/{subset}/English/response_classification.json",
-                f"./outputs/{save_name}/{benchmark_name}/cultural_content_generation/{subset}/Local/response_classification.json",
-            ],
-            label_mapping={"Harmful": 1.0, "Sensitive": 1.0, "Safe": 0.0},
-        ))
-    prompt_results.append(round(np.mean(prompt_results).item(), 1))
-    response_results.append(round(np.mean(response_results).item(), 1))
-    print(" & ".join([f'{prompt_result} / {response_result}' for prompt_result, response_result in zip(prompt_results, response_results)]))
+    # # Report performance summary #2
+    # prompt_results = []
+    # response_results = []
+    # for subset in ["IN_EN", "MS_EN", "MY_EN", "TA_EN", "TH_EN", "TL_EN", "VI_EN"]:
+    #     prompt_results.append(compute_result(
+    #         paths=[
+    #             f"./outputs/{save_name}/{benchmark_name}/cultural_in_the_wild/{subset}/English/prompt_classification.json",
+    #             f"./outputs/{save_name}/{benchmark_name}/cultural_in_the_wild/{subset}/Local/prompt_classification.json",
+    #             f"./outputs/{save_name}/{benchmark_name}/cultural_content_generation/{subset}/English/prompt_classification.json",
+    #             f"./outputs/{save_name}/{benchmark_name}/cultural_content_generation/{subset}/Local/prompt_classification.json",
+    #         ],
+    #         label_mapping={"Harmful": 1.0, "Sensitive": 0.0, "Safe": 0.0},
+    #     ))
+    #     response_results.append(compute_result(
+    #         paths=[
+    #             f"./outputs/{save_name}/{benchmark_name}/cultural_content_generation/{subset}/English/response_classification.json",
+    #             f"./outputs/{save_name}/{benchmark_name}/cultural_content_generation/{subset}/Local/response_classification.json",
+    #         ],
+    #         label_mapping={"Harmful": 1.0, "Sensitive": 1.0, "Safe": 0.0},
+    #     ))
+    # prompt_results.append(round(np.mean(prompt_results).item(), 1))
+    # response_results.append(round(np.mean(response_results).item(), 1))
+    # print(" & ".join([f'{prompt_result} / {response_result}' for prompt_result, response_result in zip(prompt_results, response_results)]))
 
     # Report performance summary #3
     prompt_results = []
