@@ -1,3 +1,4 @@
+import time
 import numpy as np
 from ...core.dataclasses import Job
 from dataclasses import dataclass, field
@@ -7,7 +8,21 @@ from ..agent_modules.agent_module import auto_completions
 
 
 def polyguard_completions(inputs: dict) -> dict:
-    _, logprobs = auto_completions(inputs, return_logprobs=True)
+    wait_time = 1
+    logprobs = None
+    for _ in range(inputs.get("max_retries", 10)):
+        try:
+            _, logprobs = auto_completions(inputs, return_logprobs=True)[0]
+            break
+        except Exception as e:
+            error = e
+            if error == "Connection error":
+                print(f"Got error: {error}. Retrying in {wait_time} seconds.")
+                time.sleep(wait_time)
+                wait_time *= 2
+    if logprobs is None:
+        raise ValueError(f"All attempts failed. Last error: {error}")
+
     if inputs.get("task") == "prompt_classification":
         label_logprobs = [(inputs["representative_tokens"][token], logprob) for token, logprob in logprobs[5] if token in inputs["representative_tokens"]]
     else:
@@ -84,7 +99,7 @@ class PolyGuardModule(GuardModule):
             module_input=module_input,
             executor_func=polyguard_completions,
             executor_input=self.get_executor_input(module_input),
-            executor_default_output=get_dummy_output(self.output_structure, default_value=1/len(self.representative_tokens)),
+            executor_default_output={'harmful_score': 1/len(self.representative_tokens)},
             instance_id=instance_id,
             module_name=self.name,
             progress_name=self.progress_name

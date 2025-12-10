@@ -32,8 +32,8 @@ class ModuleInterface:
 
 @dataclass
 class Module:
-    interface: Union[ModuleInterface, Dict[str, ModuleInterface]]
     name: Optional[str] = None
+    interface: Optional[Union[ModuleInterface, Dict[str, ModuleInterface]]] = None
     worker_nodes: Optional[Dict[str, List[dict]]] = None
     progress_name: Optional[str] = None
 
@@ -119,14 +119,14 @@ class Module:
             datapool=None,
             output_composers=None,
             worker_nodes=self.worker_nodes,
-            debug_mode=debug_mode,
         )
 
         # Run the temporary Service
         outputs = temp_service.run(
             inputs=inputs,
             instances=instances,
-            verbose=verbose
+            verbose=verbose,
+            debug_mode=debug_mode,
         )
 
         return outputs

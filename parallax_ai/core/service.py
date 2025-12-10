@@ -119,6 +119,7 @@ class Service:
             # Get outputs from finished instances
             for instance in self.datapool.retrieve(target_modules=[module.name for module in self.flattened_modules]):
                 output = instance.contents
+                output["metadata"] = instance.metadata
                 outputs.append(output)
                 # Clean up memory
                 self.datapool.remove(instance.id)

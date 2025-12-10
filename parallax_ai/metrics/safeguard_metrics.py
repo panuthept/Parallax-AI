@@ -15,7 +15,7 @@ class SafeguardMetrics:
         gold_labels: List[str],
         gold_scores: List[float] = None
     ) -> dict:
-        gold_labels = [self.label_mapping[gold_label] for gold_label in gold_labels]
+        gold_labels = [self.label_mapping.get(gold_label, gold_label) for gold_label in gold_labels]
 
         gold_labels = np.array(gold_labels)
         predicted_scores = np.array(predicted_scores)
@@ -29,17 +29,22 @@ class SafeguardMetrics:
         precision_curve, recall_curve, _ = precision_recall_curve(gold_labels, predicted_scores)
         pr_auc = auc(recall_curve, precision_curve)
 
+        fpr = ((predicted_scores >= self.threshold) & (gold_labels == 0)).sum() / (gold_labels == 0).sum()
+
         metrics = {
             "supports": len(gold_labels),
             "precision": precision,
             "recall": recall,
             "f1_score": f1,
-            "pr_auc": pr_auc
+            "pr_auc": pr_auc,
+            "fpr": fpr,
         }
 
         if gold_scores is not None:
             mean_squared_error = np.mean((gold_scores - predicted_scores) ** 2)
             spearman_corr, _ = stats.spearmanr(gold_scores, predicted_scores)
+            pearson_corr, _ = stats.pearsonr(gold_scores, predicted_scores)
             metrics["mean_squared_error"] = mean_squared_error.item()
             metrics["spearman_correlation"] = spearman_corr.item()
+            metrics["pearson_correlation"] = pearson_corr.item()
         return metrics

@@ -98,6 +98,8 @@ class DataPool:
         instances: List[Instance] = None
     ) -> None:
         if data is not None:
+            if not isinstance(data, list):
+                data = [data]
             for contents in data:
                 metadata = contents.pop("metadata", {})
                 # Update self.instances
@@ -106,6 +108,8 @@ class DataPool:
                 # Update self.index
                 self.index.add(instance)
         if instances is not None:
+            if not isinstance(instances, list):
+                instances = [instances]
             for instance in instances:
                 # Update self.instances
                 self.instances[instance.id] = instance

@@ -1,3 +1,4 @@
+import time
 import numpy as np
 from ...core.module import Module
 from typing import List, Optional
@@ -8,7 +9,21 @@ from ..agent_modules.agent_module import auto_completions
 
 
 def safeguard_completions(inputs: dict) -> dict:
-    _, logprobs = auto_completions(inputs, return_logprobs=True)
+    wait_time = 1
+    logprobs = None
+    for _ in range(inputs.get("max_retries", 10)):
+        try:
+            _, logprobs = auto_completions(inputs, return_logprobs=True)[0]
+            break
+        except Exception as e:
+            error = e
+            if error == "Connection error":
+                print(f"Got error: {error}. Retrying in {wait_time} seconds.")
+                time.sleep(wait_time)
+                wait_time *= 2
+    if logprobs is None:
+        raise ValueError(f"All attempts failed. Last error: {error}")
+
     label_logprobs = [(inputs["representative_tokens"][token], logprob) for token, logprob in logprobs[inputs["representative_token_index"]] if token in inputs["representative_tokens"]]
     
     logprobs = [logprob for label, logprob in label_logprobs]
@@ -68,12 +83,18 @@ class GuardModule(Module):
             "model": self.spec.model_name,
             "model_addresses": self.worker_nodes[self.spec.model_name],
             "max_retries": self.max_retries,
-            "kwargs": {
+        }
+        if "messages" in executor_input:
+            executor_input["kwargs"] = {
                 "max_tokens": 100,
                 "logprobs": True,
                 "top_logprobs": 20,
             }
-        }
+        elif "prompt" in executor_input:
+            executor_input["kwargs"] = {
+                "max_tokens": 100,
+                "logprobs": 20,
+            }
         return executor_input
 
     def _create_job(self, instance_id: str, module_input: dict) -> Job:
@@ -81,7 +102,7 @@ class GuardModule(Module):
             module_input=module_input,
             executor_func=safeguard_completions,
             executor_input=self.get_executor_input(module_input),
-            executor_default_output=get_dummy_output(self.output_structure, default_value=1/len(self.representative_tokens)),
+            executor_default_output={'harmful_score': 1/len(self.representative_tokens)},
             instance_id=instance_id,
             module_name=self.name,
             progress_name=self.progress_name
