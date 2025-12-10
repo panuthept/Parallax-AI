@@ -277,7 +277,7 @@ class AgentModule(Module):
     def _create_job(self, instance_id: str, module_input: dict) -> Job:
         return Job(
             module_input=module_input,
-            executor_func=partial(agent_completions, n=None, return_logprobs=False),
+            executor_func=partial(agent_completions, return_logprobs=False),
             executor_input=self.get_executor_input(module_input),
             executor_default_output=get_dummy_output(self.spec.output_structure) if self.spec.default_output is None else self.spec.default_output,
             instance_id=instance_id,

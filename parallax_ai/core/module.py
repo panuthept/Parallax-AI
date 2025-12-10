@@ -119,14 +119,14 @@ class Module:
             datapool=None,
             output_composers=None,
             worker_nodes=self.worker_nodes,
-            debug_mode=debug_mode,
         )
 
         # Run the temporary Service
         outputs = temp_service.run(
             inputs=inputs,
             instances=instances,
-            verbose=verbose
+            verbose=verbose,
+            debug_mode=debug_mode,
         )
 
         return outputs
