@@ -1,10 +1,36 @@
 import math
-from typing import List
+import json
+from typing import List, Dict
 from collections import defaultdict
 
 
 class WordBiasAnalysis:
-    def analyze(self, samples: List[dict]):
+    def __init__(self, load_path: str = None):
+        self.keyword_stats = None
+        if load_path:
+            self.load(load_path)
+
+    def get_available_labels(self) -> List[str]:
+        if self.keyword_stats is None:
+            return []
+        return list(self.keyword_stats.keys())
+    
+    def get_keyword_stats(self, label: str) -> Dict[str, Dict[str, float]]:
+        assert self.keyword_stats is not None, "Keyword statistics have not been computed or loaded."
+        assert label in self.keyword_stats, f"Unknown label '{label}', please choose from {list(self.keyword_stats.keys())}."
+        return self.keyword_stats[label]
+
+    def load(self, path: str):
+        assert path.endswith(".json"), "Only JSON format is supported for loading."
+        with open(path, "r") as f:
+            self.keyword_stats = json.load(f)
+
+    def save(self, path: str):
+        assert path.endswith(".json"), "Only JSON format is supported for saving."
+        with open(path, "w") as f:
+            json.dump(self.keyword_stats, f, indent=2)
+
+    def fit(self, samples: List[dict]):
         # Frequency tables
         word_freq = defaultdict(int)                     # count(W)
         label_freq = defaultdict(int)                    # count(Y)
@@ -47,7 +73,20 @@ class WordBiasAnalysis:
                     "LMI": LMI,
                 }
             results[label] = label_results
-        return results
+        self.keyword_stats = results
+
+    def predict(self, sample: dict) -> Dict[str, float]:
+        assert self.keyword_stats is not None, "Keyword statistics have not been computed or loaded."
+        text = sample["text"]
+
+        class_scores = {label: 0.0 for label in self.get_available_labels()}
+        for label in class_scores:
+            stats = self.get_keyword_stats(label)
+            for w in text:
+                class_scores[label] += stats.get(w, {"LMI": 0.0})["LMI"]
+        class_scores = {label: math.exp(score) for label, score in class_scores.items()}
+        class_probs = {label: score / sum(class_scores.values()) for label, score in class_scores.items()}
+        return class_probs
 
 
 if __name__ == "__main__":
@@ -56,9 +95,9 @@ if __name__ == "__main__":
         {"text": ["How", "to", "make", "a", "bomb", "?"], "label": "Harmful"},
     ]
     tool = WordBiasAnalysis()
-    results = tool.analyze(samples)
-    for label in results:
+    tool.fit(samples)
+    for label in tool.get_available_labels():
         print(f"Label: {label}")
-        for word, stats in results[label].items():
-            print(f"  Word: {word}, PMI: {stats['PMI']:.4f}, LMI: {stats['LMI']:.4f}")
+        for keyword, stats in tool.get_keyword_stats(label).items():
+            print(f"  Keyword: {keyword}, PMI: {stats['PMI']:.4f}, LMI: {stats['LMI']:.4f}")
     print()
