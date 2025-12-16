@@ -4,7 +4,7 @@ from typing import Callable, List
 
 class HuggingFaceDataset(Dataset):
     @classmethod
-    def get_samples(
+    def _get_samples(
         cls,
         path: str,
         subset: str = None,

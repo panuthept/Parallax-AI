@@ -5,7 +5,7 @@ from ..analysis.word_bias_analysis import WordBiasAnalysis
 class WordBiasAttack:
     def __init__(self, training_samples: List[dict]):
         self.training_samples = training_samples
-        self.bias_stats = WordBiasAnalysis().analyze(training_samples)
+        self.bias_stats = WordBiasAnalysis().fit(training_samples)
 
     def attack(self, sample, target_label: str, num_keywords: int = 3) -> dict:
         assert "text" in sample, "Sample must contain 'text' field."
