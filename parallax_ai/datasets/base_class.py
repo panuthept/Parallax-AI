@@ -12,4 +12,4 @@ class Dataset:
     @classmethod
     def get_samples(cls, transformation: Optional[Callable] = None, **kwargs) -> List[dict]:
         samples = cls._get_samples(**kwargs)
-        return transformation(samples) if transformation else samples
+        return [transformation(sample) for sample in samples] if transformation else samples
