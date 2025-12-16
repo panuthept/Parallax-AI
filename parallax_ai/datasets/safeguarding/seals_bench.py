@@ -12,7 +12,7 @@ class SEALSBenchDataset(Dataset):
     }
 
     @classmethod
-    def get_samples(
+    def _get_samples(
         cls,
         splits: List[str] = None,
         **kwargs,
@@ -21,7 +21,7 @@ class SEALSBenchDataset(Dataset):
         for split in splits:
             assert split in cls.available_splits[None], f"Split {split} not available. Choose from {cls.available_splits[None]}."
 
-        return HuggingFaceDataset.get_samples(
+        return HuggingFaceDataset._get_samples(
             path="MickyMike/SEALSBench",
             splits=splits,
             sample_acquisitions=[lambda data: {

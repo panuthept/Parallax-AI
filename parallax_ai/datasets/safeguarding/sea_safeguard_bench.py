@@ -18,7 +18,7 @@ class SEASafeguardBenchDataset(Dataset):
     }
 
     @classmethod
-    def get_samples(
+    def _get_samples(
         cls,
         subset: str = None,
         splits: List[str] = None,
@@ -122,7 +122,7 @@ class SEASafeguardBenchDataset(Dataset):
         samples = []
         for subset in subsets:
             samples.extend(
-                HuggingFaceDataset.get_samples(
+                HuggingFaceDataset._get_samples(
                     path="aisingapore/SEASafeguardBench",
                     subset=subset,
                     splits=splits or cls.available_splits[subset],

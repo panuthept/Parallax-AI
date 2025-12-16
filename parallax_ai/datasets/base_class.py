@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Callable, Optional
 
 
 class Dataset:    
@@ -6,5 +6,10 @@ class Dataset:
     available_splits = [None]
 
     @classmethod
-    def get_samples(cls) -> List[dict]:
-        raise NotImplementedError("Subclasses must implement get_samples method.")
+    def _get_samples(cls, **kwargs) -> List[dict]:
+        raise NotImplementedError("Subclasses must implement _get_samples method.")
+
+    @classmethod
+    def get_samples(cls, transformation: Optional[Callable] = None, **kwargs) -> List[dict]:
+        samples = cls._get_samples(**kwargs)
+        return transformation(samples) if transformation else samples
